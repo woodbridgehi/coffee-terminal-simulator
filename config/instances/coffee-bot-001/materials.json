@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "materials": [
+    {"materialId": "coffee-beans", "name": "咖啡豆", "unit": "g", "capacity": 5000, "initialOnHand": 4200, "lowThreshold": 1000, "criticalThreshold": 300, "enabled": true},
+    {"materialId": "water", "name": "净水", "unit": "ml", "capacity": 20000, "initialOnHand": 18000, "lowThreshold": 4000, "criticalThreshold": 1000, "enabled": true},
+    {"materialId": "milk", "name": "鲜奶", "unit": "ml", "capacity": 6000, "initialOnHand": 4800, "lowThreshold": 1200, "criticalThreshold": 300, "enabled": true},
+    {"materialId": "ice", "name": "冰块", "unit": "g", "capacity": 8000, "initialOnHand": 6500, "lowThreshold": 1500, "criticalThreshold": 400, "enabled": true},
+    {"materialId": "cup-12oz", "name": "12oz 杯", "unit": "count", "capacity": 120, "initialOnHand": 100, "lowThreshold": 25, "criticalThreshold": 8, "enabled": true},
+    {"materialId": "lid-12oz", "name": "12oz 杯盖", "unit": "count", "capacity": 120, "initialOnHand": 100, "lowThreshold": 25, "criticalThreshold": 8, "enabled": true},
+    {"materialId": "hazelnut-syrup", "name": "榛果糖浆", "unit": "ml", "capacity": 1500, "initialOnHand": 900, "lowThreshold": 300, "criticalThreshold": 80, "enabled": true}
+  ]
+}

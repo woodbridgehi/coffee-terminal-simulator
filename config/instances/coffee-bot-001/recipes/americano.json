@@ -1,0 +1,15 @@
+{
+  "recipeId": "americano-v1",
+  "skuCode": "HOT_AMERICANO",
+  "version": "1.0.0",
+  "name": "热美式",
+  "enabled": true,
+  "display": {"description": "双份浓缩与热水", "sortOrder": 10},
+  "visual": {"profile": "americano", "cup": "ceramic-mug", "layers": ["coffee", "water"]},
+  "steps": [
+    {"id": "prepare-cup", "name": "准备杯子", "animationCue": "cup-arrive", "durationSeconds": 5, "durationRandomization": {"minSeconds": 3, "maxSeconds": 7}, "failureProfile": "cup-dispenser", "consumes": [{"materialId": "cup-12oz", "amount": 1, "unit": "count"}]},
+    {"id": "extract-coffee", "name": "萃取咖啡", "animationCue": "brew-stream", "durationSeconds": 25, "durationRandomization": {"minSeconds": 22, "maxSeconds": 30}, "failureProfile": "brewer", "consumes": [{"materialId": "coffee-beans", "amount": 18, "unit": "g"}, {"materialId": "water", "amount": 45, "unit": "ml"}]},
+    {"id": "add-hot-water", "name": "添加热水", "animationCue": "water-pour", "durationSeconds": 10, "durationRandomization": {"minSeconds": 8, "maxSeconds": 13}, "failureProfile": "water-pump", "consumes": [{"materialId": "water", "amount": 220, "unit": "ml"}]},
+    {"id": "seal-and-serve", "name": "封杯并出杯", "animationCue": "seal", "durationSeconds": 6, "durationRandomization": {"minSeconds": 4, "maxSeconds": 8}, "failureProfile": "lid-dispenser", "consumes": [{"materialId": "lid-12oz", "amount": 1, "unit": "count"}]}
+  ]
+}

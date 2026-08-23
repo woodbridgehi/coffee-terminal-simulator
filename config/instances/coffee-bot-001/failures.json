@@ -1,0 +1,13 @@
+{
+  "globalFailureRate": 0.002,
+  "profiles": {
+    "cup-dispenser": {"failureRate": 0.01, "errorCode": "CUP_NOT_DETECTED", "message": "取杯失败", "retryable": true, "maxRetries": 1, "timing": "before", "consumeOnFailure": false},
+    "ice-dispenser": {"failureRate": 0.02, "errorCode": "ICE_DISPENSER_ERROR", "message": "冰块投放异常", "retryable": true, "maxRetries": 1, "timing": "after", "consumeOnFailure": true},
+    "brewer": {"failureRate": 0.015, "errorCode": "BREW_PRESSURE_LOW", "message": "萃取压力异常", "retryable": true, "maxRetries": 2, "timing": "after", "consumeOnFailure": true},
+    "milk-pump": {"failureRate": 0.02, "errorCode": "MILK_PUMP_TIMEOUT", "message": "牛奶泵超时", "retryable": true, "maxRetries": 1, "timing": "after", "consumeOnFailure": true},
+    "water-pump": {"failureRate": 0.01, "errorCode": "WATER_FLOW_LOW", "message": "热水流量不足", "retryable": true, "maxRetries": 1, "timing": "after", "consumeOnFailure": true},
+    "syrup-pump": {"failureRate": 0.025, "errorCode": "SYRUP_PUMP_TIMEOUT", "message": "糖浆泵超时", "retryable": true, "maxRetries": 1, "timing": "after", "consumeOnFailure": true},
+    "lid-dispenser": {"failureRate": 0.01, "errorCode": "LID_NOT_DETECTED", "message": "杯盖投放失败", "retryable": false, "maxRetries": 0, "timing": "before", "consumeOnFailure": false}
+  },
+  "stepOverrides": {}
+}

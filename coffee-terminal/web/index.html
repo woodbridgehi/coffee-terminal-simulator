@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coffee Terminal Simulator</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="inventory.css" />
+  <link rel="stylesheet" href="drink-visual.css" />
+</head>
+<body>
+  <main class="app-shell" id="app">
+    <section class="display" aria-label="顾客显示屏">
+      <header class="display-header">
+        <div class="connection"><span class="status-dot"></span><span id="connectionText">设备在线</span></div>
+        <div class="device-name" id="deviceName">COFFEE BOT 001</div>
+        <button class="console-trigger" id="consoleTrigger" title="打开开发控制台" aria-label="打开开发控制台">⌘</button>
+      </header>
+
+      <div class="display-content" id="idleView">
+        <p class="quiet-label">新鲜现制 · 即点即做</p>
+        <h1>扫码点咖啡</h1>
+        <p class="subhead">扫描二维码，在手机完成点单</p>
+        <div class="qr-frame"><img id="qrImage" alt="咖啡下单二维码" /></div>
+        <p class="qr-note" id="qrNote">仅在设备在线时可用</p>
+      </div>
+
+      <div class="making-view is-hidden" id="makingView">
+        <p class="quiet-label" id="orderId">订单处理中</p>
+        <h1 id="recipeName">冰拿铁</h1>
+        <div class="coffee-stage" id="coffeeStage" aria-hidden="true">
+          <svg class="drink-visual" viewBox="0 0 360 320" role="presentation">
+            <defs>
+              <clipPath id="drinkClip"><path id="drinkClipPath" d="M92 78 L108 254 Q111 278 136 282 H224 Q249 278 252 254 L268 78 Z" /></clipPath>
+              <linearGradient id="glassShine" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".6"/><stop offset=".48" stop-color="#fff" stop-opacity=".06"/><stop offset="1" stop-color="#fff" stop-opacity=".34"/></linearGradient>
+              <linearGradient id="coffeeGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7b4a2c"/><stop offset="1" stop-color="#3d2418"/></linearGradient>
+              <filter id="softShadow"><feGaussianBlur stdDeviation="7"/></filter>
+            </defs>
+            <ellipse class="drink-shadow" cx="180" cy="292" rx="88" ry="12" />
+            <g class="drink-pour-system">
+              <path class="brew-nozzle" d="M163 12 H197 L194 38 H166 Z" />
+              <path class="pour-stream brew-stream" id="brewStream" d="M180 36 V126" />
+              <path class="pour-stream milk-stream" id="milkStream" d="M207 34 Q210 77 196 130" />
+              <path class="pour-stream water-stream" id="waterStream" d="M151 36 Q150 76 165 132" />
+            </g>
+            <g class="steam-group">
+              <path class="aroma aroma-one" d="M145 82 C126 55 158 47 144 21" />
+              <path class="aroma aroma-two" d="M180 75 C162 47 194 39 180 11" />
+              <path class="aroma aroma-three" d="M215 82 C196 55 228 47 214 21" />
+            </g>
+            <g clip-path="url(#drinkClip)" class="drink-contents">
+              <rect class="liquid liquid-base" x="75" y="118" width="210" height="180" />
+              <rect class="liquid liquid-top" x="75" y="118" width="210" height="66" />
+              <path class="syrup-ribbon" d="M111 191 C142 166 214 218 249 184 C220 235 149 190 112 232" />
+              <g class="ice-group">
+                <rect class="ice-cube ice-one" x="118" y="128" width="34" height="31" rx="6" transform="rotate(-12 135 144)" />
+                <rect class="ice-cube ice-two" x="164" y="140" width="36" height="32" rx="6" transform="rotate(9 182 156)" />
+                <rect class="ice-cube ice-three" x="211" y="122" width="32" height="30" rx="6" transform="rotate(-5 227 137)" />
+              </g>
+              <ellipse class="foam-layer" cx="180" cy="125" rx="74" ry="16" />
+              <rect class="glass-highlight" x="111" y="86" width="24" height="176" rx="12" fill="url(#glassShine)" />
+            </g>
+            <path class="cup-shell" id="cupShell" d="M88 78 L104 258 Q108 285 134 289 H226 Q252 285 256 258 L272 78 Z" />
+            <path class="cup-rim" id="cupRim" d="M88 78 Q180 60 272 78 Q180 96 88 78 Z" />
+            <path class="cup-handle" id="cupHandle" d="M256 137 C315 125 315 232 251 219" />
+            <g class="lid-group"><path class="cup-lid-svg" d="M82 71 Q180 50 278 71 L270 88 Q180 104 90 88 Z"/><path class="lid-top" d="M105 60 Q180 43 255 60" /></g>
+            <g class="serve-sparkles"><path d="M68 164 h20 M78 154 v20"/><path d="M278 134 h16 M286 126 v16"/><circle cx="289" cy="204" r="5"/></g>
+          </svg>
+        </div>
+        <div class="current-step" id="currentStep">正在准备</div>
+        <div class="step-count" id="stepCount">步骤 1 / 5</div>
+        <div class="display-progress"><span id="displayProgress"></span></div>
+        <p class="remaining" id="remainingTime">预计还需 1 分 10 秒</p>
+      </div>
+
+      <div class="ready-view is-hidden" id="readyView">
+        <div class="ready-mark">✓</div>
+        <p class="quiet-label">订单已完成</p>
+        <h1>请取走您的咖啡</h1>
+        <p class="subhead" id="readyOrder">请核对订单号</p>
+        <button class="clear-button" id="clearButton">返回待机</button>
+      </div>
+
+      <div class="error-view is-hidden" id="errorView">
+        <div class="error-mark">!</div>
+        <p class="quiet-label">制作暂时中断</p>
+        <h1>设备正在处理</h1>
+        <p class="subhead" id="errorMessage">请稍候或联系门店工作人员</p>
+      </div>
+
+      <footer class="display-footer"><span>精品咖啡 · 新鲜现制</span><i></i><span id="footerMessage">感谢您的耐心等待</span></footer>
+    </section>
+
+    <aside class="console" id="console" aria-label="开发控制台">
+      <header class="console-header"><div><span class="console-kicker">DEVELOPER</span><h2>开发控制台</h2></div><button class="close-console" id="closeConsole" aria-label="关闭控制台">×</button></header>
+      <div class="console-scroll">
+        <section class="console-section task-section"><div class="section-heading"><span>当前任务</span><span class="state" id="taskState">IDLE</span></div><div class="task-title" id="taskTitle">暂无制作任务</div><div class="task-meta" id="taskMeta">等待销售服务下发订单</div><button class="action primary-action" id="demoOrder">模拟后台下单</button></section>
+        <section class="console-section"><div class="section-heading"><span>制作配方</span><button class="text-button" id="saveRecipe">保存</button></div><select id="recipeSelect" aria-label="选择配方"></select><textarea id="recipeEditor" spellcheck="false" aria-label="配方 JSON"></textarea><p class="help">配方变更保存到本地，仅用于调试。</p></section>
+        <section class="console-section"><div class="section-heading"><span>物料库存</span><button class="text-button" id="reloadConfig">刷新配置</button></div><div id="inventoryList" class="inventory-list"></div><p class="help">补满会写入当前实例的库存状态，并同步给后台。</p></section>
+        <section class="console-section"><div class="section-heading"><span>故障注入</span><span id="failureValue">0%</span></div><input id="failureRate" type="range" min="0" max="100" value="0" /><div class="range-labels"><span>稳定</span><span>高风险</span></div><div class="action-grid"><button class="action" id="forceFail">下一步失败</button><button class="action" id="toggleOffline">模拟断网</button></div></section>
+        <section class="console-section"><div class="section-heading"><span>任务操作</span></div><div class="action-grid three"><button class="action" id="pauseResume">暂停</button><button class="action" id="skipStep">跳过</button><button class="action" id="retryTask">重试</button></div></section>
+        <section class="console-section event-section"><div class="section-heading"><span>事件日志</span><span class="live-dot-label">● LIVE</span></div><div id="eventLog" class="event-log"></div></section>
+      </div>
+    </aside>
+  </main>
+  <div class="toast is-hidden" id="toast"></div>
+  <script src="vendor/animejs/anime.umd.min.js"></script>
+  <script src="drink-visual.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

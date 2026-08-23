@@ -1,0 +1,82 @@
+.coffee-stage {
+  width: 330px;
+  height: 292px;
+  margin: 0;
+  display: grid;
+  place-items: center;
+}
+
+.drink-visual {
+  width: 318px;
+  height: 276px;
+  overflow: visible;
+  transform: translateY(7px);
+}
+
+.drink-shadow { fill: rgba(83, 49, 25, .16); filter: url(#softShadow); }
+.cup-shell { fill: rgba(255, 249, 239, .22); stroke: #b99776; stroke-width: 4; stroke-linejoin: round; }
+.cup-rim { fill: rgba(255, 255, 255, .46); stroke: #a98262; stroke-width: 3; }
+.cup-handle { fill: none; stroke: #c7a98c; stroke-width: 13; stroke-linecap: round; opacity: 0; }
+.liquid { transition: fill .35s ease, opacity .35s ease; }
+.liquid-base { fill: #ead4b5; }
+.liquid-top { fill: url(#coffeeGlow); }
+.glass-highlight { opacity: .78; }
+.foam-layer { fill: #f0dfc7; opacity: 0; }
+.syrup-ribbon { fill: none; stroke: #9a572c; stroke-width: 8; stroke-linecap: round; opacity: 0; }
+.ice-cube { fill: rgba(242, 250, 252, .66); stroke: rgba(143, 180, 189, .72); stroke-width: 2; }
+.brew-nozzle { fill: #4a342a; opacity: 0; }
+.pour-stream { fill: none; stroke-linecap: round; stroke-width: 7; opacity: 0; transform-origin: top center; }
+.brew-stream { stroke: #5b311d; }
+.milk-stream { stroke: #ead5b6; filter: drop-shadow(0 0 1px rgba(86, 54, 34, .42)); }
+.water-stream { stroke: rgba(133, 185, 199, .78); stroke-width: 6; }
+.aroma { fill: none; stroke: rgba(167, 113, 65, .38); stroke-width: 5; stroke-linecap: round; opacity: 0; }
+.lid-group { opacity: 0; transform: translateY(-34px); }
+.cup-lid-svg { fill: #3d2b22; stroke: #2e211b; stroke-width: 2; }
+.lid-top { fill: none; stroke: #b6875d; stroke-width: 8; stroke-linecap: round; }
+.serve-sparkles { fill: none; stroke: #bf854c; stroke-width: 4; stroke-linecap: round; opacity: 0; }
+
+.profile-americano .liquid-base,
+.profile-americano .liquid-top { fill: #4b2b1d; }
+.profile-americano .ice-group,
+.profile-americano .syrup-ribbon { opacity: 0; }
+.profile-americano .aroma { opacity: .52; }
+
+.profile-espresso .liquid-base,
+.profile-espresso .liquid-top { fill: #3b2118; }
+.profile-espresso .ice-group,
+.profile-espresso .syrup-ribbon { opacity: 0; }
+.profile-espresso .cup-shell { fill: #f5eadc; stroke: #a98566; }
+.profile-espresso .cup-handle { opacity: 1; }
+.profile-espresso .glass-highlight { opacity: .22; }
+.profile-espresso .aroma { opacity: .5; }
+
+.profile-iced-latte .liquid-base { fill: #ead8bd; }
+.profile-iced-latte .liquid-top { fill: url(#coffeeGlow); }
+.profile-iced-latte .foam-layer { opacity: .38; }
+.profile-iced-latte .cup-shell { fill: rgba(255, 255, 255, .12); stroke: #b59476; }
+
+.profile-hazelnut-special .liquid-base { fill: #d9b892; }
+.profile-hazelnut-special .liquid-top { fill: #7e4b2d; }
+.profile-hazelnut-special .syrup-ribbon { opacity: .74; }
+.profile-hazelnut-special .foam-layer { opacity: .58; }
+.profile-hazelnut-special .ice-group { opacity: .2; }
+
+.profile-generic .liquid-base { fill: #d4ad83; }
+.profile-generic .liquid-top { fill: #65402b; }
+.profile-generic .ice-group,
+.profile-generic .syrup-ribbon { opacity: 0; }
+
+.cue-brew-stream .brew-nozzle,
+.cue-brew-stream .brew-stream,
+.cue-milk-pour .milk-stream,
+.cue-water-pour .water-stream { opacity: 1; }
+.cue-milk-pour .brew-nozzle,
+.cue-water-pour .brew-nozzle { opacity: .78; }
+.cue-ice-drop .ice-group { opacity: 1; }
+.cue-syrup-swirl .syrup-ribbon { opacity: .9; }
+.cue-seal .lid-group { opacity: 1; }
+.cue-serve .serve-sparkles { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .drink-visual * { animation: none !important; transition: none !important; }
+}

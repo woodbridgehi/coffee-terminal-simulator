@@ -1,0 +1,16 @@
+{
+  "recipeId": "xin-yi-special-v1",
+  "skuCode": "XINYI_SPECIAL",
+  "version": "1.0.0",
+  "name": "信义榛果特调",
+  "enabled": true,
+  "display": {"description": "门店限定榛果奶咖", "sortOrder": 5, "operatorExclusive": true},
+  "visual": {"profile": "hazelnut-special", "cup": "transparent-tall", "layers": ["coffee", "milk", "hazelnut-syrup"]},
+  "steps": [
+    {"id": "prepare-cup", "name": "准备杯子", "animationCue": "cup-arrive", "durationSeconds": 5, "durationRandomization": {"minSeconds": 3, "maxSeconds": 7}, "failureProfile": "cup-dispenser", "consumes": [{"materialId": "cup-12oz", "amount": 1, "unit": "count"}]},
+    {"id": "extract-coffee", "name": "萃取咖啡", "animationCue": "brew-stream", "durationSeconds": 27, "durationRandomization": {"minSeconds": 23, "maxSeconds": 32}, "failureProfile": "brewer", "consumes": [{"materialId": "coffee-beans", "amount": 20, "unit": "g"}, {"materialId": "water", "amount": 50, "unit": "ml"}]},
+    {"id": "add-hazelnut", "name": "加入榛果糖浆", "animationCue": "syrup-swirl", "durationSeconds": 7, "durationRandomization": {"minSeconds": 5, "maxSeconds": 10}, "failureProfile": "syrup-pump", "consumes": [{"materialId": "hazelnut-syrup", "amount": 20, "unit": "ml"}]},
+    {"id": "add-milk", "name": "添加牛奶", "animationCue": "milk-pour", "durationSeconds": 15, "durationRandomization": {"minSeconds": 12, "maxSeconds": 19}, "failureProfile": "milk-pump", "consumes": [{"materialId": "milk", "amount": 150, "unit": "ml"}]},
+    {"id": "seal-and-serve", "name": "封杯并出杯", "animationCue": "seal", "durationSeconds": 6, "durationRandomization": {"minSeconds": 4, "maxSeconds": 8}, "failureProfile": "lid-dispenser", "consumes": [{"materialId": "lid-12oz", "amount": 1, "unit": "count"}]}
+  ]
+}

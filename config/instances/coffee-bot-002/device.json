@@ -1,0 +1,12 @@
+{
+  "instanceId": "instance-coffee-bot-002",
+  "deviceId": "coffee-bot-002",
+  "deviceName": "COFFEE BOT 002",
+  "operatorId": "operator-demo-001",
+  "storeId": "store-demo-taipei-02",
+  "storeName": "台北大安体验店",
+  "environment": "development",
+  "backend": {"mode": "remote", "baseUrl": "http://localhost:8080", "commandPollSeconds": 2, "heartbeatIntervalSeconds": 30, "requestTimeoutSeconds": 5},
+  "localApi": {"enabled": true, "host": "127.0.0.1", "port": 9102},
+  "enableConsole": true
+}

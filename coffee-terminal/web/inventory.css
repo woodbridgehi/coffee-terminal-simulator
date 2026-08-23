@@ -1,0 +1,29 @@
+.inventory-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.inventory-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 7px 12px;
+  padding: 10px;
+  border: 1px solid #343639;
+  border-radius: 5px;
+  background: #151617;
+}
+
+.inventory-name { color: #eee7df; font-size: 12px; }
+.inventory-amount { color: #aaa198; font: 10px 'DM Mono'; }
+.inventory-status { align-self: start; padding: 3px 6px; border-radius: 3px; font: 500 9px 'DM Mono'; }
+.inventory-status.ok { color: #70d69c; background: rgba(112, 214, 156, .1); }
+.inventory-status.low { color: #e8ae64; background: rgba(232, 174, 100, .1); }
+.inventory-status.critical { color: #ee806f; background: rgba(238, 128, 111, .1); }
+.inventory-bar { grid-column: 1 / -1; height: 4px; overflow: hidden; border-radius: 4px; background: #2b2d2f; }
+.inventory-bar span { display: block; height: 100%; background: #72bc8d; }
+.inventory-item.low .inventory-bar span { background: #d89a51; }
+.inventory-item.critical .inventory-bar span { background: #d46554; }
+.inventory-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+.inventory-actions button { padding: 0; border: 0; color: #d59a5c; background: none; cursor: pointer; font: 10px 'DM Mono'; }
+.empty-note { margin: 14px 0 0; color: #817970; font-size: 11px; }

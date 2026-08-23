@@ -1,0 +1,472 @@
+# Coffee Terminal Simulator
+
+基于 pywebview 的自动贩卖咖啡机终端模拟器，用于联调订单、商品、设备、库存、告警和售后服务。它不模拟机械运动，也不在终端内创建正式订单、处理支付或决定退款。
+
+终端负责：
+
+- 展示后台提供的下单二维码和设备状态。
+- 从本地 JSON 发布这台设备支持的饮品能力。
+- 从后台领取制作任务，在本地按步骤计时执行。
+- 预占和扣减整台设备共享的物料库存。
+- 模拟步骤故障、重试、暂停、取消和网络中断。
+- 向后台同步心跳、能力、库存和设备事实事件。
+- 提供本地查询 API 和开发控制台，辅助后台集成测试。
+
+手机端始终访问后台的商品和订单服务，不直接连接终端本地 API。
+
+## 1. 项目结构
+
+```text
+coffee-terminal-simulator/
+├── coffee-terminal/
+│   ├── app.py                       # 单实例 pywebview 入口
+│   ├── backend.py                   # 设备运行时和任务状态机
+│   ├── catalog.py                   # 配方校验、随机时长和能力计算
+│   ├── inventory.py                 # 预占、扣料、补料和库存持久化
+│   ├── failures.py                  # 故障策略
+│   ├── cloud.py                     # 云端 HTTP 客户端
+│   ├── local_api.py                 # 本地设备 API
+│   ├── DESIGN.md                    # 架构、状态机和一致性规则
+│   └── API.md                       # 后台与本地接口契约
+├── config/
+│   ├── README.md                    # 配置字段参考
+│   └── instances/
+│       ├── coffee-bot-001/
+│       │   ├── device.json
+│       │   ├── recipes/*.json       # 一个文件一种饮品
+│       │   ├── materials.json       # 本机共享物料定义
+│       │   ├── failures.json
+│       │   └── state/inventory.json # 自动维护的实时库存
+│       └── coffee-bot-002/
+├── scripts/
+├── tests/
+├── start-instance.command
+└── start-all.command
+```
+
+## 2. 安装与启动
+
+项目已有 `.venv` 时可直接运行。重新安装环境：
+
+```bash
+cd /Users/alex/Downloads/armaster/coffee-terminal-simulator
+python3 -m venv .venv
+.venv/bin/python -m pip install -r coffee-terminal/requirements.txt
+```
+
+启动单台设备：
+
+```bash
+./start-instance.command coffee-bot-001
+```
+
+启动单台并打开 pywebview 调试工具：
+
+```bash
+.venv/bin/python scripts/start_instance.py coffee-bot-001 --debug
+```
+
+启动所有实例：
+
+```bash
+./start-all.command
+# 或
+.venv/bin/python scripts/start_all.py
+```
+
+`start-all.command` 会扫描 `config/instances/*/device.json`。每个实例启动独立窗口、独立本地 API 端口和独立库存文件。
+
+当前示例：
+
+- `coffee-bot-001`：`local` 模式，适合直接体验本地制作、随机时长、库存和故障。
+- `coffee-bot-002`：`remote` 模式，默认连接 `http://localhost:8080`，适合后台联调。
+
+## 3. 新建或复制设备
+
+复制整个实例目录：
+
+```bash
+cp -R config/instances/coffee-bot-001 config/instances/coffee-bot-003
+```
+
+至少修改：
+
+- `device.json`：`instanceId`、`deviceId`、设备名称、门店和运营商信息。
+- `localApi.port`：同时运行的实例端口不能重复。
+- `recipes/`：这台设备实际支持的饮品。
+- `materials.json`：这台设备拥有的物料和容量。
+- `failures.json`：这台设备的故障特征。
+
+如果新设备需要使用初始库存，删除复制来的 `state/inventory.json`；首次启动会按 `materials.json` 的 `initialOnHand` 创建新状态。不要复制旧设备的实时库存当作新设备初始库存。
+
+## 4. 运行模式
+
+在 `device.json` 中配置：
+
+```json
+{
+  "backend": {
+    "mode": "local",
+    "baseUrl": "http://localhost:8080",
+    "commandPollSeconds": 2,
+    "heartbeatIntervalSeconds": 30,
+    "requestTimeoutSeconds": 5
+  }
+}
+```
+
+### local
+
+- 不访问云端后台。
+- 控制台“模拟后台下单”直接创建本地测试任务。
+- 暂停、跳过、重试、强制失败等操作直接作用于本地任务。
+- 本地查询 API 正常可用。
+
+### remote
+
+- 真实请求 `backend.baseUrl`。
+- 轮询后台命令并 ACK 接受或拒绝。
+- 本地执行配方并同步能力、库存、心跳和事件。
+- 控制台下单和调试命令先请求后台调试接口，再由正常命令轮询返回设备。
+- 后台不可用时终端显示离线；本地配置和库存不会因此丢失。
+
+可选鉴权：
+
+```json
+{
+  "backend": {
+    "authToken": "test-device-token",
+    "headers": {"X-Test-Environment": "staging"}
+  }
+}
+```
+
+设置 `authToken` 后请求会携带 `Authorization: Bearer ...`；所有云端请求默认携带 `X-Device-Id`。
+
+## 5. 添加或修改饮品
+
+一个 recipe JSON 就是一种设备饮品能力。建议文件名与 `recipeId` 一致，且同一设备内不能出现重复 `recipeId`。
+
+完整示例：
+
+```json
+{
+  "recipeId": "operator-special-v1",
+  "skuCode": "OPERATOR_SPECIAL",
+  "version": "1.0.0",
+  "name": "门店榛果特调",
+  "enabled": true,
+  "display": {
+    "description": "门店限定榛果奶咖",
+    "sortOrder": 30,
+    "operatorExclusive": true
+  },
+  "visual": {
+    "profile": "hazelnut-special",
+    "cup": "transparent-tall",
+    "layers": ["coffee", "milk", "hazelnut-syrup"]
+  },
+  "steps": [
+    {
+      "id": "prepare-cup",
+      "name": "准备杯子",
+      "animationCue": "cup-arrive",
+      "durationSeconds": 5,
+      "durationRandomization": {"minSeconds": 3, "maxSeconds": 7},
+      "failureProfile": "cup-dispenser",
+      "consumes": [
+        {"materialId": "cup-12oz", "amount": 1, "unit": "count"}
+      ]
+    },
+    {
+      "id": "add-hazelnut",
+      "name": "加入榛果糖浆",
+      "animationCue": "syrup-swirl",
+      "durationSeconds": 7,
+      "durationRandomization": {"minSeconds": 5, "maxSeconds": 10},
+      "failureProfile": "syrup-pump",
+      "consumes": [
+        {"materialId": "hazelnut-syrup", "amount": 20, "unit": "ml"}
+      ]
+    }
+  ]
+}
+```
+
+必要规则：
+
+- `recipeId`、`skuCode`、`version`、`name` 和非空 `steps` 必填。
+- 修改配方后应提升 `version`，后台任务可用 `recipeVersion` 做版本校验。
+- 每一步必须有 `id`、`name` 和大于 0 的 `durationSeconds`。
+- `consumes.materialId` 必须存在于本机 `materials.json`。
+- recipe 和 material 的单位必须完全一致，例如 `ml` 不能写成 `g`。
+- 消耗量必须大于 0。
+- 制作任务执行期间不能保存或刷新配方。
+
+保存文件后，在控制台点击“刷新配置”，或调用：
+
+```bash
+curl -X POST http://127.0.0.1:9101/device/v1/config/reload
+```
+
+刷新后终端会重新扫描全部 recipe、计算 `capabilityVersion`、可制作杯数和时间范围。无效文件不会进入可售产品，错误会出现在能力响应的 `invalidRecipes`。
+
+## 6. 随机步骤时间
+
+每个步骤的 `durationSeconds` 是运营基准估算，可选配置：
+
+```json
+{
+  "durationSeconds": 25,
+  "durationRandomization": {
+    "minSeconds": 22,
+    "maxSeconds": 30
+  }
+}
+```
+
+规则：
+
+- `minSeconds` 必须大于 0。
+- `maxSeconds` 必须大于或等于 `minSeconds`。
+- `durationSeconds` 必须位于范围内。
+- 未配置随机范围时，实际时间始终等于 `durationSeconds`。
+- 接受每杯任务时，每个步骤分别随机一次，并冻结为本杯执行计划。
+- 同一杯制作过程中不会重新抽取，因此进度、剩余时间和事件一致。
+- 能力中的 `estimatedDurationSeconds` 是各步骤基准之和。
+- `durationRangeSeconds.min/max` 是各步骤最小值和最大值之和。
+- `task.acknowledged` 事件给出本杯 `plannedDurationSeconds` 和每一步实际时长。
+
+## 7. 饮品形象与步骤表现配置
+
+配方可以选择内置饮品形象：
+
+```json
+"visual": {
+  "profile": "iced-latte",
+  "cup": "transparent-tall",
+  "layers": ["milk", "coffee", "ice"]
+}
+```
+
+支持的 `visual.profile`：
+
+```text
+espresso
+americano
+iced-latte
+hazelnut-special
+generic
+```
+
+步骤可选择：
+
+```json
+"animationCue": "milk-pour"
+```
+
+支持的动作：
+
+```text
+cup-arrive
+ice-drop
+brew-stream
+water-pour
+milk-pour
+syrup-swirl
+seal
+serve
+idle
+```
+
+这两个字段都可省略；终端会根据饮品和步骤名称尝试推断，无法识别的饮品使用 `generic`。显式写入不支持的值会使该 recipe 进入 `invalidRecipes`。
+
+## 8. 共享物料与库存估算
+
+`materials.json` 是整台设备的总物料，不是每种饮品各一套库存。所有 recipe 通过相同 `materialId` 消耗同一个余额。
+
+例如：
+
+- 美式消耗咖啡豆、净水、杯和杯盖。
+- 拿铁消耗同一份咖啡豆和净水，并额外消耗牛奶或冰块。
+- 做完一杯拿铁后，美式和特调的 `maxServings` 也会重新计算。
+
+库存字段：
+
+- `onHand`：物理账面余量。
+- `reserved`：已接受但尚未完成步骤消耗的预占量。
+- `available = onHand - reserved`：当前可用于新任务的数量。
+
+单个饮品的 `maxServings` 计算方式为：
+
+```text
+min(floor(各物料 available / 该饮品整杯需求量))
+```
+
+它表示“如果后续全部制作这一种饮品，当前最多能接受多少杯”，不是不同 SKU 之间的库存分配承诺。
+
+制作规则：
+
+1. 接受任务前汇总整杯需求。
+2. 物料不足则用 `MATERIAL_INSUFFICIENT` 拒绝任务。
+3. 接受任务后预占整杯需求。
+4. 每一步成功后扣除本步骤 `onHand` 并释放对应预占。
+5. 失败或取消时释放尚未执行步骤的预占。
+6. 已经消耗的物料不会返还。
+7. 每次库存变化都会增加 `inventoryVersion`，并使能力快照重新同步。
+
+库存状态：
+
+- `OK`：高于低库存阈值。
+- `LOW`：小于等于 `lowThreshold`。
+- `CRITICAL`：小于等于 `criticalThreshold`。
+
+## 9. 补料与盘点
+
+控制台“补满”会把该物料设置为 `capacity`。也可以调用本地 API：
+
+设置绝对值：
+
+```bash
+curl -X POST http://127.0.0.1:9101/device/v1/inventory/adjustments \
+  -H 'Content-Type: application/json' \
+  -d '{"materialId":"milk","mode":"SET","amount":6000,"reason":"OPERATOR_REFILL","operatorId":"operator-001"}'
+```
+
+增加或减少：
+
+```bash
+curl -X POST http://127.0.0.1:9101/device/v1/inventory/adjustments \
+  -H 'Content-Type: application/json' \
+  -d '{"materialId":"milk","mode":"ADD","amount":-200,"reason":"WASTE"}'
+```
+
+调整后的数量必须在 `0` 和 `capacity` 之间。操作会产生 `inventory.adjusted` 事件并更新能力和库存快照。
+
+`state/inventory.json` 是运行时状态文件：
+
+- 重启会保留 `onHand`。
+- 启动时会清除上次进程遗留的预占，因为当前版本不恢复中断任务。
+- 新增物料时会使用该物料的 `initialOnHand`。
+- 已存在物料不能直接更换单位；需要迁移或重建库存状态。
+- 手工删除该文件会把整机库存重置到 `initialOnHand`，仅建议测试环境使用。
+
+## 10. 故障配置与调试
+
+`failures.json` 支持：
+
+- 设备全局故障率 `globalFailureRate`。
+- 可复用硬件故障档案 `profiles`。
+- 针对具体步骤 ID 的 `stepOverrides`。
+
+故障档案示例：
+
+```json
+{
+  "failureRate": 0.02,
+  "errorCode": "MILK_PUMP_TIMEOUT",
+  "message": "牛奶泵超时",
+  "retryable": true,
+  "maxRetries": 1,
+  "timing": "after",
+  "consumeOnFailure": true
+}
+```
+
+- `timing=before`：步骤开始前失败，通常不消耗本步骤物料。
+- `timing=after`：步骤计时完成后失败，可用 `consumeOnFailure` 表示物料是否已经投入。
+- 重试必须满足 `retryable=true`、未超过 `maxRetries` 且剩余物料足够。
+- 控制台失败率滑块只覆盖当前进程，不修改 JSON。
+- “下一步失败”只作用一次，用于测试失败订单、告警、退款和售后流程。
+- “模拟断网”暂停云端通信；当前实现也会暂停本地任务计时，恢复网络后继续。
+
+## 11. 开发控制台
+
+右上角按钮打开控制台，可进行：
+
+- 选择和编辑 recipe JSON。
+- 创建测试订单。
+- 查看物料、预占、阈值状态并补满。
+- 修改当前进程故障率。
+- 强制下一环节失败。
+- 暂停、继续、跳过、重试和清理任务。
+- 模拟断网。
+- 查看最近 50 条本地事件。
+
+远程模式下，下单、暂停、跳过、重试和强制失败会先调用后台调试接口；后台必须再生成设备命令。`toggle-offline` 例外，它直接作用于本地连接状态。
+
+## 12. 本地查询 API
+
+端口由 `device.json` 的 `localApi.port` 决定：
+
+```text
+GET  /device/v1/health
+GET  /device/v1/capabilities
+GET  /device/v1/inventory
+GET  /device/v1/status
+POST /device/v1/inventory/adjustments
+POST /device/v1/config/reload
+```
+
+示例：
+
+```bash
+curl http://127.0.0.1:9101/device/v1/health
+curl http://127.0.0.1:9101/device/v1/capabilities
+curl http://127.0.0.1:9101/device/v1/inventory
+curl http://127.0.0.1:9101/device/v1/status
+```
+
+本地 API 当前没有单独鉴权，默认只应绑定 `127.0.0.1`。不要把补料和配置刷新接口直接暴露到公网。
+
+## 13. 后台接入顺序
+
+推荐后台按以下顺序实现：
+
+1. `POST heartbeat`，确认设备在线和版本。
+2. `PUT capabilities`，保存设备可售能力投影。
+3. `PUT inventory`，保存实时库存投影。
+4. `GET commands` 与 `POST task ACK`，打通任务领取。
+5. `POST events`，用设备事实推进订单状态。
+6. `GET display-config`，提供二维码。
+7. 最后实现仅测试环境使用的 debug 接口。
+
+完整协议见 [coffee-terminal/API.md](coffee-terminal/API.md)，业务边界和一致性规则见 [coffee-terminal/DESIGN.md](coffee-terminal/DESIGN.md)，配置字段见 [config/README.md](config/README.md)。
+
+## 14. 测试
+
+```bash
+.venv/bin/python -m py_compile coffee-terminal/*.py scripts/*.py
+.venv/bin/python -m unittest discover -s tests -v
+node --test tests/test_visual_logic.mjs
+node --check coffee-terminal/web/app.js
+node --check coffee-terminal/web/drink-visual.js
+```
+
+当前测试覆盖：
+
+- 本地 API、能力计算和库存快照。
+- 两种不同饮品连续消耗同一份共享物料。
+- 每杯随机步骤时长及时间范围。
+- 缺料拒单和能力下架。
+- 故障后的物料消耗与预占释放。
+- 真实 HTTP 命令、ACK、心跳、能力、库存和事件同步。
+- 饮品形象与步骤表现配置映射。
+
+## 15. 常见问题
+
+### 界面显示离线
+
+检查 `backend.mode` 是否为 `remote`、`baseUrl` 是否可访问，以及后台是否实现了命令、心跳、能力和库存接口。
+
+### 新增配方没有出现在能力清单
+
+调用配置刷新，再查看 `GET /device/v1/capabilities` 的 `invalidRecipes`。常见原因是重复 `recipeId`、未知物料、单位不一致、随机时间范围错误或使用了不支持的表现配置。
+
+### 修改 initialOnHand 后库存没变化
+
+`initialOnHand` 只用于首次创建该物料状态。已有设备应通过补料/盘点接口调整；测试环境需要完全重置时才删除 `state/inventory.json`。
+
+### 启动多个实例端口冲突
+
+确保每个实例的 `localApi.port` 唯一。后台也应把 `deviceId` 和 `instanceId` 当作不同身份管理。

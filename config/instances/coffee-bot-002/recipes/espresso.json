@@ -1,0 +1,14 @@
+{
+  "recipeId": "espresso-v1",
+  "skuCode": "ESPRESSO",
+  "version": "1.0.0",
+  "name": "双份浓缩",
+  "enabled": true,
+  "display": {"description": "短杯双份浓缩", "sortOrder": 10},
+  "visual": {"profile": "espresso", "cup": "ceramic-espresso", "layers": ["espresso", "crema"]},
+  "steps": [
+    {"id": "prepare-cup", "name": "准备浓缩杯", "animationCue": "cup-arrive", "durationSeconds": 4, "durationRandomization": {"minSeconds": 3, "maxSeconds": 6}, "failureProfile": "cup-dispenser", "consumes": [{"materialId": "cup-4oz", "amount": 1, "unit": "count"}]},
+    {"id": "extract-coffee", "name": "萃取双份浓缩", "animationCue": "brew-stream", "durationSeconds": 28, "durationRandomization": {"minSeconds": 23, "maxSeconds": 34}, "failureProfile": "brewer", "consumes": [{"materialId": "coffee-beans", "amount": 18, "unit": "g"}, {"materialId": "water", "amount": 45, "unit": "ml"}]},
+    {"id": "serve", "name": "移动到取杯口", "animationCue": "serve", "durationSeconds": 5, "durationRandomization": {"minSeconds": 4, "maxSeconds": 7}, "failureProfile": "output-gate", "consumes": []}
+  ]
+}

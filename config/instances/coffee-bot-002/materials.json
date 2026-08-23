@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "materials": [
+    {"materialId": "coffee-beans", "name": "咖啡豆", "unit": "g", "capacity": 3000, "initialOnHand": 800, "lowThreshold": 700, "criticalThreshold": 200, "enabled": true},
+    {"materialId": "water", "name": "净水", "unit": "ml", "capacity": 12000, "initialOnHand": 9000, "lowThreshold": 2500, "criticalThreshold": 600, "enabled": true},
+    {"materialId": "cup-4oz", "name": "4oz 浓缩杯", "unit": "count", "capacity": 80, "initialOnHand": 36, "lowThreshold": 20, "criticalThreshold": 5, "enabled": true}
+  ]
+}

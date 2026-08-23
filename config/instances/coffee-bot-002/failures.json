@@ -1,0 +1,9 @@
+{
+  "globalFailureRate": 0.005,
+  "profiles": {
+    "cup-dispenser": {"failureRate": 0.02, "errorCode": "CUP_NOT_DETECTED", "message": "取杯失败", "retryable": true, "maxRetries": 1, "timing": "before", "consumeOnFailure": false},
+    "brewer": {"failureRate": 0.04, "errorCode": "BREW_PRESSURE_LOW", "message": "萃取压力异常", "retryable": true, "maxRetries": 2, "timing": "after", "consumeOnFailure": true},
+    "output-gate": {"failureRate": 0.015, "errorCode": "OUTPUT_GATE_BLOCKED", "message": "取杯口阻塞", "retryable": false, "maxRetries": 0, "timing": "after", "consumeOnFailure": false}
+  },
+  "stepOverrides": {}
+}

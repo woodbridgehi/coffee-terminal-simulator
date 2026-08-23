@@ -1,0 +1,94 @@
+{
+  "recipeId": "iced-latte-v1",
+  "skuCode": "ICED_LATTE",
+  "version": "1.0.0",
+  "name": "冰拿铁",
+  "enabled": true,
+  "display": {
+    "description": "双份浓缩、鲜奶与冰块",
+    "sortOrder": 20
+  },
+  "visual": {"profile": "iced-latte", "cup": "transparent-tall", "layers": ["milk", "coffee", "ice"]},
+  "steps": [
+    {
+      "id": "prepare-cup",
+      "name": "准备杯子",
+      "animationCue": "cup-arrive",
+      "durationSeconds": 5,
+      "durationRandomization": {"minSeconds": 3, "maxSeconds": 7},
+      "failureProfile": "cup-dispenser",
+      "consumes": [
+        {
+          "materialId": "cup-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
+    },
+    {
+      "id": "add-ice",
+      "name": "加入冰块",
+      "animationCue": "ice-drop",
+      "durationSeconds": 8,
+      "durationRandomization": {"minSeconds": 6, "maxSeconds": 11},
+      "failureProfile": "ice-dispenser",
+      "consumes": [
+        {
+          "materialId": "ice",
+          "amount": 180,
+          "unit": "g"
+        }
+      ]
+    },
+    {
+      "id": "extract-coffee",
+      "name": "萃取咖啡",
+      "animationCue": "brew-stream",
+      "durationSeconds": 15,
+      "durationRandomization": {"minSeconds": 13, "maxSeconds": 20},
+      "failureProfile": "brewer",
+      "consumes": [
+        {
+          "materialId": "coffee-beans",
+          "amount": 18,
+          "unit": "g"
+        },
+        {
+          "materialId": "water",
+          "amount": 45,
+          "unit": "ml"
+        }
+      ]
+    },
+    {
+      "id": "add-milk",
+      "name": "添加牛奶",
+      "animationCue": "milk-pour",
+      "durationSeconds": 15,
+      "durationRandomization": {"minSeconds": 12, "maxSeconds": 19},
+      "failureProfile": "milk-pump",
+      "consumes": [
+        {
+          "materialId": "milk",
+          "amount": 180,
+          "unit": "ml"
+        }
+      ]
+    },
+    {
+      "id": "seal-and-serve",
+      "name": "封杯并出杯",
+      "animationCue": "seal",
+      "durationSeconds": 6,
+      "durationRandomization": {"minSeconds": 4, "maxSeconds": 8},
+      "failureProfile": "lid-dispenser",
+      "consumes": [
+        {
+          "materialId": "lid-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
+    }
+  ]
+}
