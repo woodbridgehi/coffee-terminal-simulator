@@ -1,6 +1,7 @@
 const $ = (selector) => document.querySelector(selector);
 let state = null;
 let selectedRecipeId = null;
+const renderCache = { recipes: '', inventory: '', events: '' };
 
 const mockApi = (() => {
   const recipe = { recipeId: 'iced-latte-v1', skuCode: 'ICED_LATTE', version: '1.0.0', name: '冰拿铁', enabled: true, visual: { profile: 'iced-latte' }, steps: [
@@ -51,14 +52,16 @@ function toast(message) { const element = $('#toast'); element.textContent = mes
 function renderRecipes(recipes, capabilities) {
   const products = new Map((capabilities?.products || []).map((item) => [item.recipeId, item]));
   const select = $('#recipeSelect'); const current = selectedRecipeId || select.value || recipes[0]?.recipeId;
-  select.innerHTML = recipes.map((recipe) => { const capability = products.get(recipe.recipeId); const suffix = capability && !capability.available ? ' · 缺料' : capability ? ` · 可做 ${capability.maxServings} 杯` : ''; return `<option value="${escapeHtml(recipe.recipeId)}">${escapeHtml(recipe.name)} · ${escapeHtml(recipe.version)}${suffix}</option>`; }).join('');
+  const html = recipes.map((recipe) => { const capability = products.get(recipe.recipeId); const suffix = capability && !capability.available ? ' · 缺料' : capability ? ` · 可做 ${capability.maxServings} 杯` : ''; return `<option value="${escapeHtml(recipe.recipeId)}">${escapeHtml(recipe.name)} · ${escapeHtml(recipe.version)}${suffix}</option>`; }).join('');
+  if (html !== renderCache.recipes) { renderCache.recipes = html; select.innerHTML = html; }
   selectedRecipeId = recipes.some((item) => item.recipeId === current) ? current : recipes[0]?.recipeId;
   if (selectedRecipeId) select.value = selectedRecipeId;
 }
 
 function renderInventory(snapshot) {
   const materials = snapshot?.materials || [];
-  $('#inventoryList').innerHTML = materials.length ? materials.map((item) => { const ratio = item.capacity ? Math.min(100, Math.max(0, item.onHand / item.capacity * 100)) : 0; const status = String(item.status || 'OK').toLowerCase(); return `<div class="inventory-item ${status}"><div><div class="inventory-name">${escapeHtml(item.name)}</div><div class="inventory-amount">${item.onHand} / ${item.capacity} ${escapeHtml(item.unit)} · 预占 ${item.reserved || 0}</div></div><span class="inventory-status ${status}">${escapeHtml(item.status)}</span><div class="inventory-bar"><span style="width:${ratio}%"></span></div><div class="inventory-actions"><button data-refill="${escapeHtml(item.materialId)}" data-capacity="${item.capacity}">补满</button></div></div>`; }).join('') : '<p class="empty-note">当前实例没有物料配置</p>';
+  const html = materials.length ? materials.map((item) => { const ratio = item.capacity ? Math.min(100, Math.max(0, item.onHand / item.capacity * 100)) : 0; const status = String(item.status || 'OK').toLowerCase(); return `<div class="inventory-item ${status}"><div><div class="inventory-name">${escapeHtml(item.name)}</div><div class="inventory-amount">${item.onHand} / ${item.capacity} ${escapeHtml(item.unit)} · 预占 ${item.reserved || 0}</div></div><span class="inventory-status ${status}">${escapeHtml(item.status)}</span><div class="inventory-bar"><span style="width:${ratio}%"></span></div><div class="inventory-actions"><button data-refill="${escapeHtml(item.materialId)}" data-capacity="${item.capacity}">补满</button></div></div>`; }).join('') : '<p class="empty-note">当前实例没有物料配置</p>';
+  if (html !== renderCache.inventory) { renderCache.inventory = html; $('#inventoryList').innerHTML = html; }
 }
 
 function render(data) {
@@ -69,12 +72,12 @@ function render(data) {
   if (!$('#recipeEditor').matches(':focus')) { const selected = recipes.find((item) => item.recipeId === selectedRecipeId); if (selected && $('#recipeEditor').dataset.recipeId !== selected.recipeId) { $('#recipeEditor').value = JSON.stringify(selected, null, 2); $('#recipeEditor').dataset.recipeId = selected.recipeId; } }
   const isReady = task?.state === 'SUCCEEDED'; const isFailed = task?.state === 'FAILED'; const isMaking = task && ['RECEIVED', 'VALIDATING', 'ACKNOWLEDGED', 'RUNNING', 'PAUSED', 'RETRY_WAIT'].includes(task.state);
   setVisible('#idleView', !task); setVisible('#makingView', isMaking); setVisible('#readyView', isReady); setVisible('#errorView', isFailed);
-  if (isMaking) window.DrinkVisual?.render(task); else window.DrinkVisual?.reset();
+  if (isMaking) { window.DrinkVisual?.render(task); window.DrinkVisual?.updateProgress(task); } else window.DrinkVisual?.reset();
   if (task) {
     const total = task.recipe.steps.length; $('#taskState').textContent = task.state; $('#taskTitle').textContent = task.recipe.name; $('#taskMeta').textContent = `${task.orderId || task.taskId} · ${task.message}`; $('#recipeName').textContent = task.recipe.name; $('#orderId').textContent = `订单 ${task.orderId || task.taskId}`; $('#currentStep').textContent = task.message; $('#stepCount').textContent = `步骤 ${task.stepIndex + 1} / ${total}`; $('#displayProgress').style.width = `${Math.round((task.stepIndex + task.stepProgress) / total * 100)}%`;
     const seconds = Math.max(0, Math.ceil(task.recipe.steps.slice(task.stepIndex).reduce((sum, step, index) => sum + (index === 0 ? step.durationSeconds * (1 - task.stepProgress) : step.durationSeconds), 0))); $('#remainingTime').textContent = `预计还需 ${seconds} 秒`; $('#readyOrder').textContent = `订单 ${task.orderId || task.taskId} · ${task.recipe.name}`; $('#errorMessage').textContent = task.failure ? `${task.failure.code} · ${task.message}` : '请稍候或联系门店工作人员'; $('#pauseResume').textContent = task.state === 'PAUSED' ? '继续' : '暂停';
   } else { $('#taskState').textContent = 'IDLE'; $('#taskTitle').textContent = '暂无制作任务'; $('#taskMeta').textContent = '等待销售服务下发订单'; }
-  $('#failureRate').value = Math.round((runtime.override.globalFailureRate || 0) * 100); $('#failureValue').textContent = `${$('#failureRate').value}%`; $('#toggleOffline').textContent = runtime.override.offline ? '恢复网络' : '模拟断网'; $('#eventLog').innerHTML = runtime.events.map((entry) => `<div class="event"><time>${fmtTime(entry.occurredAt)}</time><div>${escapeHtml(entry.message)}<span class="event-type">${escapeHtml(entry.type)}</span></div></div>`).join('');
+  if (document.activeElement !== $('#failureRate')) $('#failureRate').value = Math.round((runtime.override.globalFailureRate || 0) * 100); $('#failureValue').textContent = `${$('#failureRate').value}%`; $('#toggleOffline').textContent = runtime.override.offline ? '恢复网络' : '模拟断网'; const eventSig = `${runtime.events.length}:${runtime.events[0]?.occurredAt || ''}`; if (eventSig !== renderCache.events) { renderCache.events = eventSig; $('#eventLog').innerHTML = runtime.events.map((entry) => `<div class="event"><time>${fmtTime(entry.occurredAt)}</time><div>${escapeHtml(entry.message)}<span class="event-type">${escapeHtml(entry.type)}</span></div></div>`).join(''); }
 }
 
 async function refresh() { try { render(await api().get_state()); } catch (error) { toast(`连接终端失败：${error.message}`); } }

@@ -1,6 +1,8 @@
 (() => {
   const PROFILE_CLASSES = ['profile-americano', 'profile-espresso', 'profile-iced-latte', 'profile-hazelnut-special', 'profile-generic'];
   const CUE_CLASSES = ['cue-cup-arrive', 'cue-ice-drop', 'cue-brew-stream', 'cue-water-pour', 'cue-milk-pour', 'cue-syrup-swirl', 'cue-seal', 'cue-serve', 'cue-idle'];
+  // Steps that actually add liquid to the cup — these drive the fill-level animation.
+  const POUR_CUES = new Set(['brew-stream', 'milk-pour', 'water-pour', 'syrup-swirl']);
   const SHAPES = {
     tall: {
       shell: 'M88 78 L104 258 Q108 285 134 289 H226 Q252 285 256 258 L272 78 Z',
@@ -28,6 +30,11 @@
   function stopAnimations(stage) {
     for (const animation of animations) {
       if (typeof animation.pause === 'function') animation.pause();
+    }
+    // B1: purge anime v4 engine entries so looping tweens don't accumulate across a long session.
+    // pause() alone leaves them registered in anime's internal ticker; remove() truly detaches them.
+    if (window.anime?.remove) {
+      stage.querySelectorAll('.drink-visual, .drink-visual *').forEach((element) => window.anime.remove(element));
     }
     animations = [];
     stage.querySelectorAll('.drink-visual, .drink-visual *').forEach((element) => {
@@ -79,7 +86,8 @@
     if (cue === 'cup-arrive') {
       play(svg, { translateY: [38, 7], opacity: [0, 1], duration: 900, ease: 'out(4)' });
     } else if (cue === 'ice-drop') {
-      play(stage.querySelectorAll('.ice-cube'), { translateY: [-58, 0], rotate: [-18, 0], opacity: [0, 1], delay: window.anime.stagger(130), duration: 850, ease: 'outBounce' });
+      // B2: animate the wrapper <g> (translateY only) so each rect keeps its SVG rotate() pivot.
+      play(stage.querySelectorAll('.ice-drop'), { translateY: [-58, 0], opacity: [0, 1], delay: window.anime.stagger(130), duration: 850, ease: 'outBounce' });
       play(contents, { translateY: [3, 0], duration: 480, delay: 620, ease: 'out(3)' });
     } else if (cue === 'brew-stream') {
       play('#brewStream', { scaleY: [.08, 1], opacity: [.35, 1], duration: 760, loop: true, alternate: true, ease: 'inOutSine' });
@@ -103,9 +111,45 @@
     } else {
       play(svg, { translateY: [7, 2], duration: 1800, loop: true, alternate: true, ease: 'inOutSine' });
     }
-    if (['americano', 'espresso'].includes(inferProfile({ visual: { profile: stage.dataset.profile } }))) {
-      play('.aroma', { translateY: [8, -10], opacity: [.1, .56], delay: window.anime.stagger(180), duration: 1700, loop: true, alternate: true, ease: 'inOutSine' });
+    // Steam only for hot drinks. Layered rise + sway + fade reads as wispy steam (cheaper than a turbulence filter).
+    if (stage.dataset.profile === 'americano' || stage.dataset.profile === 'espresso') {
+      play('.aroma', {
+        translateY: [14, -26],
+        translateX: [-3, 4],
+        scaleY: [.9, 1.25],
+        opacity: [0, .5],
+        delay: window.anime.stagger(220),
+        duration: 2600,
+        loop: true,
+        alternate: true,
+        ease: 'inOutSine',
+      });
     }
+  }
+
+  // Fraction (0..1) of the cup that is filled, counting only liquid-adding steps.
+  function liquidFill(task) {
+    const steps = task?.recipe?.steps || [];
+    let total = 0;
+    for (const step of steps) if (POUR_CUES.has(inferCue(step))) total += 1;
+    if (!total) return 0;
+    let filled = 0;
+    for (let i = 0; i < steps.length; i += 1) {
+      if (!POUR_CUES.has(inferCue(steps[i]))) continue;
+      if (i < task.stepIndex) filled += 1;
+      else if (i === task.stepIndex) filled += Math.min(1, Math.max(0, task.stepProgress || 0));
+    }
+    return Math.min(1, Math.max(0, filled / total));
+  }
+
+  // Called on every poll: keeps the liquid level in sync with real task progress (not a blind loop).
+  function updateProgress(task) {
+    const stage = document.querySelector('#coffeeStage');
+    if (!stage) return;
+    const body = stage.querySelector('.liquid-body');
+    if (!body) return;
+    const fill = task && task.recipe?.steps?.length ? liquidFill(task) : 0;
+    body.style.transform = `scaleY(${fill})`;
   }
 
   function render(task) {
@@ -132,5 +176,5 @@
     activeKey = '';
   }
 
-  window.DrinkVisual = { render, reset, inferProfile, inferCue };
+  window.DrinkVisual = { render, reset, updateProgress, inferProfile, inferCue };
 })();

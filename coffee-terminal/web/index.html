@@ -49,13 +49,15 @@
               <path class="aroma aroma-three" d="M215 82 C196 55 228 47 214 21" />
             </g>
             <g clip-path="url(#drinkClip)" class="drink-contents">
-              <rect class="liquid liquid-base" x="75" y="118" width="210" height="180" />
-              <rect class="liquid liquid-top" x="75" y="118" width="210" height="66" />
+              <g class="liquid-body">
+                <rect class="liquid liquid-base" x="75" y="118" width="210" height="180" />
+                <rect class="liquid liquid-top" x="75" y="118" width="210" height="66" />
+              </g>
               <path class="syrup-ribbon" d="M111 191 C142 166 214 218 249 184 C220 235 149 190 112 232" />
               <g class="ice-group">
-                <rect class="ice-cube ice-one" x="118" y="128" width="34" height="31" rx="6" transform="rotate(-12 135 144)" />
-                <rect class="ice-cube ice-two" x="164" y="140" width="36" height="32" rx="6" transform="rotate(9 182 156)" />
-                <rect class="ice-cube ice-three" x="211" y="122" width="32" height="30" rx="6" transform="rotate(-5 227 137)" />
+                <g class="ice-drop"><rect class="ice-cube ice-one" x="118" y="128" width="34" height="31" rx="6" transform="rotate(-12 135 144)" /></g>
+                <g class="ice-drop"><rect class="ice-cube ice-two" x="164" y="140" width="36" height="32" rx="6" transform="rotate(9 182 156)" /></g>
+                <g class="ice-drop"><rect class="ice-cube ice-three" x="211" y="122" width="32" height="30" rx="6" transform="rotate(-5 227 137)" /></g>
               </g>
               <ellipse class="foam-layer" cx="180" cy="125" rx="74" ry="16" />
               <rect class="glass-highlight" x="111" y="86" width="24" height="176" rx="12" fill="url(#glassShine)" />
