@@ -33,6 +33,7 @@ coffee-terminal-simulator/
 │   ├── state_store.py               # SQLite Inbox/Job/Outbox 可靠状态
 │   ├── DESIGN.md                    # 架构、状态机和一致性规则
 │   └── API.md                       # 后台与本地接口契约
+├── ACTIVATION.md                    # 多设备登记、错误码验证、激活与启动手册
 ├── config/
 │   ├── README.md                    # 配置字段参考
 │   └── instances/
@@ -85,7 +86,7 @@ python3 -m venv .venv
 
 当前示例：
 
-- `coffee-bot-001`：`local` 模式，适合直接体验本地制作、随机时长、库存和故障。
+- `coffee-bot-001`：已切换为 `remote` 模式；实例目录名为 `coffee-bot-001`，当前协议 `deviceId` 是管理台登记的 `coffee-bot`。
 - `coffee-bot-002`：`remote` 模式，连接 `https://coffee-api.woodbridge.top`，适合 VPS 在线联调；凭证从未跟踪的 `.secrets/coffee-bot-002.env` 注入。
 
 启动 002 在线模式：
@@ -109,6 +110,8 @@ python3 -m venv .venv
 ```
 
 ### 2.1 首次激活与轮换
+
+完整的后台登记、错误激活码测试、pending 重试、正确激活、启动、错误码和泄露轮换流程见 [ACTIVATION.md](ACTIVATION.md)。`deviceId` 必须与管理台登记值完全一致；实例目录名/启动参数不等于协议设备 ID。
 
 管理员先通过云端创建一次性激活码，并把码放入临时文件；不要把码直接写进 shell 历史。终端执行：
 

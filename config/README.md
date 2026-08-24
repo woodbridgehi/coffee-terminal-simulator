@@ -24,6 +24,8 @@ config/instances/{deviceId}/
 
 同一台电脑同时运行多个实例时，`instanceId`、`deviceId` 和 `localApi.port` 必须不同。
 
+`config/instances/{目录名}` 是本地启动参数；`device.json.deviceId` 是云端协议身份，两者不要求相同，但 `deviceId` 必须与管理台登记值逐字符一致。HTTP 404 通常表示后台未登记这个 `deviceId`，不是激活码错误；错误激活码对应 HTTP 401。完整操作见项目根目录 `ACTIVATION.md`。
+
 ## 2. device.json
 
 ```json

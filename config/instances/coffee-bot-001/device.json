@@ -1,17 +1,17 @@
 {
   "instanceId": "instance-coffee-bot-001",
-  "deviceId": "coffee-bot-001",
+  "deviceId": "coffee-bot",
   "deviceName": "COFFEE BOT 001",
   "operatorId": "operator-demo-001",
   "storeId": "store-demo-taipei-01",
   "storeName": "台北信义体验店",
   "environment": "development",
   "backend": {
-    "mode": "local",
-    "baseUrl": "http://localhost:8080",
+    "mode": "remote",
+    "baseUrl": "https://coffee-api.woodbridge.top",
     "commandPollSeconds": 2,
-    "heartbeatIntervalSeconds": 30,
-    "requestTimeoutSeconds": 5
+    "heartbeatIntervalSeconds": 10,
+    "requestTimeoutSeconds": 8
   },
   "localApi": {"enabled": true, "host": "127.0.0.1", "port": 9101},
   "enableConsole": true
