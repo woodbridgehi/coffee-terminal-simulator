@@ -10,7 +10,9 @@ config/instances/{deviceId}/
 ├── recipes/*.json
 ├── materials.json
 ├── failures.json
-└── state/inventory.json
+└── state/
+    ├── inventory.json
+    └── runtime.db
 ```
 
 - `device.json` 是启动入口，它的父目录就是完整实例目录。
@@ -18,6 +20,7 @@ config/instances/{deviceId}/
 - `materials.json` 定义整台设备共享的物料，不为每种饮品单独创建库存。
 - `failures.json` 定义设备和步骤故障概率。
 - `state/inventory.json` 由程序自动创建和更新，不建议手工编辑。
+- `state/runtime.db` 由程序自动维护命令 Inbox、任务、游标、ACK/命令结果和事件 Outbox，不得复制到另一台设备。
 
 同一台电脑同时运行多个实例时，`instanceId`、`deviceId` 和 `localApi.port` 必须不同。
 
@@ -41,7 +44,14 @@ config/instances/{deviceId}/
     "authToken": "optional-token",
     "headers": {"X-Test-Environment": "staging"}
   },
-  "localApi": {"enabled": true, "host": "127.0.0.1", "port": 9101},
+  "localApi": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 9101,
+    "authToken": "optional-local-maintenance-token",
+    "maxBodyBytes": 65536,
+    "allowedOrigins": []
+  },
   "enableConsole": true
 }
 ```
@@ -65,6 +75,9 @@ config/instances/{deviceId}/
 | `localApi.enabled` | 否 | 是否启动本地调试 API，默认 `true` |
 | `localApi.host` | 否 | 默认 `127.0.0.1` |
 | `localApi.port` | 否 | 本地 API 端口，多实例不能重复 |
+| `localApi.authToken` | 条件必填 | 写接口的 `X-Local-Token`；非回环绑定或 production 环境必须配置 |
+| `localApi.maxBodyBytes` | 否 | 本地写接口请求体上限，默认 65536 |
+| `localApi.allowedOrigins` | 否 | 允许访问写接口的浏览器 Origin；默认拒绝所有带 Origin 的请求 |
 | `enableConsole` | 否 | 预留开关；当前界面仍会显示控制台 |
 
 运行模式：
@@ -255,11 +268,11 @@ curl -X POST http://127.0.0.1:9101/device/v1/inventory/adjustments \
 - `updatedAt`：最后写入时间。
 - `items`：每种物料的 `onHand` 和 `reserved`。
 - `reservations`：按 `taskId` 保存的整杯预占。
-- `consumedKeys`：最近的 `taskId:stepId` 消耗幂等键，最多保留 1000 个。
+- `consumedKeys`：最近的 `taskId:stepId:attempt` 消耗幂等键，最多保留 1000 个。
 
-程序使用临时文件替换方式写入。启动时保留 `onHand`，但清空旧进程遗留的预占，因为当前版本不会恢复未完成任务。
+程序使用临时文件替换方式写入。若 `runtime.db` 中存在可恢复的活动任务，启动时保留对应预占；否则清理没有活动任务支撑的遗留预占。
 
-若希望实例重新使用 `materials.json` 的初始库存，应先关闭该实例，再删除它自己的 `state/inventory.json`。不要删除其他设备实例的状态目录。
+`state/runtime.db` 使用 SQLite WAL，保存 `command_inbox`、`production_job`、`event_outbox` 和同步游标。需要完全重置测试实例时，应先关闭该实例，再同时删除它自己的 `state/inventory.json`、`state/runtime.db`、`state/runtime.db-wal` 和 `state/runtime.db-shm`。只删除其中一种状态可能破坏任务与库存对应关系；不要删除其他设备实例的状态目录。
 
 ## 6. failures.json
 

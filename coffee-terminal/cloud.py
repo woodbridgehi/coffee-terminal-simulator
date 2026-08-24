@@ -8,7 +8,10 @@ from urllib.request import Request, urlopen
 
 
 class CloudError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, status: int | None = None, retryable: bool = True) -> None:
+        super().__init__(message)
+        self.status = status
+        self.retryable = retryable
 
 
 class CloudClient:
@@ -28,8 +31,13 @@ class CloudClient:
             with urlopen(request, timeout=self.timeout) as response:
                 raw = response.read().decode("utf-8")
                 return json.loads(raw) if raw else {}
-        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-            raise CloudError(str(exc)) from exc
+        except HTTPError as exc:
+            retryable = exc.code in {408, 425, 429} or 500 <= exc.code <= 599
+            raise CloudError(str(exc), status=exc.code, retryable=retryable) from exc
+        except json.JSONDecodeError as exc:
+            raise CloudError(f"后台响应不是有效 JSON：{exc}", retryable=False) from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            raise CloudError(str(exc), retryable=True) from exc
 
     def commands(self, cursor: str | None) -> dict[str, Any]:
         query = urlencode({"after": cursor or "", "limit": 10})
@@ -37,6 +45,9 @@ class CloudClient:
 
     def ack(self, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         return self.request("POST", f"/api/v1/tasks/{task_id}/ack", payload)
+
+    def command_result(self, message_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.request("POST", f"/api/v1/devices/{self.device_id}/commands/{message_id}/result", payload)
 
     def heartbeat(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.request("POST", f"/api/v1/devices/{self.device_id}/heartbeat", payload)

@@ -53,6 +53,7 @@ Authorization: Bearer <token>
 | --- | --- | --- |
 | `GET` | `/api/v1/devices/{deviceId}/commands` | 领取设备命令 |
 | `POST` | `/api/v1/tasks/{taskId}/ack` | 接受或拒绝制作任务 |
+| `POST` | `/api/v1/devices/{deviceId}/commands/{messageId}/result` | 上报非制作命令的统一执行结果 |
 | `POST` | `/api/v1/devices/{deviceId}/heartbeat` | 上报设备心跳 |
 | `PUT` | `/api/v1/devices/{deviceId}/capabilities` | 同步饮品能力快照 |
 | `PUT` | `/api/v1/devices/{deviceId}/inventory` | 同步共享库存快照 |
@@ -89,7 +90,7 @@ GET /api/v1/devices/{deviceId}/commands?after={cursor}&limit=10
 }
 ```
 
-`commands` 可为空。设备处理完本批命令后保存 `nextCursor`，下次作为 `after` 传回。`messageId` 应全局唯一，设备会在当前进程内按它去重；后台也应支持重复拉取和重复 ACK。
+`commands` 可为空。设备先把每条命令写入本地 SQLite Inbox，再保存 `nextCursor`，下次作为 `after` 传回。`messageId` 应全局唯一；设备跨进程去重，同 ID 不同载荷会被拒绝。`MAKE_DRINK` 还按 `taskId` 做业务去重，即使命令服务换了 messageId，也不会再次制作同一任务。
 
 支持的命令类型：
 
@@ -99,7 +100,7 @@ GET /api/v1/devices/{deviceId}/commands?after={cursor}&limit=10
 | `DEBUG_COMMAND` | `messageId`、`action` | 执行调试动作 |
 | `RELOAD_CONFIG` | `messageId` | 重载本地配置 |
 | `INVENTORY_ADJUSTMENT` | `messageId`、`payload` | 调整本地物料 |
-| `CANCEL_TASK` | `messageId` | 取消当前活动任务 |
+| `CANCEL_TASK` | `messageId`、`taskId` | 仅取消 ID 匹配的当前活动任务 |
 
 `DEBUG_COMMAND.action` 支持 `pause`、`resume`、`skip`、`retry`、`cancel`、`clear`、`force-fail` 和 `toggle-offline`，但动作是否成功取决于当前任务状态。
 
@@ -150,12 +151,41 @@ POST /api/v1/tasks/{taskId}/ack
 | `COMMAND_EXPIRED` | 命令已过期 | `expiresAt` |
 | `DEVICE_BUSY` | 当前已有活动任务 | `currentTaskId` |
 | `RECIPE_NOT_FOUND` | 本机没有该配方 | `recipeId` |
+| `RECIPE_DISABLED` | 配方存在但已禁用 | `recipeId` |
 | `RECIPE_VERSION_MISMATCH` | 后台指定版本与本机不一致 | `requested`、`installed` |
 | `MATERIAL_INSUFFICIENT` | 整杯所需共享库存不足 | 物料、需求量和可用量 |
+| `TASK_ID_CONFLICT` | 已存在的 taskId 对应另一订单或配方 | 原值和请求值 |
 
 HTTP ACK 只表达接单结果。本杯随机抽取并冻结的步骤时长通过随后发送的 `task.acknowledged` 事件上报。
 
-若 ACK 请求失败，终端记录本地 `task.ack.failed` 事件，但当前版本不会持久化重试 ACK。后台必须结合命令、ACK 和设备事件做超时与人工处置。
+ACK 在接单结果和任务落入本地持久状态后加入发送队列。网络错误、429 和 5xx 会跨重启重试；后台返回 409 时按幂等重复视为已确认；永久 4xx 进入本地死信并显示在健康状态中。后台仍必须以 `messageId/taskId` 幂等，并结合设备事件做超时与人工处置。
+
+### 4.1 非制作命令结果
+
+`DEBUG_COMMAND`、`RELOAD_CONFIG`、`INVENTORY_ADJUSTMENT`、`CANCEL_TASK` 和未知类型命令统一调用：
+
+```http
+POST /api/v1/devices/{deviceId}/commands/{messageId}/result
+```
+
+```json
+{
+  "messageId": "cmd-control-001",
+  "deviceId": "coffee-bot-001",
+  "taskId": "task-001",
+  "commandType": "CANCEL_TASK",
+  "accepted": false,
+  "status": "REJECTED",
+  "reasonCode": "TASK_MISMATCH",
+  "details": {
+    "currentTaskId": "task-002",
+    "targetTaskId": "task-001"
+  },
+  "completedAt": "2026-08-23T12:00:01Z"
+}
+```
+
+结果与 ACK 一样持久重试。后台不能把“命令已投递”当作“命令已应用”。
 
 ## 5. 心跳
 
@@ -170,10 +200,13 @@ POST /api/v1/devices/{deviceId}/heartbeat
   "storeId": "store-demo-taipei-01",
   "deviceStatus": "BUSY",
   "currentTaskId": "task-001",
+  "currentTaskState": "RUNNING",
+  "currentTaskRevision": 12,
   "capabilityVersion": "sha256:...",
   "inventoryVersion": 18,
   "localApiUrl": "http://127.0.0.1:9101",
-  "appVersion": "0.3.0",
+  "deliveries": {"eventsPending": 2, "commandsSent": 1},
+  "appVersion": "1.2.0",
   "sentAt": "2026-08-23T12:00:00Z"
 }
 ```
@@ -287,13 +320,13 @@ POST /api/v1/devices/{deviceId}/events
 
 | 分类 | 事件类型 |
 | --- | --- |
-| 生命周期/连接 | `device.online`、`device.connection`、`cloud.connection.failed` |
-| 任务 | `task.acknowledged`、`task.started`、`task.progress`、`task.paused`、`task.resumed`、`task.retry`、`task.succeeded`、`task.failed`、`task.rejected`、`task.cancelled`、`task.cleared`、`task.ack.failed` |
+| 生命周期/连接 | `device.online`、`device.connection`、`cloud.connection.failed`、`cloud.worker.error` |
+| 任务 | `task.recovered`、`task.acknowledged`、`task.started`、`task.progress`、`task.paused`、`task.resumed`、`task.retry`、`task.succeeded`、`task.failed`、`task.rejected`、`task.cancelled`、`task.cleared` |
 | 步骤 | `step.started`、`step.completed`、`step.skipped` |
 | 库存 | `inventory.reserved`、`inventory.consumed`、`inventory.adjusted`、`inventory.low`、`inventory.critical`、`inventory.recovered` |
-| 配置/调试 | `capability.changed`、`debug.config-updated`、`debug.failure-armed` |
+| 配置/调试/诊断 | `capability.changed`、`debug.config-updated`、`debug.failure-armed`、`command.malformed`、`command.id-conflict`、`command.processing-failed`、`outbox.event.dead`、`outbox.command.dead` |
 
-其中 `device.online`、`cloud.connection.failed` 和 `task.ack.failed` 仅保留在本地事件列表，不进入云端 outbox；模拟离线期间产生的断线 `device.connection` 事件也不会发送。
+其中 `device.online`、`cloud.connection.failed`、`cloud.worker.error` 和命令/Outbox 诊断事件仅保留在本地事件列表，不再次写入云端 Outbox，避免错误递归；模拟离线期间产生的断线 `device.connection` 事件也不会发送。
 
 ### 8.1 接单计划事件
 
@@ -303,6 +336,8 @@ POST /api/v1/devices/{deviceId}/events
   "payload": {
     "taskId": "task-001",
     "orderId": "order-1024",
+    "messageId": "cmd-001",
+    "taskRevision": 2,
     "plannedDurationSeconds": 58.7,
     "stepDurations": [
       {"stepId": "prepare-cup", "durationSeconds": 4.2},
@@ -333,6 +368,8 @@ POST /api/v1/devices/{deviceId}/events
 
 `progress` 是当前步骤的 0 到 1 比例，不是整杯总进度。终端约在跨越每个 10% 桶时上报一次。
 
+任务和步骤事件会携带 `taskRevision` 与 `attempt`。后台使用 revision 和合法状态迁移处理乱序；同一次物理尝试的回调重复具有相同 attempt，真正重试会递增 attempt。
+
 ### 8.3 物料消耗事件
 
 ```json
@@ -343,6 +380,8 @@ POST /api/v1/devices/{deviceId}/events
     "orderId": "order-1024",
     "recipeId": "iced-latte-v1",
     "stepId": "add-milk",
+    "attempt": 1,
+    "inventoryVersion": 19,
     "materialId": "milk",
     "amount": 180,
     "unit": "ml",
@@ -376,7 +415,7 @@ POST /api/v1/devices/{deviceId}/events
 
 后台应以 `failure.retryable` 为设备当前判定，不应只根据错误码自行假设可以重试。
 
-事件发送失败后会进入内存 outbox 并在连接恢复后重发，但进程退出会丢失 outbox。后台必须容忍丢失、重复和乱序，并以能力/库存快照做最终校正。
+事件发送前进入 SQLite Outbox，网络失败后跨重启重发。后台必须容忍至少一次投递产生的重复与乱序，以 `eventId` 去重，并以任务 revision、库存版本和完整快照做状态校正。永久 4xx 会进入终端死信而不是阻塞队首，运营侧应监控健康接口中的积压和死信数量。
 
 ## 9. 显示配置
 
@@ -460,7 +499,7 @@ GET /api/v1/devices/{deviceId}/alerts
 
 ## 12. 设备本地 API
 
-每个实例在自己的 `localApi.host` 和 `localApi.port` 启动本地接口，默认地址类似 `http://127.0.0.1:9101`。当前没有认证，建议仅绑定回环地址。
+每个实例在自己的 `localApi.host` 和 `localApi.port` 启动本地接口，默认地址类似 `http://127.0.0.1:9101`。接口校验回环 Host；写请求必须使用 JSON、受大小限制并拒绝未授权 Origin。配置 `localApi.authToken` 后，写请求还必须携带 `X-Local-Token`。非回环绑定或 production 环境启用本地 API 时 Token 强制必填。
 
 ### 12.1 健康检查
 
@@ -475,6 +514,8 @@ GET /device/v1/health
   "bootId": "boot-uuid",
   "connection": "ONLINE",
   "deviceStatus": "IDLE",
+  "sync": {"threadAlive": true, "lastSuccessAt": "2026-08-23T12:00:00Z", "lastError": null},
+  "deliveries": {"eventsSent": 20, "commandsSent": 3},
   "time": "2026-08-23T12:00:00Z"
 }
 ```
@@ -510,7 +551,9 @@ GET /device/v1/status
   "deviceStatus": "BUSY",
   "currentTask": {},
   "capabilityVersion": "sha256:...",
-  "inventoryVersion": 18
+  "inventoryVersion": 18,
+  "sync": {},
+  "deliveries": {}
 }
 ```
 
@@ -520,6 +563,8 @@ GET /device/v1/status
 
 ```http
 POST /device/v1/inventory/adjustments
+Content-Type: application/json
+X-Local-Token: <仅在配置 authToken 时必填>
 ```
 
 设置绝对库存：

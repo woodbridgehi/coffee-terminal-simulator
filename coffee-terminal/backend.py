@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import random
 import threading
 import time
 import uuid
@@ -18,6 +19,7 @@ from cloud import CloudClient, CloudError
 from failures import FailurePolicy
 from inventory import InventoryError, InventoryManager
 from local_api import DeviceApiServer
+from state_store import LocalStateStore, StateStoreError
 
 
 def now() -> str:
@@ -38,23 +40,34 @@ class CoffeeDeviceRuntime:
         self.boot_id = str(uuid.uuid4())
         self.sequence = 0
         self.events: list[dict[str, Any]] = []
-        self.outbox: list[dict[str, Any]] = []
-        self.command_cursor: str | None = None
-        self.seen_commands: set[str] = set()
+        self.store = LocalStateStore(instance_dir / "state" / "runtime.db")
+        recovered_task = self.store.current_job()
+        recovery_hold = bool(self.mode == "remote" and recovered_task and recovered_task.get("state") in ACTIVE_STATES)
+        if recovery_hold:
+            previous_state = recovered_task.get("state")
+            recovered_task.update({"state": "PAUSED", "message": "重启恢复后等待后台对账或人工继续", "recoveryPreviousState": previous_state})
+            self.store.save_job(recovered_task)
+        self.command_cursor: str | None = self.store.get_meta("command_cursor")
         self.last_synced_capability: tuple[str, int] | None = None
         self.last_synced_inventory = -1
+        self.sync_health: dict[str, Any] = {"threadAlive": False, "lastSuccessAt": None, "lastError": None}
 
-        self.inventory = InventoryManager(instance_dir / "materials.json", instance_dir / "state" / "inventory.json")
+        recoverable = bool(recovered_task and recovered_task.get("state") in ACTIVE_STATES)
+        self.inventory = InventoryManager(
+            instance_dir / "materials.json",
+            instance_dir / "state" / "inventory.json",
+            clear_reservations=not recoverable,
+        )
         self.material_statuses = {item["materialId"]: item["status"] for item in self.inventory.snapshot()["materials"]}
         self.catalog = RecipeCatalog(instance_dir / "recipes", self.inventory)
         self.failures = FailurePolicy(instance_dir / "failures.json")
         backend_url = config.get("backend", {}).get("baseUrl", "http://localhost:8080").rstrip("/")
         self.runtime: dict[str, Any] = {
-            "deviceStatus": "IDLE",
+            "deviceStatus": "RECOVERING" if recovery_hold else self._device_status_for_task(recovered_task),
             "connection": "CONNECTING" if self.mode == "remote" else "ONLINE",
             "qrUrl": f"{backend_url}/order?device_id={self.device_id}",
             "qrExpiresAt": None,
-            "task": None,
+            "task": recovered_task,
             "override": {"globalFailureRate": 0.0, "forceFailNext": False, "offline": False, "eventDelayMs": 0},
             "events": self.events,
         }
@@ -62,9 +75,21 @@ class CoffeeDeviceRuntime:
         self.local_api: DeviceApiServer | None = None
         local_api = config.get("localApi", {})
         if local_api.get("enabled", True):
-            self.local_api = DeviceApiServer(self, local_api.get("host", "127.0.0.1"), int(local_api.get("port", 9101)))
+            self.local_api = DeviceApiServer(
+                self,
+                local_api.get("host", "127.0.0.1"),
+                int(local_api.get("port", 9101)),
+                settings=local_api,
+                environment=str(config.get("environment", "development")),
+            )
             self.local_api.start()
         self._emit("device.online", "设备运行时已启动", queue=False)
+        if recovered_task:
+            self._emit(
+                "task.recovered",
+                "已从本地事务状态恢复任务",
+                {**self._task_ref(recovered_task), "state": recovered_task.get("state"), "revision": recovered_task.get("revision")},
+            )
         self.background_threads = [threading.Thread(target=self._execution_loop, daemon=True)]
         self.background_threads[0].start()
         if self.cloud:
@@ -79,7 +104,7 @@ class CoffeeDeviceRuntime:
             self.events.insert(0, event)
             del self.events[50:]
             if queue and self.cloud:
-                self.outbox.append(event)
+                self.store.enqueue_event(event)
             return event
 
     def close(self) -> None:
@@ -89,6 +114,21 @@ class CoffeeDeviceRuntime:
             self.local_api.stop()
         for thread in self.background_threads:
             thread.join(timeout=self.cloud.timeout + 1 if self.cloud else 2)
+        self.store.close()
+
+    @staticmethod
+    def _device_status_for_task(task: dict[str, Any] | None) -> str:
+        if not task:
+            return "IDLE"
+        return {
+            "ACKNOWLEDGED": "RESERVED",
+            "RUNNING": "BUSY",
+            "PAUSED": "BUSY",
+            "RETRY_WAIT": "FAILED",
+            "FAILED": "FAILED",
+            "SUCCEEDED": "READY",
+            "CANCELLED": "IDLE",
+        }.get(str(task.get("state")), "RECOVERING")
 
     @staticmethod
     def _qr_data_url(value: str) -> str:
@@ -108,7 +148,7 @@ class CoffeeDeviceRuntime:
             return {"config": self.config, "recipes": self.catalog.list(), "capabilities": self.capabilities(), "runtime": runtime, "backend": {"mode": self.mode, "baseUrl": self.config.get("backend", {}).get("baseUrl")}}
 
     def health(self) -> dict[str, Any]:
-        return {"ok": True, "deviceId": self.device_id, "bootId": self.boot_id, "connection": self.runtime["connection"], "deviceStatus": self.runtime["deviceStatus"], "time": now()}
+        return {"ok": True, "deviceId": self.device_id, "bootId": self.boot_id, "connection": self.runtime["connection"], "deviceStatus": self.runtime["deviceStatus"], "sync": dict(self.sync_health), "deliveries": self.store.delivery_stats(), "time": now()}
 
     def capabilities(self) -> dict[str, Any]:
         result = self.catalog.capabilities(self.device_id, self.config.get("storeId", ""))
@@ -119,7 +159,7 @@ class CoffeeDeviceRuntime:
         return {"deviceId": self.device_id, **self.inventory.snapshot()}
 
     def status(self) -> dict[str, Any]:
-        return {"deviceId": self.device_id, "instanceId": self.config["instanceId"], "storeId": self.config.get("storeId"), "connection": self.runtime["connection"], "deviceStatus": self.runtime["deviceStatus"], "currentTask": self.runtime["task"], "capabilityVersion": self.catalog.version, "inventoryVersion": self.inventory.state["version"]}
+        return {"deviceId": self.device_id, "instanceId": self.config["instanceId"], "storeId": self.config.get("storeId"), "connection": self.runtime["connection"], "deviceStatus": self.runtime["deviceStatus"], "currentTask": self.runtime["task"], "capabilityVersion": self.catalog.version, "inventoryVersion": self.inventory.state["version"], "sync": dict(self.sync_health), "deliveries": self.store.delivery_stats()}
 
     # Configuration and operator actions
     def reload_config(self) -> dict[str, Any]:
@@ -186,7 +226,7 @@ class CoffeeDeviceRuntime:
 
     def _accept_task(self, command: dict[str, Any]) -> dict[str, Any]:
         with self.lock:
-            if not command.get("taskId") or not command.get("recipeId"):
+            if not isinstance(command.get("taskId"), str) or not command["taskId"].strip() or not isinstance(command.get("recipeId"), str) or not command["recipeId"].strip():
                 return self._reject(command, "INVALID_COMMAND", {"required": ["taskId", "recipeId"]})
             if command.get("expiresAt"):
                 try:
@@ -195,12 +235,24 @@ class CoffeeDeviceRuntime:
                         return self._reject(command, "COMMAND_EXPIRED", {"expiresAt": command["expiresAt"]})
                 except (TypeError, ValueError):
                     return self._reject(command, "INVALID_COMMAND", {"field": "expiresAt"})
+            previous = self.store.job(str(command["taskId"]))
+            if previous:
+                previous_recipe_id = previous.get("recipe", {}).get("recipeId")
+                order_conflict = bool(previous.get("orderId") and command.get("orderId") and previous.get("orderId") != command.get("orderId"))
+                if previous_recipe_id != command.get("recipeId") or order_conflict:
+                    return self._reject(command, "TASK_ID_CONFLICT", {"previousRecipeId": previous_recipe_id, "requestedRecipeId": command.get("recipeId"), "previousOrderId": previous.get("orderId"), "requestedOrderId": command.get("orderId")})
+                accepted = previous.get("state") not in {"REJECTED", "CANCELLED"}
+                details = {"duplicate": True, "currentState": previous.get("state"), "revision": previous.get("revision")}
+                self._ack(command, accepted, None if accepted else "TASK_ALREADY_CANCELLED", details)
+                return {"ok": accepted, "taskId": command["taskId"], **details}
             current = self.runtime.get("task")
             if current and current.get("state") in ACTIVE_STATES:
                 return self._reject(command, "DEVICE_BUSY", {"currentTaskId": current.get("taskId")})
             recipe = self.catalog.get(command.get("recipeId", ""))
             if not recipe:
                 return self._reject(command, "RECIPE_NOT_FOUND", {"recipeId": command.get("recipeId")})
+            if not recipe.get("enabled", True):
+                return self._reject(command, "RECIPE_DISABLED", {"recipeId": command.get("recipeId")})
             if command.get("recipeVersion") and command["recipeVersion"] != recipe["version"]:
                 return self._reject(command, "RECIPE_VERSION_MISMATCH", {"requested": command["recipeVersion"], "installed": recipe["version"]})
             requirements = self.inventory.requirements(recipe)
@@ -211,8 +263,9 @@ class CoffeeDeviceRuntime:
             planned_duration = sum(float(step["durationSeconds"]) for step in execution_recipe["steps"])
             task = {"taskId": command["taskId"], "orderId": command.get("orderId"), "messageId": command.get("messageId"), "recipe": execution_recipe, "state": "ACKNOWLEDGED", "stepIndex": 0, "stepProgress": 0.0, "stepElapsed": 0.0, "stepPrechecked": False, "attempt": 1, "stepRetries": {}, "plannedDurationSeconds": planned_duration, "lastProgressBucket": -1, "message": "任务已接受，准备制作"}
             self.runtime["task"] = task; self.runtime["deviceStatus"] = "RESERVED"
-            self._emit("inventory.reserved", "已预占整杯所需物料", {"taskId": task["taskId"], "orderId": task.get("orderId"), "materials": requirements})
-            self._emit("task.acknowledged", "制作任务已接受", {"taskId": task["taskId"], "orderId": task.get("orderId"), "plannedDurationSeconds": planned_duration, "stepDurations": [{"stepId": step["id"], "durationSeconds": step["durationSeconds"]} for step in execution_recipe["steps"]]})
+            self._persist_task(task)
+            self._emit("inventory.reserved", "已预占整杯所需物料", {"taskId": task["taskId"], "orderId": task.get("orderId"), "messageId": task.get("messageId"), "taskRevision": task.get("revision"), "materials": requirements})
+            self._emit("task.acknowledged", "制作任务已接受", {"taskId": task["taskId"], "orderId": task.get("orderId"), "messageId": task.get("messageId"), "taskRevision": task.get("revision"), "plannedDurationSeconds": planned_duration, "stepDurations": [{"stepId": step["id"], "durationSeconds": step["durationSeconds"]} for step in execution_recipe["steps"]]})
             self._ack(command, True)
             self._inventory_changed()
             return {"ok": True, "taskId": task["taskId"]}
@@ -223,15 +276,40 @@ class CoffeeDeviceRuntime:
         return {"ok": False, "error": reason, "details": details}
 
     def _ack(self, command: dict[str, Any], accepted: bool, reason: str | None = None, details: dict[str, Any] | None = None) -> None:
-        if not self.cloud:
+        message_id = command.get("messageId")
+        if not message_id:
             return
-        payload = {"messageId": command.get("messageId"), "deviceId": self.device_id, "accepted": accepted, "acceptedAt": now()}
+        completed_at = now()
+        payload = {"messageId": message_id, "deviceId": self.device_id, "taskId": command.get("taskId"), "commandType": command.get("type"), "accepted": accepted, "status": "APPLIED" if accepted else "REJECTED", "acceptedAt": completed_at, "completedAt": completed_at}
         if reason:
             payload.update({"reasonCode": reason, "details": details or {}})
-        try:
-            self.cloud.ack(command.get("taskId", "unknown"), payload)
-        except CloudError as exc:
-            self._emit("task.ack.failed", f"任务 ACK 上报失败：{exc}", payload, queue=False)
+        elif details:
+            payload["details"] = details
+        self.store.complete_command(message_id, payload["status"], payload, queue_delivery=bool(self.cloud))
+
+    def _complete_control_command(self, command: dict[str, Any], result: dict[str, Any]) -> None:
+        message_id = command.get("messageId")
+        if not message_id:
+            return
+        accepted = bool(result.get("ok"))
+        payload = {
+            "messageId": message_id,
+            "deviceId": self.device_id,
+            "taskId": command.get("taskId"),
+            "commandType": command.get("type"),
+            "accepted": accepted,
+            "status": "APPLIED" if accepted else "REJECTED",
+            "completedAt": now(),
+        }
+        if not accepted:
+            payload["reasonCode"] = result.get("reasonCode", "COMMAND_REJECTED")
+            payload["details"] = {key: value for key, value in result.items() if key != "ok"}
+        else:
+            payload["details"] = {key: value for key, value in result.items() if key != "ok"}
+        self.store.complete_command(message_id, payload["status"], payload, queue_delivery=bool(self.cloud))
+
+    def _persist_task(self, task: dict[str, Any]) -> None:
+        self.store.save_job(task)
 
     # Local task commands
     def command(self, action: str) -> dict[str, Any]:
@@ -243,7 +321,7 @@ class CoffeeDeviceRuntime:
             return {"ok": True, "message": "命令已发送后台，等待设备命令轮询返回"}
         return self._apply_command(action)
 
-    def _apply_command(self, action: str) -> dict[str, Any]:
+    def _apply_command(self, action: str, target_task_id: str | None = None) -> dict[str, Any]:
         with self.lock:
             if action == "toggle-offline":
                 offline = not self.runtime["override"]["offline"]
@@ -257,11 +335,13 @@ class CoffeeDeviceRuntime:
                 return {"ok": True}
             task = self.runtime.get("task")
             if not task:
-                return {"ok": False, "error": "没有当前任务"}
+                return {"ok": False, "reasonCode": "NO_ACTIVE_TASK", "error": "没有当前任务"}
+            if target_task_id and target_task_id != task.get("taskId"):
+                return {"ok": False, "reasonCode": "TASK_MISMATCH", "error": "命令目标不是当前任务", "currentTaskId": task.get("taskId"), "targetTaskId": target_task_id}
             if action == "pause" and task["state"] == "RUNNING":
-                task["state"] = "PAUSED"; task["message"] = "任务已暂停"; self._emit("task.paused", task["message"], self._task_ref(task))
+                task["state"] = "PAUSED"; task["message"] = "任务已暂停"; self._persist_task(task); self._emit("task.paused", task["message"], self._task_ref(task))
             elif action == "resume" and task["state"] == "PAUSED":
-                task["state"] = "RUNNING"; task["message"] = "继续制作"; self._emit("task.resumed", task["message"], self._task_ref(task))
+                task["state"] = "RUNNING"; task["message"] = "继续制作"; self.runtime["deviceStatus"] = "BUSY"; self._persist_task(task); self._emit("task.resumed", task["message"], self._task_ref(task))
             elif action == "skip" and task["state"] in {"RUNNING", "PAUSED"}:
                 step = task["recipe"]["steps"][task["stepIndex"]]
                 self.inventory.release(task["taskId"], self.inventory.requirements({"steps": [step]}))
@@ -280,13 +360,13 @@ class CoffeeDeviceRuntime:
                     return {"ok": False, "error": "重试所需物料不足", "details": detail}
                 task.setdefault("stepRetries", {})[step_id] = retries_used + 1
                 task.update({"state": "RUNNING", "stepProgress": 0.0, "stepElapsed": 0.0, "stepPrechecked": False, "attempt": task.get("attempt", 1) + 1, "message": "任务重试"})
-                self._emit("task.retry", "任务开始重试", self._task_ref(task)); self._inventory_changed()
+                self._persist_task(task); self._emit("task.retry", "任务开始重试", self._task_ref(task)); self._inventory_changed()
             elif action == "cancel" and task["state"] in ACTIVE_STATES:
-                self.inventory.release(task["taskId"]); task["state"] = "CANCELLED"; task["message"] = "任务已取消"; self.runtime["deviceStatus"] = "IDLE"; self._emit("task.cancelled", task["message"], self._task_ref(task)); self._inventory_changed()
+                self.inventory.release(task["taskId"]); task["state"] = "CANCELLED"; task["message"] = "任务已取消"; self.runtime["deviceStatus"] = "IDLE"; self._persist_task(task); self._emit("task.cancelled", task["message"], self._task_ref(task)); self._inventory_changed()
             elif action == "clear" and task["state"] in {"SUCCEEDED", "FAILED", "CANCELLED"}:
-                self.runtime["task"] = None; self.runtime["deviceStatus"] = "IDLE"; self._emit("task.cleared", "终端返回待机")
+                self.runtime["task"] = None; self.runtime["deviceStatus"] = "IDLE"; self.store.clear_current_job(); self._emit("task.cleared", "终端返回待机")
             else:
-                return {"ok": False, "error": "当前状态不支持该操作"}
+                return {"ok": False, "reasonCode": "ILLEGAL_TASK_STATE", "error": "当前状态不支持该操作"}
             return {"ok": True}
 
     # Execution
@@ -299,6 +379,7 @@ class CoffeeDeviceRuntime:
                     continue
                 if task["state"] == "ACKNOWLEDGED":
                     task["state"] = "RUNNING"; self.runtime["deviceStatus"] = "BUSY"
+                    self._persist_task(task)
                     self._emit("task.started", "开始制作", self._task_ref(task))
                 if task["state"] != "RUNNING":
                     continue
@@ -309,12 +390,14 @@ class CoffeeDeviceRuntime:
                     if failed:
                         self._fail_task(task, step, profile, consume=False); continue
                     task["stepPrechecked"] = True; task["message"] = step["name"]
+                    self._persist_task(task)
                     self._emit("step.started", f"开始：{step['name']}", {**self._task_ref(task), "stepId": step["id"]})
                 task["stepElapsed"] += tick
                 task["stepProgress"] = min(1.0, task["stepElapsed"] / float(step["durationSeconds"]))
                 bucket = int(task["stepProgress"] * 10)
                 if bucket != task["lastProgressBucket"]:
                     task["lastProgressBucket"] = bucket
+                    self._persist_task(task)
                     self._emit("task.progress", step["name"], {**self._task_ref(task), "stepId": step["id"], "stepIndex": task["stepIndex"], "progress": task["stepProgress"]})
                 if task["stepProgress"] < 1:
                     continue
@@ -323,13 +406,14 @@ class CoffeeDeviceRuntime:
                 if failed:
                     self._fail_task(task, step, profile, consume=bool(profile.get("consumeOnFailure"))); continue
                 self._consume_step(task, step)
+                self._persist_task(task)
                 self._emit("step.completed", f"完成：{step['name']}", {**self._task_ref(task), "stepId": step["id"]})
                 self._advance_step(task)
 
     def _consume_step(self, task: dict[str, Any], step: dict[str, Any]) -> None:
-        changes = self.inventory.consume_step(task["taskId"], step["id"], step.get("consumes", []))
+        changes = self.inventory.consume_step(task["taskId"], step["id"], step.get("consumes", []), attempt=int(task.get("attempt", 1)))
         for change in changes:
-            self._emit("inventory.consumed", f"已消耗 {change['materialId']} {change['amount']} {change['unit']}", {**self._task_ref(task), "stepId": step["id"], **change})
+            self._emit("inventory.consumed", f"已消耗 {change['materialId']} {change['amount']} {change['unit']}", {**self._task_ref(task), "stepId": step["id"], "inventoryVersion": self.inventory.state["version"], **change})
         if changes:
             self._inventory_changed()
 
@@ -342,6 +426,7 @@ class CoffeeDeviceRuntime:
         max_retries = int(profile.get("maxRetries", 0))
         task["failure"] = {"code": profile["errorCode"], "stepId": step["id"], "retryable": bool(profile.get("retryable")) and retries_used < max_retries, "retriesUsed": retries_used, "maxRetries": max_retries, "consumedOnFailure": consume}
         self.runtime["deviceStatus"] = "FAILED"
+        self._persist_task(task)
         self._emit("task.failed", task["message"], {**self._task_ref(task), "failure": task["failure"]})
         self._inventory_changed()
 
@@ -350,13 +435,15 @@ class CoffeeDeviceRuntime:
         if task["stepIndex"] >= len(task["recipe"]["steps"]):
             task["stepIndex"] = len(task["recipe"]["steps"]) - 1; task["stepProgress"] = 1.0; task["state"] = "SUCCEEDED"; task["message"] = "咖啡制作完成，请取杯"; self.runtime["deviceStatus"] = "READY"
             self.inventory.release(task["taskId"])
+            self._persist_task(task)
             self._emit("task.succeeded", task["message"], self._task_ref(task)); self._inventory_changed()
         else:
             task.update({"stepProgress": 0.0, "stepElapsed": 0.0, "stepPrechecked": False, "lastProgressBucket": -1})
+            self._persist_task(task)
 
     @staticmethod
     def _task_ref(task: dict[str, Any]) -> dict[str, Any]:
-        return {"taskId": task.get("taskId"), "orderId": task.get("orderId"), "recipeId": task.get("recipe", {}).get("recipeId")}
+        return {"taskId": task.get("taskId"), "orderId": task.get("orderId"), "recipeId": task.get("recipe", {}).get("recipeId"), "taskRevision": task.get("revision"), "attempt": task.get("attempt", 1)}
 
     def _inventory_changed(self) -> None:
         snapshot = self.inventory.snapshot()
@@ -375,56 +462,109 @@ class CoffeeDeviceRuntime:
         poll_seconds = float(self.config["backend"].get("commandPollSeconds", 2))
         heartbeat_seconds = float(self.config["backend"].get("heartbeatIntervalSeconds", 30))
         next_poll = next_heartbeat = next_display = 0.0
-        while not self.stop_event.wait(0.25):
-            if self.runtime["override"]["offline"]:
-                continue
-            clock = time.monotonic()
-            try:
-                if clock >= next_poll:
-                    self._poll_commands(); next_poll = clock + poll_seconds
-                if clock >= next_heartbeat:
-                    response = self.cloud.heartbeat(self._heartbeat_payload())
-                    if response.get("qrUrl"):
-                        self.runtime["qrUrl"] = response["qrUrl"]
-                    next_heartbeat = clock + heartbeat_seconds
-                if clock >= next_display:
-                    try:
-                        display = self.cloud.display_config()
-                        if display.get("qrUrl"):
-                            self.runtime["qrUrl"] = display["qrUrl"]; self.runtime["qrExpiresAt"] = display.get("qrExpiresAt")
-                    except CloudError:
-                        pass
-                    next_display = clock + 30
-                self._sync_snapshots(); self._flush_outbox()
-                self.runtime["connection"] = "ONLINE"
-            except CloudError as exc:
-                self.runtime["connection"] = "OFFLINE"
-                self._emit("cloud.connection.failed", f"后台连接失败：{exc}", queue=False)
-                self.stop_event.wait(min(2.0, poll_seconds))
+        failure_count = 0
+        self.sync_health["threadAlive"] = True
+        try:
+            while not self.stop_event.wait(0.25):
+                if self.runtime["override"]["offline"]:
+                    continue
+                clock = time.monotonic()
+                try:
+                    if clock >= next_poll:
+                        self._poll_commands(); next_poll = clock + poll_seconds
+                    if clock >= next_heartbeat:
+                        response = self.cloud.heartbeat(self._heartbeat_payload())
+                        if response.get("qrUrl"):
+                            self.runtime["qrUrl"] = response["qrUrl"]
+                        next_heartbeat = clock + heartbeat_seconds
+                    if clock >= next_display:
+                        try:
+                            display = self.cloud.display_config()
+                            if display.get("qrUrl"):
+                                self.runtime["qrUrl"] = display["qrUrl"]; self.runtime["qrExpiresAt"] = display.get("qrExpiresAt")
+                        except CloudError:
+                            pass
+                        next_display = clock + 30
+                    self._flush_command_results(); self._sync_snapshots(); self._flush_outbox()
+                    self.runtime["connection"] = "ONLINE"
+                    self.sync_health.update({"lastSuccessAt": now(), "lastError": None})
+                    failure_count = 0
+                except CloudError as exc:
+                    failure_count += 1
+                    self.runtime["connection"] = "OFFLINE"
+                    self.sync_health["lastError"] = str(exc)
+                    self._emit("cloud.connection.failed", f"后台连接失败：{exc}", queue=False)
+                    self.stop_event.wait(self._retry_delay(failure_count, base=min(2.0, poll_seconds)))
+                except Exception as exc:  # keep the device agent observable and supervised
+                    failure_count += 1
+                    self.runtime["connection"] = "DEGRADED"
+                    self.sync_health["lastError"] = f"{type(exc).__name__}: {exc}"
+                    self._emit("cloud.worker.error", f"云端工作线程已隔离异常：{exc}", {"exceptionType": type(exc).__name__}, queue=False)
+                    self.stop_event.wait(self._retry_delay(failure_count, base=1.0))
+        finally:
+            self.sync_health["threadAlive"] = False
+
+    @staticmethod
+    def _retry_delay(attempt: int, base: float = 1.0) -> float:
+        ceiling = min(60.0, max(0.25, base) * (2 ** min(max(0, attempt - 1), 6)))
+        return random.uniform(0.0, ceiling)
 
     def _poll_commands(self) -> None:
         response = self.cloud.commands(self.command_cursor)
-        for command in response.get("commands", []):
-            message_id = command.get("messageId")
-            if message_id in self.seen_commands:
+        if not isinstance(response, dict):
+            raise CloudError("命令响应必须是 JSON 对象", retryable=False)
+        commands = response.get("commands", [])
+        if not isinstance(commands, list):
+            raise CloudError("commands 必须是数组", retryable=False)
+        for raw_command in commands:
+            if not isinstance(raw_command, dict):
+                self._emit("command.malformed", "忽略非对象命令", {"valueType": type(raw_command).__name__}, queue=False)
                 continue
-            self.seen_commands.add(message_id)
+            command = raw_command
+            try:
+                disposition, existing = self.store.record_command(command)
+            except StateStoreError as exc:
+                self._emit("command.malformed", str(exc), {"commandType": command.get("type")}, queue=False)
+                continue
+            if disposition == "CONFLICT":
+                self._emit("command.id-conflict", "相同 messageId 的命令载荷不一致", {"messageId": command.get("messageId")}, queue=False)
+                continue
+            if disposition == "EXISTING" and existing and existing["state"] != "RECEIVED":
+                continue
             command_type = command.get("type")
-            if command_type == "MAKE_DRINK":
-                self._accept_task(command)
-            elif command_type == "DEBUG_COMMAND":
-                self._apply_command(command.get("action", ""))
-            elif command_type == "RELOAD_CONFIG":
-                self.reload_config()
-            elif command_type == "INVENTORY_ADJUSTMENT":
-                self.adjust_inventory(command.get("payload", {}))
-            elif command_type == "CANCEL_TASK":
-                self._apply_command("cancel")
+            try:
+                if command_type == "MAKE_DRINK":
+                    self._accept_task(command)
+                elif command_type == "DEBUG_COMMAND":
+                    result = self._apply_command(command.get("action", ""), command.get("taskId"))
+                    self._complete_control_command(command, result)
+                elif command_type == "RELOAD_CONFIG":
+                    self._complete_control_command(command, self.reload_config())
+                elif command_type == "INVENTORY_ADJUSTMENT":
+                    self._complete_control_command(command, self.adjust_inventory(command.get("payload", {})))
+                elif command_type == "CANCEL_TASK":
+                    if not command.get("taskId"):
+                        result = {"ok": False, "reasonCode": "INVALID_COMMAND", "error": "CANCEL_TASK 必须包含 taskId"}
+                    else:
+                        result = self._apply_command("cancel", str(command["taskId"]))
+                    self._complete_control_command(command, result)
+                else:
+                    self._complete_control_command(command, {"ok": False, "reasonCode": "COMMAND_TYPE_UNSUPPORTED", "error": f"不支持的命令类型：{command_type}"})
+            except Exception as exc:
+                if command_type == "MAKE_DRINK":
+                    self._ack(command, False, "COMMAND_PROCESSING_ERROR", {"exceptionType": type(exc).__name__})
+                else:
+                    self._complete_control_command(command, {"ok": False, "reasonCode": "COMMAND_PROCESSING_ERROR", "error": str(exc), "exceptionType": type(exc).__name__})
+                self._emit("command.processing-failed", f"命令处理失败：{exc}", {"messageId": command.get("messageId"), "commandType": command_type}, queue=False)
         self.command_cursor = response.get("nextCursor", self.command_cursor)
+        if self.command_cursor is not None and not isinstance(self.command_cursor, str):
+            raise CloudError("nextCursor 必须是字符串或 null", retryable=False)
+        self.store.set_meta("command_cursor", self.command_cursor)
 
     def _heartbeat_payload(self) -> dict[str, Any]:
         local_api = self.config.get("localApi", {})
-        return {"deviceId": self.device_id, "instanceId": self.config["instanceId"], "storeId": self.config.get("storeId"), "deviceStatus": self.runtime["deviceStatus"], "currentTaskId": (self.runtime.get("task") or {}).get("taskId"), "capabilityVersion": self.catalog.version, "inventoryVersion": self.inventory.state["version"], "localApiUrl": f"http://{local_api.get('host', '127.0.0.1')}:{local_api.get('port', 9101)}" if local_api.get("enabled", True) else None, "appVersion": "0.3.0", "sentAt": now()}
+        task = self.runtime.get("task") or {}
+        return {"deviceId": self.device_id, "instanceId": self.config["instanceId"], "storeId": self.config.get("storeId"), "deviceStatus": self.runtime["deviceStatus"], "currentTaskId": task.get("taskId"), "currentTaskState": task.get("state"), "currentTaskRevision": task.get("revision"), "capabilityVersion": self.catalog.version, "inventoryVersion": self.inventory.state["version"], "deliveries": self.store.delivery_stats(), "localApiUrl": f"http://{local_api.get('host', '127.0.0.1')}:{local_api.get('port', 9101)}" if local_api.get("enabled", True) else None, "appVersion": "1.2.0", "sentAt": now()}
 
     def _sync_snapshots(self) -> None:
         capability_key = (self.catalog.version, int(self.inventory.state["version"]))
@@ -435,9 +575,38 @@ class CoffeeDeviceRuntime:
             self.cloud.sync_inventory(self.inventory_snapshot()); self.last_synced_inventory = inventory_version
 
     def _flush_outbox(self) -> None:
-        while self.outbox:
-            self.cloud.send_event(self.outbox[0])
-            self.outbox.pop(0)
+        for record in self.store.pending_events():
+            try:
+                self.cloud.send_event(record["event"])
+                self.store.mark_event_sent(record["eventId"])
+            except CloudError as exc:
+                if exc.status == 409:
+                    self.store.mark_event_sent(record["eventId"])
+                    continue
+                delay = self._retry_delay(int(record["attempts"]) + 1)
+                self.store.mark_event_failed(record["eventId"], str(exc), exc.retryable, delay)
+                if exc.retryable:
+                    raise
+                self._emit("outbox.event.dead", "事件因永久错误进入死信", {"eventId": record["eventId"], "error": str(exc)}, queue=False)
+
+    def _flush_command_results(self) -> None:
+        for record in self.store.pending_command_results():
+            result = record.get("result") or {}
+            try:
+                if record["type"] == "MAKE_DRINK":
+                    self.cloud.ack(record.get("taskId") or "unknown", result)
+                else:
+                    self.cloud.command_result(record["messageId"], result)
+                self.store.mark_command_result_sent(record["messageId"])
+            except CloudError as exc:
+                if exc.status == 409:
+                    self.store.mark_command_result_sent(record["messageId"])
+                    continue
+                delay = self._retry_delay(int(record["attempts"]) + 1)
+                self.store.mark_command_result_failed(record["messageId"], str(exc), exc.retryable, delay)
+                if exc.retryable:
+                    raise
+                self._emit("outbox.command.dead", "命令结果因永久错误进入死信", {"messageId": record["messageId"], "error": str(exc)}, queue=False)
 
 
 # Compatibility aliases for older imports.

@@ -14,6 +14,8 @@
 
 手机端始终访问后台的商品和订单服务，不直接连接终端本地 API。
 
+当前 `v1.2` 是可靠性优化版：命令 Inbox、制作任务、命令游标和待发事件使用每实例 SQLite 持久化；重启可恢复模拟任务，重复任务不会再次制作，ACK/命令结果和事件会持久重试。
+
 ## 1. 项目结构
 
 ```text
@@ -26,6 +28,7 @@ coffee-terminal-simulator/
 │   ├── failures.py                  # 故障策略
 │   ├── cloud.py                     # 云端 HTTP 客户端
 │   ├── local_api.py                 # 本地设备 API
+│   ├── state_store.py               # SQLite Inbox/Job/Outbox 可靠状态
 │   ├── DESIGN.md                    # 架构、状态机和一致性规则
 │   └── API.md                       # 后台与本地接口契约
 ├── config/
@@ -36,7 +39,9 @@ coffee-terminal-simulator/
 │       │   ├── recipes/*.json       # 一个文件一种饮品
 │       │   ├── materials.json       # 本机共享物料定义
 │       │   ├── failures.json
-│       │   └── state/inventory.json # 自动维护的实时库存
+│       │   └── state/
+│       │       ├── inventory.json   # 自动维护的实时库存
+│       │       └── runtime.db       # 自动维护的命令、任务和待发消息
 │       └── coffee-bot-002/
 ├── scripts/
 ├── tests/
@@ -343,13 +348,16 @@ curl -X POST http://127.0.0.1:9101/device/v1/inventory/adjustments \
 
 调整后的数量必须在 `0` 和 `capacity` 之间。操作会产生 `inventory.adjusted` 事件并更新能力和库存快照。
 
-`state/inventory.json` 是运行时状态文件：
+实例的 `state/` 包含两类运行时状态：
 
-- 重启会保留 `onHand`。
-- 启动时会清除上次进程遗留的预占，因为当前版本不恢复中断任务。
+- `inventory.json` 保存 `onHand`、预占、库存版本和步骤消耗键。
+- `runtime.db` 使用 SQLite WAL 保存命令 Inbox、当前/历史任务、命令游标以及命令结果和事件 Outbox。
+- 重启会保留 `onHand`；存在可恢复任务时也保留该任务预占。local 模式从最近检查点继续模拟；remote 模式进入 `RECOVERING/PAUSED`，等待后台对账或明确继续命令。
 - 新增物料时会使用该物料的 `initialOnHand`。
 - 已存在物料不能直接更换单位；需要迁移或重建库存状态。
-- 手工删除该文件会把整机库存重置到 `initialOnHand`，仅建议测试环境使用。
+- 只删除 `inventory.json` 会重置库存但保留任务/去重历史，可能形成不一致；测试环境需要完全重置时，应关闭进程后同时删除该实例的 `inventory.json` 和 `runtime.db*`。
+
+步骤消耗键是 `taskId:stepId:attempt`。同一次动作回调重复不会再扣料，真正重试会增加 attempt 并记录新的实际消耗。
 
 ## 10. 故障配置与调试
 
@@ -417,7 +425,7 @@ curl http://127.0.0.1:9101/device/v1/inventory
 curl http://127.0.0.1:9101/device/v1/status
 ```
 
-本地 API 当前没有单独鉴权，默认只应绑定 `127.0.0.1`。不要把补料和配置刷新接口直接暴露到公网。
+本地 API 默认只允许回环 Host。写接口要求 `Content-Type: application/json`，拒绝未授权浏览器 Origin，并限制请求体大小。可在 `device.json` 配置 `localApi.authToken`，调用写接口时携带 `X-Local-Token`；绑定非回环地址或在 `production` 环境启用时，Token 为必填。不要把补料和配置刷新接口直接暴露到公网。
 
 ## 13. 后台接入顺序
 
@@ -438,7 +446,7 @@ curl http://127.0.0.1:9101/device/v1/status
 ```bash
 .venv/bin/python -m py_compile coffee-terminal/*.py scripts/*.py
 .venv/bin/python -m unittest discover -s tests -v
-node --test tests/test_visual_logic.mjs
+node --test tests/*.mjs
 node --check coffee-terminal/web/app.js
 node --check coffee-terminal/web/drink-visual.js
 ```
@@ -451,7 +459,21 @@ node --check coffee-terminal/web/drink-visual.js
 - 缺料拒单和能力下架。
 - 故障后的物料消耗与预占释放。
 - 真实 HTTP 命令、ACK、心跳、能力、库存和事件同步。
+- ACK 响应丢失后的持久重试，以及重复命令不重复制饮。
+- 进程重启后的任务与预占恢复、历史 taskId 去重。
+- 迟到取消的目标任务校验、禁用配方拒单和非法库存调整拒绝。
+- 已耗料步骤重试时按 execution attempt 再次扣料。
+- 畸形命令响应隔离及云端工作线程恢复。
+- 本地写接口对非 JSON 浏览器式请求的拒绝。
 - 饮品形象与步骤表现配置映射。
+
+### v1.2 尚未承诺的生产能力
+
+- 库存仍为 JSON，任务/消息为 SQLite；两种存储之间还不是单一原子事务。
+- 模拟任务可从计时检查点恢复，但真实硬件动作在崩溃后必须结合传感器进入 `RECOVERING/HOLD`，不能照搬自动续做。
+- 远程身份仍是可选静态 Bearer Token；设备激活、mTLS、凭据轮换和命令签名尚未实现。
+- 配置重载还不是签名配置包的 staged/atomic 发布，OTA 和硬件安全互锁仍不存在。
+- SQLite 已发送记录尚未实施长期归档策略，商业试点前应明确保留期和磁盘水位。
 
 ## 15. 常见问题
 
@@ -465,7 +487,7 @@ node --check coffee-terminal/web/drink-visual.js
 
 ### 修改 initialOnHand 后库存没变化
 
-`initialOnHand` 只用于首次创建该物料状态。已有设备应通过补料/盘点接口调整；测试环境需要完全重置时才删除 `state/inventory.json`。
+`initialOnHand` 只用于首次创建该物料状态。已有设备应通过补料/盘点接口调整；测试环境需要完全重置时，关闭实例并同时清理该实例自己的 `state/inventory.json` 与 `state/runtime.db*`。
 
 ### 启动多个实例端口冲突
 

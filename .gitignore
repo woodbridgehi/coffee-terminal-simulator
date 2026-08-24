@@ -6,3 +6,6 @@ venv/
 
 # Runtime inventory is device-local mutable state.
 config/instances/*/state/inventory.json
+config/instances/*/state/runtime.db
+config/instances/*/state/runtime.db-wal
+config/instances/*/state/runtime.db-shm

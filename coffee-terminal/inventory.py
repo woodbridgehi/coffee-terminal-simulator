@@ -16,13 +16,13 @@ class InventoryError(ValueError):
 
 
 class InventoryManager:
-    def __init__(self, definitions_path: Path, state_path: Path) -> None:
+    def __init__(self, definitions_path: Path, state_path: Path, *, clear_reservations: bool = True) -> None:
         self.definitions_path = definitions_path
         self.state_path = state_path
         self.lock = threading.RLock()
         self.definitions: dict[str, dict[str, Any]] = {}
         self.state: dict[str, Any] = {}
-        self.reload(clear_reservations=True)
+        self.reload(clear_reservations=clear_reservations)
 
     def reload(self, clear_reservations: bool = False) -> None:
         with self.lock:
@@ -112,8 +112,8 @@ class InventoryManager:
             self._bump()
             return True, None
 
-    def consume_step(self, task_id: str, step_id: str, consumes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        key = f"{task_id}:{step_id}"
+    def consume_step(self, task_id: str, step_id: str, consumes: list[dict[str, Any]], *, attempt: int = 1) -> list[dict[str, Any]]:
+        key = f"{task_id}:{step_id}:{attempt}"
         with self.lock:
             if key in self.state["consumedKeys"]:
                 return []
@@ -155,15 +155,18 @@ class InventoryManager:
         with self.lock:
             if material_id not in self.definitions:
                 raise InventoryError(f"未知物料：{material_id}")
+            normalized_mode = mode.upper()
+            if normalized_mode not in {"ADD", "SET"}:
+                raise InventoryError("库存调整 mode 只允许 ADD 或 SET")
             definition = self.definitions[material_id]
             item = self.state["items"][material_id]
             before = float(item["onHand"])
-            after = amount if mode.upper() == "SET" else before + amount
+            after = amount if normalized_mode == "SET" else before + amount
             if after < 0 or after > float(definition["capacity"]):
                 raise InventoryError(f"调整后数量必须在 0 到 {definition['capacity']} 之间")
             item["onHand"] = after
             self._bump()
-            return {"materialId": material_id, "mode": mode.upper(), "amount": amount, "before": before, "after": after, "unit": definition["unit"]}
+            return {"materialId": material_id, "mode": normalized_mode, "amount": amount, "before": before, "after": after, "unit": definition["unit"]}
 
     def snapshot(self) -> dict[str, Any]:
         with self.lock:
