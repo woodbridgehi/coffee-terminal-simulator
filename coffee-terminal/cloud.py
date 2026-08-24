@@ -20,13 +20,26 @@ class CloudClient:
         backend = config.get("backend", {})
         self.base_url = backend.get("baseUrl", "").rstrip("/")
         self.timeout = float(backend.get("requestTimeoutSeconds", 5))
-        self.headers = {"Accept": "application/json", "Content-Type": "application/json", "X-Device-Id": self.device_id, **backend.get("headers", {})}
+        self.headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": backend.get("userAgent", "CoffeeTerminalSimulator/1.2.0"),
+            "X-Device-Id": self.device_id,
+            **backend.get("headers", {}),
+        }
         if backend.get("authToken"):
             self.headers["Authorization"] = f"Bearer {backend['authToken']}"
 
-    def request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def request(
+        self,
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None = None,
+        extra_headers: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         body = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        request = Request(f"{self.base_url}{path}", data=body, method=method, headers=self.headers)
+        headers = {**self.headers, **(extra_headers or {})}
+        request = Request(f"{self.base_url}{path}", data=body, method=method, headers=headers)
         try:
             with urlopen(request, timeout=self.timeout) as response:
                 raw = response.read().decode("utf-8")
@@ -63,6 +76,18 @@ class CloudClient:
 
     def display_config(self) -> dict[str, Any]:
         return self.request("GET", f"/api/v1/devices/{self.device_id}/display-config")
+
+    def activate(self, activation_code: str, device_token: str) -> dict[str, Any]:
+        return self.request(
+            "POST", "/api/v1/device-activations",
+            {"deviceId": self.device_id, "activationCode": activation_code, "deviceToken": device_token},
+        )
+
+    def rotate_credential(self, new_token: str, idempotency_key: str) -> dict[str, Any]:
+        return self.request(
+            "POST", f"/api/v1/devices/{self.device_id}/credentials/rotate",
+            {"newToken": new_token}, {"Idempotency-Key": idempotency_key},
+        )
 
     def debug_order(self, recipe_id: str, requested_at: str) -> dict[str, Any]:
         return self.request("POST", f"/api/v1/devices/{self.device_id}/debug/orders", {"deviceId": self.device_id, "recipeId": recipe_id, "source": "terminal-console", "requestedAt": requested_at})

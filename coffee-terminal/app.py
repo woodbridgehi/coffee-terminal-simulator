@@ -2,21 +2,14 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 import webview
 
 from backend import CoffeeDeviceRuntime
+from configuration import load_config
 
 ROOT = Path(__file__).resolve().parent
-
-
-def load_config(path: Path) -> dict:
-    config = json.loads(path.read_text(encoding="utf-8"))
-    config["_configPath"] = str(path)
-    return config
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Coffee terminal instance")

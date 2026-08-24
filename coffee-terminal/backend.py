@@ -145,7 +145,14 @@ class CoffeeDeviceRuntime:
             runtime["events"] = list(self.events)
             runtime["qrDataUrl"] = self._qr_data_url(runtime.get("qrUrl", ""))
             runtime["inventory"] = self.inventory.snapshot()
-            return {"config": self.config, "recipes": self.catalog.list(), "capabilities": self.capabilities(), "runtime": runtime, "backend": {"mode": self.mode, "baseUrl": self.config.get("backend", {}).get("baseUrl")}}
+            public_config = json.loads(json.dumps(self.config))
+            public_backend = public_config.get("backend", {})
+            public_backend["authConfigured"] = bool(public_backend.pop("authToken", None))
+            header_names = sorted(public_backend.get("headers", {}).keys())
+            public_backend.pop("headers", None)
+            if header_names:
+                public_backend["headerNames"] = header_names
+            return {"config": public_config, "recipes": self.catalog.list(), "capabilities": self.capabilities(), "runtime": runtime, "backend": {"mode": self.mode, "baseUrl": self.config.get("backend", {}).get("baseUrl")}}
 
     def health(self) -> dict[str, Any]:
         return {"ok": True, "deviceId": self.device_id, "bootId": self.boot_id, "connection": self.runtime["connection"], "deviceStatus": self.runtime["deviceStatus"], "sync": dict(self.sync_health), "deliveries": self.store.delivery_stats(), "time": now()}
@@ -564,7 +571,10 @@ class CoffeeDeviceRuntime:
     def _heartbeat_payload(self) -> dict[str, Any]:
         local_api = self.config.get("localApi", {})
         task = self.runtime.get("task") or {}
-        return {"deviceId": self.device_id, "instanceId": self.config["instanceId"], "storeId": self.config.get("storeId"), "deviceStatus": self.runtime["deviceStatus"], "currentTaskId": task.get("taskId"), "currentTaskState": task.get("state"), "currentTaskRevision": task.get("revision"), "capabilityVersion": self.catalog.version, "inventoryVersion": self.inventory.state["version"], "deliveries": self.store.delivery_stats(), "localApiUrl": f"http://{local_api.get('host', '127.0.0.1')}:{local_api.get('port', 9101)}" if local_api.get("enabled", True) else None, "appVersion": "1.2.0", "sentAt": now()}
+        with self.lock:
+            self.sequence += 1
+            sequence = self.sequence
+        return {"deviceId": self.device_id, "messageId": f"hb-{self.boot_id}-{sequence}", "bootId": self.boot_id, "sequence": sequence, "instanceId": self.config["instanceId"], "storeId": self.config.get("storeId"), "deviceStatus": self.runtime["deviceStatus"], "currentTaskId": task.get("taskId"), "currentTaskState": task.get("state"), "currentTaskRevision": task.get("revision"), "capabilityVersion": self.catalog.version, "inventoryVersion": self.inventory.state["version"], "deliveries": self.store.delivery_stats(), "localApiUrl": f"http://{local_api.get('host', '127.0.0.1')}:{local_api.get('port', 9101)}" if local_api.get("enabled", True) else None, "appVersion": "1.2.0", "sentAt": now()}
 
     def _sync_snapshots(self) -> None:
         capability_key = (self.catalog.version, int(self.inventory.state["version"]))

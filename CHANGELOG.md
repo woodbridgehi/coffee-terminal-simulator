@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — VPS 在线验证
+
+- `coffee-bot-002` 默认连接 `https://coffee-api.woodbridge.top`，心跳周期调整为 10 秒。
+- 心跳增加 `messageId/bootId/sequence`，支持云端幂等和乱序识别。
+- 增加环境变量/秘密文件配置覆盖和 `start-remote-002.command`，设备 Token 不进入 JSON 或 Git。
+- 增加 headless 真实运行时入口，用于在线、离线、重连和故障注入自动验收。
+- 使用稳定设备 User-Agent，修复 Cloudflare Error 1010 对 Python 默认客户端签名的拦截。
+- pywebview 状态输出会移除设备 Token 和自定义请求头值。
+- 增加一次性激活与崩溃安全的凭证轮换脚本；终端生成 Token，pending 文件支持幂等恢复，密钥不输出。
+- 增加显式 `--resume-recovered` headless 选项，用于云端对账后恢复测试任务。
+
 ## v1.2.0 — 可靠性优化版
 
 ### 新增
@@ -29,7 +40,7 @@
 
 - 库存仍在 `inventory.json`，任务和消息在 SQLite，尚未形成跨两种存储的单一事务。
 - 重启恢复只对模拟计时流程安全；真实硬件必须增加传感器、动作日志和 `RECOVERING/HOLD` 裁决。
-- 设备激活、mTLS、命令签名、签名配置/OTA、硬件安全互锁尚未实现。
+- 一次性激活和 Bearer Token 轮换已实现；mTLS、命令签名、签名配置/OTA、硬件安全互锁尚未实现。
 - 已发送消息的长期归档和磁盘水位策略仍待下一阶段实现。
 
 ## v1.1

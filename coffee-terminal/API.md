@@ -51,6 +51,8 @@ Authorization: Bearer <token>
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
+| `POST` | `/api/v1/device-activations` | 使用一次性激活码登记终端生成的凭证 |
+| `POST` | `/api/v1/devices/{deviceId}/credentials/rotate` | 幂等轮换设备凭证 |
 | `GET` | `/api/v1/devices/{deviceId}/commands` | 领取设备命令 |
 | `POST` | `/api/v1/tasks/{taskId}/ack` | 接受或拒绝制作任务 |
 | `POST` | `/api/v1/devices/{deviceId}/commands/{messageId}/result` | 上报非制作命令的统一执行结果 |
@@ -62,8 +64,55 @@ Authorization: Bearer <token>
 | `POST` | `/api/v1/devices/{deviceId}/debug/orders` | 测试环境创建调试订单 |
 | `POST` | `/api/v1/devices/{deviceId}/debug/commands` | 测试环境创建调试命令 |
 | `PATCH` | `/api/v1/devices/{deviceId}/debug/overrides` | 更新调试覆盖参数 |
+| `POST` | `/api/v1/admin/devices/{deviceId}/activation-codes` | 管理员创建一次性激活码 |
+| `GET` | `/api/v1/admin/devices/{deviceId}/credentials` | 管理员查询凭证版本与状态 |
+| `POST` | `/api/v1/admin/devices/{deviceId}/commands` | 管理员幂等创建正式设备命令 |
+| `GET` | `/api/v1/admin/devices/{deviceId}/commands/{messageId}` | 查询命令状态和迁移历史 |
 
 后台成功响应应返回 `2xx` 和合法 JSON 对象；无响应体时也可以返回空响应体。连接失败、超时、非成功 HTTP 状态或非法 JSON 都会被设备视为调用失败。
+
+### 2.1 激活和凭证轮换
+
+管理员创建激活码时使用独立的管理员 Bearer Token。响应中的 `activationCode` 只展示一次、默认 10 分钟有效；同一设备创建新码会取消旧的待用码。
+
+终端先在本地生成至少 32 字符的高熵 Token，再激活：
+
+```json
+{
+  "deviceId": "coffee-bot-002",
+  "activationCode": "one-time-code",
+  "deviceToken": "terminal-generated-secret"
+}
+```
+
+云端只保存 Token 的 SHA-256。相同激活码和相同 Token 可以重试并得到 `duplicate: true`；同一激活码改用其他 Token 返回 `409`。
+
+轮换请求必须由当前有效凭证认证，并携带稳定的 `Idempotency-Key`：
+
+```http
+POST /api/v1/devices/coffee-bot-002/credentials/rotate
+Authorization: Bearer <current-token>
+X-Device-Id: coffee-bot-002
+Idempotency-Key: rotate-uuid
+```
+
+```json
+{"newToken": "terminal-generated-new-secret"}
+```
+
+同一个幂等键和载荷可安全重试；同键不同载荷返回 `409`。新凭证立即生效，旧凭证进入短暂 `GRACE`，宽限结束后变为 `EXPIRED`。终端脚本使用 pending 文件保证“云端已轮换但本地响应丢失”时仍能重试同一把凭证。
+
+### 2.2 正式命令状态
+
+管理端创建命令也必须携带 `Idempotency-Key`。命令状态由云端统一约束：
+
+```text
+CREATED -> DELIVERING -> ACKED -> EXECUTING -> SUCCEEDED
+                                          \-> FAILED / CANCELLED
+DELIVERING -> REJECTED / EXPIRED
+```
+
+轮询只表示 `DELIVERING`，不能当作已接单；ACK 才进入 `ACKED`。实际终端用 `payload.taskId` 关联 `task.started`、`task.succeeded`、`task.failed` 和 `task.cancelled`。重复事件和迟到 ACK 不允许让终态倒退。服务启动时会重放已入库的关键事件，补偿“事件已保存但投影尚未推进”的崩溃窗口。
 
 ## 3. 领取设备命令
 
@@ -196,6 +245,9 @@ POST /api/v1/devices/{deviceId}/heartbeat
 ```json
 {
   "deviceId": "coffee-bot-001",
+  "messageId": "hb-boot-uuid-43",
+  "bootId": "boot-uuid",
+  "sequence": 43,
   "instanceId": "instance-coffee-bot-001",
   "storeId": "store-demo-taipei-01",
   "deviceStatus": "BUSY",
@@ -210,6 +262,8 @@ POST /api/v1/devices/{deviceId}/heartbeat
   "sentAt": "2026-08-23T12:00:00Z"
 }
 ```
+
+`messageId` 用于心跳幂等；`(deviceId, bootId, sequence)` 用于检测单次启动内的重复和乱序。后台以接收时间判断在线状态，不依赖 `sentAt` 的客户端时钟。为兼容旧后台，这三个字段是向后兼容新增字段。
 
 心跳响应可以包含 `qrUrl`，终端会采用它更新二维码：
 

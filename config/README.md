@@ -70,6 +70,7 @@ config/instances/{deviceId}/
 | `backend.commandPollSeconds` | 否 | 命令轮询间隔 |
 | `backend.heartbeatIntervalSeconds` | 否 | 心跳间隔 |
 | `backend.requestTimeoutSeconds` | 否 | 单次 HTTP 超时秒数 |
+| `backend.userAgent` | 否 | 设备 HTTP 客户端标识，默认 `CoffeeTerminalSimulator/1.2.0`；避免使用通用脚本客户端签名 |
 | `backend.authToken` | 否 | 静态 Bearer Token，仅建议测试环境使用 |
 | `backend.headers` | 否 | 附加到所有后台请求的自定义请求头 |
 | `localApi.enabled` | 否 | 是否启动本地调试 API，默认 `true` |
@@ -79,6 +80,8 @@ config/instances/{deviceId}/
 | `localApi.maxBodyBytes` | 否 | 本地写接口请求体上限，默认 65536 |
 | `localApi.allowedOrigins` | 否 | 允许访问写接口的浏览器 Origin；默认拒绝所有带 Origin 的请求 |
 | `enableConsole` | 否 | 预留开关；当前界面仍会显示控制台 |
+
+remote 模式推荐通过 `COFFEE_DEVICE_TOKEN` 环境变量或 `.secrets/{instance}.env` 注入凭证。生产式联调使用 `scripts/activate_instance.py` 和 `scripts/rotate_instance_credential.py` 管理凭证，不要把 `authToken` 写进 JSON。
 
 运行模式：
 

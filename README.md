@@ -16,6 +16,8 @@
 
 当前 `v1.2` 是可靠性优化版：命令 Inbox、制作任务、命令游标和待发事件使用每实例 SQLite 持久化；重启可恢复模拟任务，重复任务不会再次制作，ACK/命令结果和事件会持久重试。
 
+远程接入已支持一次性激活和凭证轮换工具。设备 Token 只保存在被 Git 忽略且权限为 `0600` 的 `.secrets/` 文件中，不写入 `device.json`。
+
 ## 1. 项目结构
 
 ```text
@@ -84,7 +86,48 @@ python3 -m venv .venv
 当前示例：
 
 - `coffee-bot-001`：`local` 模式，适合直接体验本地制作、随机时长、库存和故障。
-- `coffee-bot-002`：`remote` 模式，默认连接 `http://localhost:8080`，适合后台联调。
+- `coffee-bot-002`：`remote` 模式，连接 `https://coffee-api.woodbridge.top`，适合 VPS 在线联调；凭证从未跟踪的 `.secrets/coffee-bot-002.env` 注入。
+
+启动 002 在线模式：
+
+```bash
+./start-remote-002.command
+```
+
+自动化联调可运行同一设备运行时而不打开 pywebview：
+
+```bash
+.venv/bin/python scripts/run_headless.py coffee-bot-002 \
+  --env-file .secrets/coffee-bot-002.env --duration 60
+```
+
+若进程在制作中退出，remote 模式重启后任务会停在恢复保护态；确认云端状态后才可在测试中显式恢复：
+
+```bash
+.venv/bin/python scripts/run_headless.py coffee-bot-002 \
+  --env-file .secrets/coffee-bot-002.env --duration 60 --resume-recovered
+```
+
+### 2.1 首次激活与轮换
+
+管理员先通过云端创建一次性激活码，并把码放入临时文件；不要把码直接写进 shell 历史。终端执行：
+
+```bash
+.venv/bin/python scripts/activate_instance.py coffee-bot-002 \
+  --activation-code-file .secrets/coffee-bot-002.activation-code \
+  --secrets-file .secrets/coffee-bot-002.env
+```
+
+脚本先生成本地待提交凭证，再调用激活接口，成功后原子替换正式秘密文件；响应丢失时保留 pending 文件，重复执行不会生成另一把 Token。
+
+轮换当前凭证：
+
+```bash
+.venv/bin/python scripts/rotate_instance_credential.py coffee-bot-002 \
+  --secrets-file .secrets/coffee-bot-002.env
+```
+
+轮换同样支持崩溃恢复和幂等重试。云端短时间同时接受新凭证与旧凭证，宽限结束后旧凭证自动失效；脚本不会打印 Token。
 
 ## 3. 新建或复制设备
 
@@ -147,6 +190,7 @@ cp -R config/instances/coffee-bot-001 config/instances/coffee-bot-003
 ```
 
 设置 `authToken` 后请求会携带 `Authorization: Bearer ...`；所有云端请求默认携带 `X-Device-Id`。
+请求还携带明确的 `User-Agent: CoffeeTerminalSimulator/1.2.0`，可通过 `backend.userAgent` 覆盖。Cloudflare 等边缘服务可能拒绝 Python 默认的通用脚本客户端签名，因此设备客户端不使用默认 `Python-urllib/*` 标识。
 
 ## 5. 添加或修改饮品
 
@@ -471,7 +515,7 @@ node --check coffee-terminal/web/drink-visual.js
 
 - 库存仍为 JSON，任务/消息为 SQLite；两种存储之间还不是单一原子事务。
 - 模拟任务可从计时检查点恢复，但真实硬件动作在崩溃后必须结合传感器进入 `RECOVERING/HOLD`，不能照搬自动续做。
-- 远程身份仍是可选静态 Bearer Token；设备激活、mTLS、凭据轮换和命令签名尚未实现。
+- 远程身份已支持一次性激活和 Bearer Token 双凭证轮换；mTLS、硬件密钥保护和命令签名尚未实现。
 - 配置重载还不是签名配置包的 staged/atomic 发布，OTA 和硬件安全互锁仍不存在。
 - SQLite 已发送记录尚未实施长期归档策略，商业试点前应明确保留期和磁盘水位。
 

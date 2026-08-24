@@ -41,6 +41,7 @@ class CloudIntegrationTest(unittest.TestCase):
             def do_GET(self) -> None:
                 nonlocal command_sent
                 path = urlparse(self.path).path
+                self.assert_device_headers()
                 received.append(("GET", path, {}))
                 if path.endswith("/commands"):
                     commands = [] if command_sent else [{"messageId": "cmd-1", "type": "MAKE_DRINK", "taskId": "task-1", "orderId": "order-1", "recipeId": "espresso-v1", "recipeVersion": "1.0.0"}]
@@ -51,8 +52,13 @@ class CloudIntegrationTest(unittest.TestCase):
                     self.respond({})
 
             def write_request(self) -> None:
+                self.assert_device_headers()
                 length = int(self.headers.get("Content-Length", "0")); payload = json.loads(self.rfile.read(length)) if length else {}
                 received.append((self.command, urlparse(self.path).path, payload)); self.respond({"ok": True})
+
+            def assert_device_headers(self) -> None:
+                if self.headers.get("User-Agent") != "CoffeeTerminalSimulator/1.2.0":
+                    raise AssertionError("missing stable device User-Agent")
 
             do_POST = write_request
             do_PUT = write_request

@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+.secrets/
 
 # Runtime inventory is device-local mutable state.
 config/instances/*/state/inventory.json

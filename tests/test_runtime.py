@@ -241,6 +241,23 @@ class RuntimeTest(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["change"]["after"], 25)
 
+    def test_public_state_redacts_cloud_credentials_and_heartbeat_has_envelope(self) -> None:
+        self.runtime.config["backend"]["authToken"] = "device-secret-that-must-not-reach-webview"
+        self.runtime.config["backend"]["headers"] = {"X-Private-Header": "private-value"}
+        state = self.runtime.get_state()
+        public_backend = state["config"]["backend"]
+        self.assertNotIn("authToken", public_backend)
+        self.assertTrue(public_backend["authConfigured"])
+        self.assertNotIn("headers", public_backend)
+        self.assertEqual(public_backend["headerNames"], ["X-Private-Header"])
+        self.assertNotIn("private-value", json.dumps(state))
+
+        heartbeat = self.runtime._heartbeat_payload()
+        self.assertEqual(heartbeat["deviceId"], "test-device")
+        self.assertEqual(heartbeat["bootId"], self.runtime.boot_id)
+        self.assertEqual(heartbeat["sequence"], 2)  # device.online event used sequence 1
+        self.assertEqual(heartbeat["messageId"], f"hb-{self.runtime.boot_id}-2")
+
 
 if __name__ == "__main__":
     unittest.main()
