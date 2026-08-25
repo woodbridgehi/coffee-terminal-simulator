@@ -3,6 +3,7 @@
   "skuCode": "ICED_LATTE",
   "version": "1.0.0",
   "name": "冰拿铁",
+  "priceMinor": 1800,
   "enabled": true,
   "display": {
     "description": "双份浓缩、鲜奶与冰块",

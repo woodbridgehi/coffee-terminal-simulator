@@ -3,6 +3,7 @@
   "skuCode": "XINYI_SPECIAL",
   "version": "1.0.0",
   "name": "信义榛果特调",
+  "priceMinor": 2200,
   "enabled": true,
   "display": {"description": "门店限定榛果奶咖", "sortOrder": 5, "operatorExclusive": true},
   "visual": {"profile": "hazelnut-special", "cup": "transparent-tall", "layers": ["coffee", "milk", "hazelnut-syrup"]},

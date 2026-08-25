@@ -3,6 +3,7 @@
   "skuCode": "ESPRESSO",
   "version": "1.0.0",
   "name": "双份浓缩",
+  "priceMinor": 1000,
   "enabled": true,
   "display": {"description": "短杯双份浓缩", "sortOrder": 10},
   "visual": {"profile": "espresso", "cup": "ceramic-espresso", "layers": ["espresso", "crema"]},

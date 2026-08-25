@@ -120,6 +120,8 @@ chmod 600 .secrets/coffee-bot-001.activation-code
 
 成功后 pending 文件会被原子提升为 `.secrets/coffee-bot-001.env`，工具只输出凭证版本，不输出 Token。
 
+云端 v0.5 启用 MQTT credential lifecycle 后，激活响应还会一次性返回该设备专属 MQTT username/password。脚本会把 `COFFEE_TRANSPORT=mqtt5` 与 `MQTT_HOST/PORT/USERNAME/PASSWORD` 一并安全写入同一个受限 `.env`，不会打印密钥。如果 HTTP 激活已成功但响应在本地落盘前丢失，重新运行命令会使用新 HTTP 凭证调用 MQTT rotate 接口恢复，不需要重新登记设备。
+
 安全检查环境文件，不显示内容：
 
 ```bash
@@ -167,3 +169,9 @@ awk -F= '{print NR ": " $1}' .secrets/coffee-bot-001.env
 
 轮换成功后新 Token 原子写入本地秘密文件，旧 Token 只在短暂宽限期内有效，之后自动过期。
 
+只升级或轮换 MQTT 凭证（保留当前 HTTP Token）：
+
+```bash
+.venv/bin/python scripts/rotate_mqtt_credential.py coffee-bot-001 \
+  --secrets-file .secrets/coffee-bot-001.env
+```

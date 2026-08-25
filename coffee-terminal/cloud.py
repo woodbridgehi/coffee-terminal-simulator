@@ -89,6 +89,9 @@ class CloudClient:
             {"newToken": new_token}, {"Idempotency-Key": idempotency_key},
         )
 
+    def rotate_mqtt_credential(self) -> dict[str, Any]:
+        return self.request("POST", f"/api/v1/devices/{self.device_id}/mqtt-credentials/rotate", {})
+
     def debug_order(self, recipe_id: str, requested_at: str) -> dict[str, Any]:
         return self.request("POST", f"/api/v1/devices/{self.device_id}/debug/orders", {"deviceId": self.device_id, "recipeId": recipe_id, "source": "terminal-console", "requestedAt": requested_at})
 

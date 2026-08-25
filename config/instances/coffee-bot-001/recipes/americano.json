@@ -3,6 +3,7 @@
   "skuCode": "HOT_AMERICANO",
   "version": "1.0.0",
   "name": "热美式",
+  "priceMinor": 1200,
   "enabled": true,
   "display": {"description": "双份浓缩与热水", "sortOrder": 10},
   "visual": {"profile": "americano", "cup": "ceramic-mug", "layers": ["coffee", "water"]},

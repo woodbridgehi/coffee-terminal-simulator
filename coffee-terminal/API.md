@@ -52,6 +52,7 @@ Authorization: Bearer <token>
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | `POST` | `/api/v1/device-activations` | 使用一次性激活码登记终端生成的凭证 |
+| `POST` | `/api/v1/devices/{deviceId}/mqtt-credentials/rotate` | 使用当前 HTTP 设备身份轮换每设备 MQTT 凭证 |
 | `POST` | `/api/v1/devices/{deviceId}/credentials/rotate` | 幂等轮换设备凭证 |
 | `GET` | `/api/v1/devices/{deviceId}/commands` | 领取设备命令 |
 | `POST` | `/api/v1/tasks/{taskId}/ack` | 接受或拒绝制作任务 |

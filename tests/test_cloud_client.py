@@ -43,6 +43,7 @@ class CloudClientIdentityTest(unittest.TestCase):
             })
             client.activate("one-time-code", "n" * 48)
             client.rotate_credential("r" * 48, "rotate-request-1")
+            client.rotate_mqtt_credential()
         finally:
             server.shutdown()
             server.server_close()
@@ -53,6 +54,7 @@ class CloudClientIdentityTest(unittest.TestCase):
         self.assertEqual(received[1][0], "/api/v1/devices/device-1/credentials/rotate")
         self.assertEqual(received[1][1]["Idempotency-Key"], "rotate-request-1")
         self.assertEqual(received[1][2]["newToken"], "r" * 48)
+        self.assertEqual(received[2][0], "/api/v1/devices/device-1/mqtt-credentials/rotate")
 
 
 if __name__ == "__main__":

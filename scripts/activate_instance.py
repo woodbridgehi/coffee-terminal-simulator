@@ -49,6 +49,22 @@ def main() -> None:
         raise SystemExit(f"激活失败（HTTP {exc.status or '-'}）；待提交凭证保留在受限文件中，可重试") from exc
     if response.get("deviceId") != config["deviceId"]:
         raise SystemExit("激活响应设备标识不匹配，未更新当前凭证")
+    mqtt_credential = response.get("mqttCredential")
+    if not isinstance(mqtt_credential, dict) or not mqtt_credential.get("password"):
+        client.headers["Authorization"] = f"Bearer {new_token}"
+        try:
+            mqtt_credential = client.rotate_mqtt_credential().get("mqttCredential")
+        except CloudError as exc:
+            raise SystemExit(f"HTTP 激活已完成，但 MQTT 凭证签发失败（HTTP {exc.status or '-'}）；可重新运行本命令恢复") from exc
+    if isinstance(mqtt_credential, dict) and mqtt_credential.get("password"):
+        pending.update({
+            "COFFEE_TRANSPORT": "mqtt5",
+            "MQTT_HOST": str(mqtt_credential.get("host") or "mqtt-api.woodbridge.top"),
+            "MQTT_PORT": str(mqtt_credential.get("port") or 8883),
+            "MQTT_USERNAME": str(mqtt_credential.get("username") or config["deviceId"]),
+            "MQTT_PASSWORD": str(mqtt_credential["password"]),
+        })
+        write_env_values(pending_path, pending)
     pending_path.replace(secret_path)
     secret_path.chmod(0o600)
     print(f"设备 {config['deviceId']} 已激活；凭证版本 {response.get('version')}，密钥未输出。")

@@ -53,6 +53,8 @@ class RecipeCatalog:
         visual_profile = recipe.get("visual", {}).get("profile")
         if visual_profile and visual_profile not in VISUAL_PROFILES:
             errors.append(f"不支持的 visual.profile: {visual_profile}")
+        if "priceMinor" in recipe and (not isinstance(recipe["priceMinor"], int) or recipe["priceMinor"] <= 0):
+            errors.append("priceMinor 必须是正整数（最小货币单位）")
         for step in recipe.get("steps", []):
             if not all(key in step for key in ["id", "name", "durationSeconds"]):
                 errors.append("步骤必须包含 id、name、durationSeconds")
@@ -114,6 +116,7 @@ class RecipeCatalog:
                 "skuCode": recipe["skuCode"],
                 "version": recipe["version"],
                 "name": recipe["name"],
+                "priceMinor": recipe.get("priceMinor"),
                 "display": recipe.get("display", {}),
                 "visual": recipe.get("visual", {"profile": "generic"}),
                 "enabled": recipe.get("enabled", True),

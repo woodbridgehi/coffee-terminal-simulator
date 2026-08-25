@@ -220,6 +220,8 @@ pywebview 会把该地址生成真实二维码。手机与终端不需要位于�
 
 一个 recipe JSON 就是一种设备饮品能力。建议文件名与 `recipeId` 一致，且同一设备内不能出现重复 `recipeId`。
 
+`priceMinor` 是可选的正整数，表示最小货币单位下的设备建议售价，并会随能力快照上报；云端仍负责最终币种、价格策略和下单时的商品快照。未配置时由云端的安全默认价格补齐。
+
 完整示例：
 
 ```json
@@ -564,6 +566,8 @@ node --check coffee-terminal/web/drink-visual.js
 ## 16. MQTT 5.0 remote 模式
 
 `remote` 现支持 `http`（兼容模式）和 `mqtt5` 两种 transport。MQTT 模式中，命令、ACK、制作事件、在线状态和 reported state 使用 MQTT 5.0；激活、凭证轮换、二维码配置、能力和库存快照继续使用 HTTPS。业务命令处理、SQLite inbox/outbox、taskId/messageId 去重和制作状态机不因 transport 改变。
+
+云端 v0.5 激活接口会一次性签发每设备 MQTT credential 并同步 EMQX ACL；`activate_instance.py` 会把它与 HTTP 凭证一起写入受限 `.env`。响应丢失后脚本通过 MQTT rotate 接口恢复，不能回退为共享 Broker 密码。
 
 002 的未跟踪凭证文件需要包含：
 
