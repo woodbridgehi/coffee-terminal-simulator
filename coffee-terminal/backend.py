@@ -268,11 +268,12 @@ class CoffeeDeviceRuntime:
                 return self._reject(command, "MATERIAL_INSUFFICIENT", detail or {})
             execution_recipe = self.catalog.materialize_execution_recipe(recipe)
             planned_duration = sum(float(step["durationSeconds"]) for step in execution_recipe["steps"])
-            task = {"taskId": command["taskId"], "orderId": command.get("orderId"), "messageId": command.get("messageId"), "recipe": execution_recipe, "state": "ACKNOWLEDGED", "stepIndex": 0, "stepProgress": 0.0, "stepElapsed": 0.0, "stepPrechecked": False, "attempt": 1, "stepRetries": {}, "plannedDurationSeconds": planned_duration, "lastProgressBucket": -1, "message": "任务已接受，准备制作"}
+            task = {"taskId": command["taskId"], "orderId": command.get("orderId"), "messageId": command.get("messageId"), "recipe": execution_recipe, "state": "ACKNOWLEDGED", "stepIndex": 0, "stepProgress": 0.0, "overallProgress": 0.0, "stepElapsed": 0.0, "elapsedSeconds": 0.0, "remainingSeconds": planned_duration, "stepPrechecked": False, "attempt": 1, "stepRetries": {}, "plannedDurationSeconds": planned_duration, "lastProgressBucket": -1, "message": "任务已接受，准备制作"}
             self.runtime["task"] = task; self.runtime["deviceStatus"] = "RESERVED"
             self._persist_task(task)
             self._emit("inventory.reserved", "已预占整杯所需物料", {"taskId": task["taskId"], "orderId": task.get("orderId"), "messageId": task.get("messageId"), "taskRevision": task.get("revision"), "materials": requirements})
-            self._emit("task.acknowledged", "制作任务已接受", {"taskId": task["taskId"], "orderId": task.get("orderId"), "messageId": task.get("messageId"), "taskRevision": task.get("revision"), "plannedDurationSeconds": planned_duration, "stepDurations": [{"stepId": step["id"], "durationSeconds": step["durationSeconds"]} for step in execution_recipe["steps"]]})
+            step_plan = [{"stepId": step["id"], "stepName": step["name"], "stepIndex": index, "durationSeconds": step["durationSeconds"]} for index, step in enumerate(execution_recipe["steps"])]
+            self._emit("task.acknowledged", "制作任务已接受", {**self._task_ref(task), **self._progress_ref(task), "messageId": task.get("messageId"), "plannedDurationSeconds": planned_duration, "stepPlan": step_plan, "stepDurations": step_plan})
             self._ack(command, True)
             self._inventory_changed()
             return {"ok": True, "taskId": task["taskId"]}
@@ -367,6 +368,7 @@ class CoffeeDeviceRuntime:
                     return {"ok": False, "error": "重试所需物料不足", "details": detail}
                 task.setdefault("stepRetries", {})[step_id] = retries_used + 1
                 task.update({"state": "RUNNING", "stepProgress": 0.0, "stepElapsed": 0.0, "stepPrechecked": False, "attempt": task.get("attempt", 1) + 1, "message": "任务重试"})
+                task.update(self._task_progress_fields(task))
                 self._persist_task(task); self._emit("task.retry", "任务开始重试", self._task_ref(task)); self._inventory_changed()
             elif action == "cancel" and task["state"] in ACTIVE_STATES:
                 self.inventory.release(task["taskId"]); task["state"] = "CANCELLED"; task["message"] = "任务已取消"; self.runtime["deviceStatus"] = "IDLE"; self._persist_task(task); self._emit("task.cancelled", task["message"], self._task_ref(task)); self._inventory_changed()
@@ -387,7 +389,7 @@ class CoffeeDeviceRuntime:
                 if task["state"] == "ACKNOWLEDGED":
                     task["state"] = "RUNNING"; self.runtime["deviceStatus"] = "BUSY"
                     self._persist_task(task)
-                    self._emit("task.started", "开始制作", self._task_ref(task))
+                    self._emit("task.started", "开始制作", {**self._task_ref(task), **self._progress_ref(task)})
                 if task["state"] != "RUNNING":
                     continue
                 step = task["recipe"]["steps"][task["stepIndex"]]
@@ -398,14 +400,15 @@ class CoffeeDeviceRuntime:
                         self._fail_task(task, step, profile, consume=False); continue
                     task["stepPrechecked"] = True; task["message"] = step["name"]
                     self._persist_task(task)
-                    self._emit("step.started", f"开始：{step['name']}", {**self._task_ref(task), "stepId": step["id"]})
+                    self._emit("step.started", f"开始：{step['name']}", {**self._task_ref(task), **self._progress_ref(task)})
                 task["stepElapsed"] += tick
                 task["stepProgress"] = min(1.0, task["stepElapsed"] / float(step["durationSeconds"]))
+                task.update(self._task_progress_fields(task))
                 bucket = int(task["stepProgress"] * 10)
                 if bucket != task["lastProgressBucket"]:
                     task["lastProgressBucket"] = bucket
                     self._persist_task(task)
-                    self._emit("task.progress", step["name"], {**self._task_ref(task), "stepId": step["id"], "stepIndex": task["stepIndex"], "progress": task["stepProgress"]})
+                    self._emit("task.progress", step["name"], {**self._task_ref(task), **self._progress_ref(task), "progress": task["stepProgress"]})
                 if task["stepProgress"] < 1:
                     continue
                 failed, profile = self.failures.should_fail(step, "after")
@@ -414,7 +417,7 @@ class CoffeeDeviceRuntime:
                     self._fail_task(task, step, profile, consume=bool(profile.get("consumeOnFailure"))); continue
                 self._consume_step(task, step)
                 self._persist_task(task)
-                self._emit("step.completed", f"完成：{step['name']}", {**self._task_ref(task), "stepId": step["id"]})
+                self._emit("step.completed", f"完成：{step['name']}", {**self._task_ref(task), **self._progress_ref(task)})
                 self._advance_step(task)
 
     def _consume_step(self, task: dict[str, Any], step: dict[str, Any]) -> None:
@@ -441,16 +444,42 @@ class CoffeeDeviceRuntime:
         task["stepIndex"] += 1
         if task["stepIndex"] >= len(task["recipe"]["steps"]):
             task["stepIndex"] = len(task["recipe"]["steps"]) - 1; task["stepProgress"] = 1.0; task["state"] = "SUCCEEDED"; task["message"] = "咖啡制作完成，请取杯"; self.runtime["deviceStatus"] = "READY"
+            task.update(self._task_progress_fields(task))
             self.inventory.release(task["taskId"])
             self._persist_task(task)
-            self._emit("task.succeeded", task["message"], self._task_ref(task)); self._inventory_changed()
+            self._emit("task.succeeded", task["message"], {**self._task_ref(task), **self._progress_ref(task)}); self._inventory_changed()
         else:
             task.update({"stepProgress": 0.0, "stepElapsed": 0.0, "stepPrechecked": False, "lastProgressBucket": -1})
+            task.update(self._task_progress_fields(task))
             self._persist_task(task)
 
     @staticmethod
     def _task_ref(task: dict[str, Any]) -> dict[str, Any]:
         return {"taskId": task.get("taskId"), "orderId": task.get("orderId"), "recipeId": task.get("recipe", {}).get("recipeId"), "taskRevision": task.get("revision"), "attempt": task.get("attempt", 1)}
+
+    @staticmethod
+    def _progress_ref(task: dict[str, Any]) -> dict[str, Any]:
+        steps = task.get("recipe", {}).get("steps") or []
+        if not steps:
+            return {"stepId": None, "stepName": None, "stepIndex": 0, "stepCount": 0, "stepProgress": 0.0, "overallProgress": 0.0, "elapsedSeconds": 0.0, "remainingSeconds": 0.0}
+        index = max(0, min(int(task.get("stepIndex", 0)), len(steps) - 1))
+        step = steps[index]
+        planned = float(task.get("plannedDurationSeconds") or sum(float(item["durationSeconds"]) for item in steps))
+        completed = sum(float(item["durationSeconds"]) for item in steps[:index])
+        step_progress = max(0.0, min(1.0, float(task.get("stepProgress", 0.0))))
+        elapsed = min(planned, completed + float(step["durationSeconds"]) * step_progress)
+        overall = 1.0 if task.get("state") == "SUCCEEDED" else (elapsed / planned if planned > 0 else 0.0)
+        return {
+            "stepId": step.get("id"), "stepName": step.get("name"), "stepIndex": index,
+            "stepCount": len(steps), "stepProgress": step_progress,
+            "overallProgress": max(0.0, min(1.0, overall)),
+            "elapsedSeconds": round(elapsed, 2), "remainingSeconds": round(max(0.0, planned - elapsed), 2),
+        }
+
+    @classmethod
+    def _task_progress_fields(cls, task: dict[str, Any]) -> dict[str, float]:
+        progress = cls._progress_ref(task)
+        return {key: progress[key] for key in ("overallProgress", "elapsedSeconds", "remainingSeconds")}
 
     def _inventory_changed(self) -> None:
         snapshot = self.inventory.snapshot()

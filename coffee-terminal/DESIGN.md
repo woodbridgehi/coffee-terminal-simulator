@@ -99,7 +99,7 @@ config/
 - 单次制作过程可复现和审计。
 - 配方能力仍可给出稳定的基准时间和预估范围。
 
-完整的本次步骤计划通过 `task.acknowledged` 事件中的 `plannedDurationSeconds` 和 `stepDurations` 上报。HTTP 接单 ACK 只表达是否接单，不承载该计划。
+完整的本次步骤计划通过 `task.acknowledged` 事件中的 `plannedDurationSeconds` 和 `stepPlan` 上报；每项包含 `stepId`、`stepName`、顺序和本杯实际时长。执行期间由终端统一计算 `stepProgress` 和按实际时长加权的 `overallProgress`，本地界面与顾客端均直接使用这组权威字段。`stepDurations` 仅作为兼容别名保留。HTTP 接单 ACK 只表达是否接单，不承载该计划。
 
 ## 5. 共享库存模型
 

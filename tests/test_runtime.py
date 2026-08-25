@@ -122,6 +122,26 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(after_second["beans"]["onHand"], 10)
         self.assertEqual(after_second["cup"]["onHand"], 0)
 
+    def test_device_publishes_authoritative_step_plan_and_overall_progress(self) -> None:
+        self.runtime.runtime["override"]["offline"] = True
+        accepted = self.runtime._accept_task({"messageId": "progress-plan", "type": "MAKE_DRINK", "taskId": "task-progress-plan", "recipeId": "coffee-v1"})
+        self.assertTrue(accepted["ok"])
+        acknowledged = next(event for event in self.runtime.events if event["type"] == "task.acknowledged")
+        plan = acknowledged["payload"]["stepPlan"]
+        self.assertEqual([(step["stepId"], step["stepName"], step["stepIndex"]) for step in plan], [("cup", "取杯", 0), ("brew", "萃取", 1)])
+        self.assertEqual(acknowledged["payload"]["stepDurations"], plan)
+
+        task = self.runtime.runtime["task"]
+        task.update({"state": "RUNNING", "stepIndex": 1, "stepProgress": 0.5})
+        progress = self.runtime._progress_ref(task)
+        first_duration = float(task["recipe"]["steps"][0]["durationSeconds"])
+        second_duration = float(task["recipe"]["steps"][1]["durationSeconds"])
+        expected = (first_duration + second_duration * 0.5) / (first_duration + second_duration)
+        self.assertEqual(progress["stepName"], "萃取")
+        self.assertAlmostEqual(progress["stepProgress"], 0.5)
+        self.assertAlmostEqual(progress["overallProgress"], expected)
+        self.assertAlmostEqual(progress["elapsedSeconds"] + progress["remainingSeconds"], task["plannedDurationSeconds"], places=2)
+
     def test_disabled_recipe_and_unknown_inventory_mode_are_rejected(self) -> None:
         recipe_path = self.instance / "recipes" / "coffee.json"
         recipe = json.loads(recipe_path.read_text(encoding="utf-8"))

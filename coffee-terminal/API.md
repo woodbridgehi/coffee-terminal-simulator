@@ -393,10 +393,10 @@ POST /api/v1/devices/{deviceId}/events
     "messageId": "cmd-001",
     "taskRevision": 2,
     "plannedDurationSeconds": 58.7,
-    "stepDurations": [
-      {"stepId": "prepare-cup", "durationSeconds": 4.2},
-      {"stepId": "brew", "durationSeconds": 24.5},
-      {"stepId": "add-milk", "durationSeconds": 30.0}
+    "stepPlan": [
+      {"stepId": "prepare-cup", "stepName": "准备杯子", "stepIndex": 0, "durationSeconds": 4.2},
+      {"stepId": "brew", "stepName": "萃取咖啡", "stepIndex": 1, "durationSeconds": 24.5},
+      {"stepId": "add-milk", "stepName": "添加牛奶", "stepIndex": 2, "durationSeconds": 30.0}
     ]
   }
 }
@@ -414,13 +414,19 @@ POST /api/v1/devices/{deviceId}/events
     "orderId": "order-1024",
     "recipeId": "iced-latte-v1",
     "stepId": "brew",
+    "stepName": "萃取咖啡",
     "stepIndex": 1,
-    "progress": 0.4
+    "stepCount": 3,
+    "progress": 0.4,
+    "stepProgress": 0.4,
+    "overallProgress": 0.24,
+    "elapsedSeconds": 14.1,
+    "remainingSeconds": 44.6
   }
 }
 ```
 
-`progress` 是当前步骤的 0 到 1 比例，不是整杯总进度。终端约在跨越每个 10% 桶时上报一次。
+`stepProgress` 是当前步骤进度，`overallProgress` 是按本杯冻结后的实际步骤时长计算的整杯总进度。旧字段 `progress` 暂时与 `stepProgress` 保持一致以兼容旧后台。终端和顾客端必须使用 `overallProgress` 显示总进度，使用 `stepName` 显示步骤名称，不能再从 `stepId` 猜测文案。
 
 任务和步骤事件会携带 `taskRevision` 与 `attempt`。后台使用 revision 和合法状态迁移处理乱序；同一次物理尝试的回调重复具有相同 attempt，真正重试会递增 attempt。
 
@@ -716,8 +722,8 @@ Content-Type: application/json
 | 9 | 咖啡终端内部 | 校验命令并准备任务 | `taskId`、`recipeId`、`recipeVersion`、`expiresAt` | 终端检查命令格式、有效期、设备是否忙碌、配方版本和共享物料；通过后汇总整杯耗材、预占库存，并为本杯随机生成且冻结步骤时长。 |
 | 10 | 咖啡终端 | `POST /api/v1/tasks/{taskId}/ack` | `messageId`、`deviceId`、`accepted`、`acceptedAt`；拒绝时增加 `reasonCode`、`details` | 设备接入/订单服务记录设备是否接单。只有 `accepted=true` 才能把订单推进到“设备已接单”；`accepted=false` 时按拒绝原因执行换机、取消或退款。 |
 | 11 | 咖啡终端 | `POST /api/v1/devices/{deviceId}/events`，`type=inventory.reserved` | `eventId`、`taskId`、`orderId`、`payload.materials` | 后台记录整杯物料已经预占。该事件用于追踪，库存最终值仍以库存快照为准。 |
-| 12 | 咖啡终端 | `POST /api/v1/devices/{deviceId}/events`，`type=task.acknowledged` | `taskId`、`plannedDurationSeconds`、`stepDurations[]` | 订单服务保存本杯冻结后的执行计划，可用于预计完成时间和顾客端等待提示。计划时长不在 HTTP ACK 中。 |
-| 13 | 咖啡终端 | 向同一事件接口依次发送 `task.started`、`step.started`、`task.progress` | `taskId`、`recipeId`、`stepId`、`stepIndex`、`progress` | 订单服务把订单推进到制作中，并展示当前步骤。`task.progress.payload.progress` 是当前步骤进度，不是整杯总进度。 |
+| 12 | 咖啡终端 | `POST /api/v1/devices/{deviceId}/events`，`type=task.acknowledged` | `taskId`、`plannedDurationSeconds`、`stepPlan[].stepId/stepName/stepIndex/durationSeconds` | 订单服务保存本杯冻结后的权威执行计划，可用于预计完成时间和顾客端等待提示。`stepDurations` 在兼容期保留为同内容别名。 |
+| 13 | 咖啡终端 | 向同一事件接口依次发送 `task.started`、`step.started`、`task.progress` | `taskId`、`recipeId`、`stepId`、`stepName`、`stepIndex`、`stepCount`、`stepProgress`、`overallProgress`、`remainingSeconds` | 订单服务把订单推进到制作中，并直接使用设备给出的步骤名称和整杯总进度；不得自行推导步骤或重新计算随机时长。 |
 | 14 | 咖啡终端 | 向同一事件接口发送 `inventory.consumed`、`step.completed` | `taskId`、`stepId`、`materialId`、`amount`、`unit`、`remaining` | 库存服务记录耗材事实，订单服务记录步骤完成；同一步骤可能消耗多种物料，因此会产生多条 `inventory.consumed`。 |
 | 15 | 咖啡终端 | 向同一事件接口发送 `task.succeeded` | `taskId`、`orderId`、`recipeId` | 订单服务将任务标记为制作成功，并通知顾客取杯。终端状态进入 `READY`，等待清理后回到 `IDLE`。 |
 | 16 | 咖啡终端 | 再次 `PUT inventory` 和 `PUT capabilities` | 新的 `inventoryVersion`；能力中的 `available`、`maxServings` | 后台用最终快照校正事件投影，并重新计算该设备和门店的可售商品。共享物料下降可能同时影响多个 SKU。 |
@@ -779,7 +785,7 @@ sequenceDiagram
         Note over D: 汇总整杯耗材并预占；<br/>随机生成并冻结本杯步骤时长
         D->>G: POST task ACK<br/>accepted=true, acceptedAt
         D->>G: POST event inventory.reserved<br/>taskId, materials
-        D->>G: POST event task.acknowledged<br/>plannedDurationSeconds, stepDurations[]
+        D->>G: POST event task.acknowledged<br/>plannedDurationSeconds, stepPlan[]
         G->>O: 更新订单为设备已接单
         O-->>M: 展示预计完成时间
 
@@ -789,7 +795,7 @@ sequenceDiagram
             loop 配方中的每一个步骤
                 D->>G: POST event step.started<br/>stepId
                 loop 当前步骤约每跨越 10% 进度
-                    D->>G: POST event task.progress<br/>stepId, stepIndex, progress
+                    D->>G: POST event task.progress<br/>stepName, stepProgress, overallProgress
                     G->>O: 更新制作进度投影
                     O-->>M: 刷新当前步骤和进度
                 end
@@ -801,7 +807,7 @@ sequenceDiagram
             O-->>M: 通知顾客取杯
         else 某步骤故障
             Note over D: 失败前可能已有若干步骤完成并消耗物料
-            D->>G: POST event step.started / task.progress<br/>stepId, progress
+            D->>G: POST event step.started / task.progress<br/>stepName, stepProgress, overallProgress
             opt consumeOnFailure=true
                 D->>G: POST event inventory.consumed<br/>stepId, materialId, amount, remaining
             end
