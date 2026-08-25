@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import socket
 import subprocess
@@ -30,6 +31,16 @@ def main() -> None:
     config = INSTANCES / args.instance.removesuffix(".json") / "device.json"
     if not config.exists():
         raise SystemExit(f"配置不存在：{config}")
+    config_data = json.loads(config.read_text(encoding="utf-8"))
+    local_api = config_data.get("localApi") or {}
+    local_host = str(local_api.get("host") or "127.0.0.1")
+    local_port = int(local_api.get("port") or 0)
+    if local_api.get("enabled", True) and local_port and port_open(local_host, local_port):
+        raise SystemExit(
+            f"启动失败：{args.instance} 的本地 API {local_host}:{local_port} 已被占用。"
+            f"\n请检查：lsof -nP -iTCP:{local_port} -sTCP:LISTEN"
+            f"\n如果是旧进程，请停止后再执行 ./start-instance.command {args.instance}。"
+        )
     command = [str(PYTHON), str(APP), "--config", str(config)]
     if args.debug:
         command.append("--debug")
