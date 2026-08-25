@@ -560,3 +560,43 @@ node --check coffee-terminal/web/drink-visual.js
 ### 启动多个实例端口冲突
 
 确保每个实例的 `localApi.port` 唯一。后台也应把 `deviceId` 和 `instanceId` 当作不同身份管理。
+
+## 16. MQTT 5.0 remote 模式
+
+`remote` 现支持 `http`（兼容模式）和 `mqtt5` 两种 transport。MQTT 模式中，命令、ACK、制作事件、在线状态和 reported state 使用 MQTT 5.0；激活、凭证轮换、二维码配置、能力和库存快照继续使用 HTTPS。业务命令处理、SQLite inbox/outbox、taskId/messageId 去重和制作状态机不因 transport 改变。
+
+002 的未跟踪凭证文件需要包含：
+
+```dotenv
+COFFEE_TRANSPORT=mqtt5
+MQTT_HOST=mqtt-api.woodbridge.top
+MQTT_PORT=8883
+MQTT_TLS=true
+MQTT_USERNAME=coffee-bot-002
+MQTT_PASSWORD=<每机独立密码>
+MQTT_SESSION_EXPIRY_SECONDS=604800
+```
+
+直接运行：
+
+```bash
+./start-remote-002.command
+```
+
+若 macOS 的 Shadowrocket fake-IP 规则不能转发 8883，可在同一 secret 文件增加以下本地调试项。启动器会在应用生命周期内自动创建 SSH 端口转发，同时保留 `mqtt-api.woodbridge.top` 作为 TLS SNI/证书校验名：
+
+```dotenv
+MQTT_CONNECT_HOST=127.0.0.1
+MQTT_CONNECT_PORT=18883
+MQTT_SSH_TUNNEL_TARGET=heymanserver-tunnel
+MQTT_TUNNEL_REMOTE_HOST=127.0.0.1
+MQTT_TUNNEL_REMOTE_PORT=8883
+```
+
+真实设备或网络已配置该域名直连时，不设置这些 `MQTT_CONNECT_*`/`MQTT_SSH_*` 项。Broker 验收脚本不会输出密码：
+
+```bash
+.venv/bin/python scripts/verify_mqtt5.py \
+  --device-env .secrets/coffee-bot-002.mqtt.env \
+  --gateway-env ../coffee-cloud-mvp/.secrets/coffee-cloud-gateway.mqtt.env
+```

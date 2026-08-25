@@ -19,6 +19,7 @@ from cloud import CloudClient, CloudError
 from failures import FailurePolicy
 from inventory import InventoryError, InventoryManager
 from local_api import DeviceApiServer
+from mqtt_transport import Mqtt5Transport, MqttTransportError
 from state_store import LocalStateStore, StateStoreError
 
 
@@ -72,6 +73,8 @@ class CoffeeDeviceRuntime:
             "events": self.events,
         }
         self.cloud = CloudClient(config) if self.mode == "remote" else None
+        self.transport_name = str(config.get("backend", {}).get("transport", "http")).lower()
+        self.mqtt = Mqtt5Transport(self.device_id, config["backend"].get("mqtt", {})) if self.cloud and self.transport_name == "mqtt5" else None
         self.local_api: DeviceApiServer | None = None
         local_api = config.get("localApi", {})
         if local_api.get("enabled", True):
@@ -110,6 +113,8 @@ class CoffeeDeviceRuntime:
     def close(self) -> None:
         """Stop background work and release the per-instance local API port."""
         self.stop_event.set()
+        if self.mqtt:
+            self.mqtt.close()
         if self.local_api:
             self.local_api.stop()
         for thread in self.background_threads:
@@ -495,6 +500,9 @@ class CoffeeDeviceRuntime:
 
     # Cloud coordination
     def _cloud_loop(self) -> None:
+        if self.mqtt:
+            self._mqtt_cloud_loop()
+            return
         poll_seconds = float(self.config["backend"].get("commandPollSeconds", 2))
         heartbeat_seconds = float(self.config["backend"].get("heartbeatIntervalSeconds", 30))
         next_poll = next_heartbeat = next_display = 0.0
@@ -540,6 +548,64 @@ class CoffeeDeviceRuntime:
         finally:
             self.sync_health["threadAlive"] = False
 
+    def _mqtt_cloud_loop(self) -> None:
+        heartbeat_seconds = float(self.config["backend"].get("heartbeatIntervalSeconds", 30))
+        next_heartbeat = next_display = next_snapshot = 0.0
+        self.sync_health["threadAlive"] = True
+        self.mqtt.start()
+        try:
+            while not self.stop_event.wait(0.1):
+                if self.runtime["override"]["offline"]:
+                    self.mqtt.suspend()
+                    self.runtime["connection"] = "OFFLINE"
+                    continue
+                try:
+                    self.mqtt.resume()
+                    commands = self.mqtt.drain_commands()
+                    if commands:
+                        self._process_commands(commands)
+                    clock = time.monotonic()
+                    if clock >= next_heartbeat:
+                        heartbeat = self._heartbeat_payload()
+                        self.mqtt.publish("heartbeat", heartbeat, qos=0)
+                        self.mqtt.publish_state({
+                            "deviceId": self.device_id,
+                            "deviceStatus": self.runtime["deviceStatus"],
+                            "currentTaskId": heartbeat.get("currentTaskId"),
+                            "currentTaskState": heartbeat.get("currentTaskState"),
+                            "currentTaskRevision": heartbeat.get("currentTaskRevision"),
+                            "sentAt": heartbeat["sentAt"],
+                        })
+                        next_heartbeat = clock + heartbeat_seconds
+                    self._flush_mqtt_command_results()
+                    self._flush_mqtt_outbox()
+                    if clock >= next_snapshot:
+                        self._sync_snapshots()
+                        next_snapshot = clock + 2
+                    if clock >= next_display:
+                        display = self.cloud.display_config()
+                        if display.get("qrUrl"):
+                            self.runtime["qrUrl"] = display["qrUrl"]
+                            self.runtime["qrExpiresAt"] = display.get("qrExpiresAt")
+                        next_display = clock + 30
+                    if self.mqtt.connected.is_set():
+                        self.runtime["connection"] = "ONLINE"
+                        self.sync_health.update({"lastSuccessAt": now(), "lastError": None})
+                    else:
+                        self.runtime["connection"] = "CONNECTING"
+                        self.sync_health["lastError"] = self.mqtt.last_error
+                except (CloudError, MqttTransportError) as exc:
+                    self.runtime["connection"] = "DEGRADED" if self.mqtt.connected.is_set() else "OFFLINE"
+                    self.sync_health["lastError"] = str(exc)
+                    self.stop_event.wait(self._retry_delay(1, base=0.5))
+                except Exception as exc:
+                    self.runtime["connection"] = "DEGRADED"
+                    self.sync_health["lastError"] = f"{type(exc).__name__}: {exc}"
+                    self._emit("cloud.worker.error", f"MQTT 工作线程异常：{exc}", {"exceptionType": type(exc).__name__}, queue=False)
+                    self.stop_event.wait(1)
+        finally:
+            self.sync_health["threadAlive"] = False
+
     @staticmethod
     def _retry_delay(attempt: int, base: float = 1.0) -> float:
         ceiling = min(60.0, max(0.25, base) * (2 ** min(max(0, attempt - 1), 6)))
@@ -552,6 +618,13 @@ class CoffeeDeviceRuntime:
         commands = response.get("commands", [])
         if not isinstance(commands, list):
             raise CloudError("commands 必须是数组", retryable=False)
+        self._process_commands(commands)
+        self.command_cursor = response.get("nextCursor", self.command_cursor)
+        if self.command_cursor is not None and not isinstance(self.command_cursor, str):
+            raise CloudError("nextCursor 必须是字符串或 null", retryable=False)
+        self.store.set_meta("command_cursor", self.command_cursor)
+
+    def _process_commands(self, commands: list[Any]) -> None:
         for raw_command in commands:
             if not isinstance(raw_command, dict):
                 self._emit("command.malformed", "忽略非对象命令", {"valueType": type(raw_command).__name__}, queue=False)
@@ -592,11 +665,6 @@ class CoffeeDeviceRuntime:
                 else:
                     self._complete_control_command(command, {"ok": False, "reasonCode": "COMMAND_PROCESSING_ERROR", "error": str(exc), "exceptionType": type(exc).__name__})
                 self._emit("command.processing-failed", f"命令处理失败：{exc}", {"messageId": command.get("messageId"), "commandType": command_type}, queue=False)
-        self.command_cursor = response.get("nextCursor", self.command_cursor)
-        if self.command_cursor is not None and not isinstance(self.command_cursor, str):
-            raise CloudError("nextCursor 必须是字符串或 null", retryable=False)
-        self.store.set_meta("command_cursor", self.command_cursor)
-
     def _heartbeat_payload(self) -> dict[str, Any]:
         local_api = self.config.get("localApi", {})
         task = self.runtime.get("task") or {}
@@ -646,6 +714,29 @@ class CoffeeDeviceRuntime:
                 if exc.retryable:
                     raise
                 self._emit("outbox.command.dead", "命令结果因永久错误进入死信", {"messageId": record["messageId"], "error": str(exc)}, queue=False)
+
+    def _flush_mqtt_outbox(self) -> None:
+        for record in self.store.pending_events():
+            event = record["event"]
+            qos = 0 if event.get("type") == "task.progress" else 1
+            try:
+                self.mqtt.publish("event", event, qos=qos)
+                self.store.mark_event_sent(record["eventId"])
+            except MqttTransportError as exc:
+                delay = self._retry_delay(int(record["attempts"]) + 1)
+                self.store.mark_event_failed(record["eventId"], str(exc), True, delay)
+                raise
+
+    def _flush_mqtt_command_results(self) -> None:
+        for record in self.store.pending_command_results():
+            result = record.get("result") or {}
+            try:
+                self.mqtt.publish("command_result", result, qos=1)
+                self.store.mark_command_result_sent(record["messageId"])
+            except MqttTransportError as exc:
+                delay = self._retry_delay(int(record["attempts"]) + 1)
+                self.store.mark_command_result_failed(record["messageId"], str(exc), True, delay)
+                raise
 
 
 # Compatibility aliases for older imports.

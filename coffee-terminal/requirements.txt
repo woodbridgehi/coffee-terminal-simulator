@@ -1,2 +1,4 @@
 pywebview>=5.4
 qrcode[pil]>=7.4
+paho-mqtt==2.1.0
+PySocks==1.7.1

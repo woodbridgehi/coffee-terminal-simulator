@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import os
+import socket
 import subprocess
+import time
 from pathlib import Path
 
 import sys
@@ -30,7 +33,42 @@ def main() -> None:
     command = [str(PYTHON), str(APP), "--config", str(config)]
     if args.debug:
         command.append("--debug")
-    raise SystemExit(subprocess.call(command, cwd=str(ROOT)))
+    tunnel: subprocess.Popen[bytes] | None = None
+    tunnel_target = os.environ.get("MQTT_SSH_TUNNEL_TARGET")
+    connect_host = os.environ.get("MQTT_CONNECT_HOST")
+    connect_port = int(os.environ.get("MQTT_CONNECT_PORT", "0") or 0)
+    if tunnel_target and connect_host and connect_port and not port_open(connect_host, connect_port):
+        remote_host = os.environ.get("MQTT_TUNNEL_REMOTE_HOST", "127.0.0.1")
+        remote_port = int(os.environ.get("MQTT_TUNNEL_REMOTE_PORT", "8883"))
+        tunnel = subprocess.Popen([
+            "ssh", "-N", "-L", f"{connect_host}:{connect_port}:{remote_host}:{remote_port}",
+            "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=30", tunnel_target,
+        ])
+        for _ in range(300):
+            if port_open(connect_host, connect_port):
+                break
+            if tunnel.poll() is not None:
+                raise SystemExit("MQTT SSH 调试隧道启动失败")
+            time.sleep(0.1)
+        else:
+            tunnel.terminate()
+            raise SystemExit("MQTT SSH 调试隧道启动超时")
+    try:
+        return_code = subprocess.call(command, cwd=str(ROOT))
+    except KeyboardInterrupt:
+        return_code = 130
+    finally:
+        if tunnel and tunnel.poll() is None:
+            tunnel.terminate()
+    raise SystemExit(return_code)
+
+
+def port_open(host: str, port: int) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=0.2):
+            return True
+    except OSError:
+        return False
 
 
 if __name__ == "__main__":

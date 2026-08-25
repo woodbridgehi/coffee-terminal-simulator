@@ -36,6 +36,21 @@ def load_config(path: Path) -> dict[str, Any]:
         backend["commandPollSeconds"] = float(value)
     if value := os.environ.get("COFFEE_REQUEST_TIMEOUT_SECONDS"):
         backend["requestTimeoutSeconds"] = float(value)
+    if value := os.environ.get("COFFEE_TRANSPORT"):
+        backend["transport"] = value
+    mqtt = backend.setdefault("mqtt", {})
+    mqtt_env = {
+        "MQTT_HOST": ("host", str), "MQTT_PORT": ("port", int),
+        "MQTT_USERNAME": ("username", str), "MQTT_PASSWORD": ("password", str),
+        "MQTT_KEEPALIVE_SECONDS": ("keepaliveSeconds", int),
+        "MQTT_SESSION_EXPIRY_SECONDS": ("sessionExpirySeconds", int),
+        "MQTT_PROXY_HOST": ("proxyHost", str), "MQTT_PROXY_PORT": ("proxyPort", int),
+        "MQTT_PROXY_TYPE": ("proxyType", str),
+        "MQTT_CONNECT_HOST": ("connectHost", str), "MQTT_CONNECT_PORT": ("connectPort", int),
+    }
+    for env_name, (field, converter) in mqtt_env.items():
+        if value := os.environ.get(env_name):
+            mqtt[field] = converter(value)
 
     config["_configPath"] = str(path)
     return config
