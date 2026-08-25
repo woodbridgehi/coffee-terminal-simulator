@@ -681,6 +681,8 @@ Content-Type: application/json
 
 ## 13. 联调时序
 
+> 本节 13.1～13.3 同时保留正式支付接入后的目标时序。当前已部署云端 `0.3.0` 采用 `TEST_FREE`，不会调用支付服务；实际可执行接口和差异见 13.4。正式支付接入后必须先确认支付成功，再创建制作任务。
+
 一次正常制作的建议后台观察顺序：
 
 ```text
@@ -830,3 +832,30 @@ sequenceDiagram
 | `cursor` / `nextCursor` | 命令服务 | 推进设备命令轮询位置 |
 
 事件与 ACK 的到达顺序可能因网络重试发生变化。订单服务应以 `taskId` 关联，以 `eventId` 去重，不应依赖 HTTP 到达顺序推进状态；同时要对长时间未 ACK、设备离线、命令过期和任务失败建立明确的超时补偿策略。
+
+### 13.4 当前云端 0.3.0 的真实扫码流程
+
+当前手机端只访问云端，不直连终端：
+
+```text
+GET  /api/v1/public/devices/{deviceId}/menu
+POST /api/v1/public/devices/{deviceId}/orders
+GET  /api/v1/public/orders/{orderId}
+```
+
+1. 终端从心跳或 `display-config` 得到 `https://coffee-api.woodbridge.top/order?device_id={deviceId}` 并生成二维码。
+2. 手机页面按二维码中的协议 `deviceId` 请求 `menu`。云端合并最近心跳、capabilities 和 inventory；设备离线、未激活、配方不可用或 `maxServings=0` 时返回 `available=false`。
+3. 手机创建订单时必须发送 `Idempotency-Key`，正文固定本次的 `recipeId + recipeVersion + quantity=1 + paymentMode=TEST_FREE`。
+4. 云端同一事务写入 `sales_order`、`production_job` 和初始迁移记录；若设备没有活动制作任务，立即创建 `MAKE_DRINK`，否则保持 `QUEUED`。
+5. 创建响应返回 `orderId`、`orderNo` 和只用于该状态页的 `accessToken`。网页把令牌放在 URL fragment，并在查询时改用 `X-Order-Access-Token` 请求头。
+6. 设备 ACK 接受后，订单进入 `ACCEPTED`；`task.started` 推进 `MAKING`；进度事件更新当前步骤；`task.succeeded` 推进 `READY`；拒绝或失败推进 `FAILED`。
+7. 终端按步骤扣减共享物料并上传新 inventory/capabilities，手机菜单和运营后台随后看到新的杯数及逐项余量。
+
+当前订单状态：
+
+```text
+QUEUED → DISPATCHED → ACCEPTED → MAKING → READY
+   └──────────────→ CANCELLED / EXPIRED / FAILED
+```
+
+同一设备只派发一个活动任务。客户只能取消仍在 `QUEUED` 的订单；命令已经交给设备后，网页不能越过终端安全状态机强制取消。当前不收款，因此失败不触发退款；支付接入后必须增加独立 payment/refund 状态机和幂等 webhook Inbox。
