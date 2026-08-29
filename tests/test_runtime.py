@@ -142,6 +142,14 @@ class RuntimeTest(unittest.TestCase):
         self.assertAlmostEqual(progress["overallProgress"], expected)
         self.assertAlmostEqual(progress["elapsedSeconds"] + progress["remainingSeconds"], task["plannedDurationSeconds"], places=2)
 
+    def test_progress_reporting_uses_delta_or_maximum_interval(self) -> None:
+        task_id = "progress-threshold"
+        self.runtime._progress_reports[task_id] = (0.0, 0.0)
+        self.assertFalse(self.runtime._should_report_progress(task_id, 0.04, monotonic_now=4.0))
+        self.assertTrue(self.runtime._should_report_progress(task_id, 0.05, monotonic_now=4.0))
+        self.assertFalse(self.runtime._should_report_progress(task_id, 0.09, monotonic_now=8.0))
+        self.assertTrue(self.runtime._should_report_progress(task_id, 0.09, monotonic_now=9.0))
+
     def test_disabled_recipe_and_unknown_inventory_mode_are_rejected(self) -> None:
         recipe_path = self.instance / "recipes" / "coffee.json"
         recipe = json.loads(recipe_path.read_text(encoding="utf-8"))

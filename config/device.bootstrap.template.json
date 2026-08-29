@@ -7,6 +7,7 @@
     "baseUrl": "https://coffee-api.woodbridge.top",
     "commandPollSeconds": 2,
     "heartbeatIntervalSeconds": 30,
+    "progressReport": {"minDeltaPercent": 5, "maxIntervalSeconds": 5},
     "requestTimeoutSeconds": 8,
     "mqtt": {
       "host": "mqtt-api.woodbridge.top",

@@ -57,6 +57,10 @@ class CoffeeDeviceRuntime:
         self.last_synced_inventory = -1
         self._last_mqtt_state_fingerprint: tuple[Any, ...] | None = None
         self._mqtt_state_revision = 0
+        progress_report = config.get("backend", {}).get("progressReport", {})
+        self.progress_min_delta = max(0.01, min(1.0, float(progress_report.get("minDeltaPercent", 5)) / 100))
+        self.progress_max_interval = max(1.0, float(progress_report.get("maxIntervalSeconds", 5)))
+        self._progress_reports: dict[str, tuple[float, float]] = {}
         self.sync_health: dict[str, Any] = {"threadAlive": False, "lastSuccessAt": None, "lastError": None}
 
         recoverable = bool(recovered_task and recovered_task.get("state") in ACTIVE_STATES)
@@ -278,7 +282,8 @@ class CoffeeDeviceRuntime:
                 return self._reject(command, "MATERIAL_INSUFFICIENT", detail or {})
             execution_recipe = self.catalog.materialize_execution_recipe(recipe)
             planned_duration = sum(float(step["durationSeconds"]) for step in execution_recipe["steps"])
-            task = {"taskId": command["taskId"], "orderId": command.get("orderId"), "messageId": command.get("messageId"), "recipe": execution_recipe, "state": "ACKNOWLEDGED", "stepIndex": 0, "stepProgress": 0.0, "overallProgress": 0.0, "stepElapsed": 0.0, "elapsedSeconds": 0.0, "remainingSeconds": planned_duration, "stepPrechecked": False, "attempt": 1, "stepRetries": {}, "plannedDurationSeconds": planned_duration, "lastProgressBucket": -1, "message": "任务已接受，准备制作"}
+            task = {"taskId": command["taskId"], "orderId": command.get("orderId"), "messageId": command.get("messageId"), "recipe": execution_recipe, "state": "ACKNOWLEDGED", "stepIndex": 0, "stepProgress": 0.0, "overallProgress": 0.0, "stepElapsed": 0.0, "elapsedSeconds": 0.0, "remainingSeconds": planned_duration, "stepPrechecked": False, "attempt": 1, "stepRetries": {}, "plannedDurationSeconds": planned_duration, "message": "任务已接受，准备制作"}
+            self._progress_reports[task["taskId"]] = (0.0, time.monotonic())
             self.runtime["task"] = task; self.runtime["deviceStatus"] = "RESERVED"
             self._persist_task(task)
             self._emit("inventory.reserved", "已预占整杯所需物料", {"taskId": task["taskId"], "orderId": task.get("orderId"), "messageId": task.get("messageId"), "taskRevision": task.get("revision"), "materials": requirements})
@@ -414,11 +419,10 @@ class CoffeeDeviceRuntime:
                 task["stepElapsed"] += tick
                 task["stepProgress"] = min(1.0, task["stepElapsed"] / float(step["durationSeconds"]))
                 task.update(self._task_progress_fields(task))
-                bucket = int(task["stepProgress"] * 10)
-                if bucket != task["lastProgressBucket"]:
-                    task["lastProgressBucket"] = bucket
+                progress = self._progress_ref(task)
+                if self._should_report_progress(task["taskId"], float(progress["overallProgress"])):
                     self._persist_task(task)
-                    self._emit("task.progress", step["name"], {**self._task_ref(task), **self._progress_ref(task), "progress": task["stepProgress"]})
+                    self._emit("task.progress", step["name"], {**self._task_ref(task), **progress, "progress": task["stepProgress"]})
                 if task["stepProgress"] < 1:
                     continue
                 failed, profile = self.failures.should_fail(step, "after")
@@ -446,6 +450,7 @@ class CoffeeDeviceRuntime:
         max_retries = int(profile.get("maxRetries", 0))
         task["failure"] = {"code": profile["errorCode"], "stepId": step["id"], "retryable": bool(profile.get("retryable")) and retries_used < max_retries, "retriesUsed": retries_used, "maxRetries": max_retries, "consumedOnFailure": consume}
         self.runtime["deviceStatus"] = "FAILED"
+        self._progress_reports.pop(task["taskId"], None)
         self._persist_task(task)
         self._emit("task.failed", task["message"], {**self._task_ref(task), "failure": task["failure"]})
         self._inventory_changed()
@@ -456,16 +461,26 @@ class CoffeeDeviceRuntime:
             task["stepIndex"] = len(task["recipe"]["steps"]) - 1; task["stepProgress"] = 1.0; task["state"] = "SUCCEEDED"; task["message"] = "咖啡制作完成，请取杯"; self.runtime["deviceStatus"] = "READY"
             task.update(self._task_progress_fields(task))
             self.inventory.release(task["taskId"])
+            self._progress_reports.pop(task["taskId"], None)
             self._persist_task(task)
             self._emit("task.succeeded", task["message"], {**self._task_ref(task), **self._progress_ref(task)}); self._inventory_changed()
         else:
-            task.update({"stepProgress": 0.0, "stepElapsed": 0.0, "stepPrechecked": False, "lastProgressBucket": -1})
+            task.update({"stepProgress": 0.0, "stepElapsed": 0.0, "stepPrechecked": False})
             task.update(self._task_progress_fields(task))
             self._persist_task(task)
 
     @staticmethod
     def _task_ref(task: dict[str, Any]) -> dict[str, Any]:
         return {"taskId": task.get("taskId"), "orderId": task.get("orderId"), "recipeId": task.get("recipe", {}).get("recipeId"), "taskRevision": task.get("revision"), "attempt": task.get("attempt", 1)}
+
+    def _should_report_progress(self, task_id: str, overall_progress: float, *, monotonic_now: float | None = None) -> bool:
+        """Send on meaningful progress change, with a bounded quiet period."""
+        current = time.monotonic() if monotonic_now is None else monotonic_now
+        previous_progress, previous_at = self._progress_reports.get(task_id, (0.0, current))
+        if overall_progress - previous_progress < self.progress_min_delta and current - previous_at < self.progress_max_interval:
+            return False
+        self._progress_reports[task_id] = (overall_progress, current)
+        return True
 
     @staticmethod
     def _progress_ref(task: dict[str, Any]) -> dict[str, Any]:

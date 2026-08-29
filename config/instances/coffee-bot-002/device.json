@@ -6,7 +6,7 @@
   "storeId": "store-demo-taipei-02",
   "storeName": "台北大安体验店",
   "environment": "development",
-  "backend": {"mode": "remote", "transport": "mqtt5", "baseUrl": "https://coffee-api.woodbridge.top", "commandPollSeconds": 2, "heartbeatIntervalSeconds": 30, "requestTimeoutSeconds": 8, "mqtt": {"host": "mqtt-api.woodbridge.top", "port": 8883, "keepaliveSeconds": 30, "sessionExpirySeconds": 604800}},
+  "backend": {"mode": "remote", "transport": "mqtt5", "baseUrl": "https://coffee-api.woodbridge.top", "commandPollSeconds": 2, "heartbeatIntervalSeconds": 30, "progressReport": {"minDeltaPercent": 5, "maxIntervalSeconds": 5}, "requestTimeoutSeconds": 8, "mqtt": {"host": "mqtt-api.woodbridge.top", "port": 8883, "keepaliveSeconds": 30, "sessionExpirySeconds": 604800}},
   "localApi": {"enabled": true, "host": "127.0.0.1", "port": 9102},
   "enableConsole": true
 }
