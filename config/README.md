@@ -43,6 +43,7 @@ config/instances/{deviceId}/
     "baseUrl": "http://localhost:8080",
     "commandPollSeconds": 2,
     "heartbeatIntervalSeconds": 30,
+    "progressReport": {"minDeltaPercent": 5, "maxIntervalSeconds": 5},
     "requestTimeoutSeconds": 5,
     "authToken": "optional-token",
     "headers": {"X-Test-Environment": "staging"},
@@ -79,6 +80,8 @@ config/instances/{deviceId}/
 | `backend.baseUrl` | remote 必填 | 后台 API 根地址 |
 | `backend.commandPollSeconds` | HTTP 兼容模式使用 | MQTT5 主通道不轮询设备命令，仅作为 HTTP 恢复模式参数 |
 | `backend.heartbeatIntervalSeconds` | 否 | 心跳间隔 |
+| `backend.progressReport.minDeltaPercent` | 否 | 整杯总进度变化达到该百分比时立即上报，默认 `5` |
+| `backend.progressReport.maxIntervalSeconds` | 否 | 进度变化不足阈值时的最长静默秒数，默认 `5` |
 | `backend.requestTimeoutSeconds` | 否 | 单次 HTTP 超时秒数 |
 | `backend.userAgent` | 否 | 设备 HTTP 客户端标识，默认 `CoffeeTerminalSimulator/1.2.0`；避免使用通用脚本客户端签名 |
 | `backend.authToken` | 否 | 静态 Bearer Token，仅建议测试环境使用 |
@@ -121,6 +124,7 @@ storeId:      store-{城市代码小写}-{门店编号}
 
 - `local`：不连接后台；模拟下单和控制命令直接作用于本机。
 - `remote + mqtt5`：通过 MQTT 接收命令、发送 ACK/心跳/状态/事件；激活、二维码、能力和库存快照仍走 HTTPS。
+- 制作进度满足“变化阈值或最长间隔”任一条件就发送；任务/步骤生命周期和故障告警不受进度限频影响。
 - `remote + http`：兼容模式，使用 HTTP 轮询命令并上报设备数据，适合故障恢复和旧部署。
 
 ## 3. recipes/*.json
