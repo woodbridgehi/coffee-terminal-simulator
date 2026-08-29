@@ -427,7 +427,7 @@ POST /api/v1/devices/{deviceId}/events
 }
 ```
 
-`stepProgress` 是当前步骤进度，`overallProgress` 是按本杯冻结后的实际步骤时长计算的整杯总进度。旧字段 `progress` 暂时与 `stepProgress` 保持一致以兼容旧后台。终端和顾客端必须使用 `overallProgress` 显示总进度，使用 `stepName` 显示步骤名称，不能再从 `stepId` 猜测文案。普通进度采用“整杯进度变化至少 5% 或距上次上报达到 5 秒，任一满足即发送”的策略；任务和步骤生命周期、失败及告警事件不受该策略限制。
+`stepProgress` 是当前步骤进度，`overallProgress` 是按本杯冻结后的实际步骤时长计算的整杯总进度。旧字段 `progress` 暂时与 `stepProgress` 保持一致以兼容旧后台。终端和顾客端必须使用 `overallProgress` 显示总进度，使用 `stepName` 显示步骤名称，不能再从 `stepId` 猜测文案。普通进度采用“整杯进度变化至少 5% 或距上次上报达到 5 秒，任一满足即发送”的策略；断网积压时同一任务只保留最新待发进度。任务和步骤生命周期、失败及告警事件不受该策略限制，并使用 QoS 1 可靠投递。
 
 任务和步骤事件会携带 `taskRevision` 与 `attempt`。后台使用 revision 和合法状态迁移处理乱序；同一次物理尝试的回调重复具有相同 attempt，真正重试会递增 attempt。
 

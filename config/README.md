@@ -87,6 +87,8 @@ config/instances/{deviceId}/
 | `backend.authToken` | 否 | 静态 Bearer Token，仅建议测试环境使用 |
 | `backend.headers` | 否 | 附加到所有后台请求的自定义请求头 |
 | `backend.mqtt` | `mqtt5` 时必填 | Broker 地址、TLS 端口、会话和每设备凭证；密码只从 `.env` 注入 |
+
+MQTT 模式下心跳和普通制作进度允许丢失；离线 SQLite outbox 会按 taskId 合并待发进度。步骤/任务生命周期与命令结果不合并，命令在进入本地队列后才确认 QoS 1。
 | `localApi.enabled` | 否 | 是否启动本地调试 API，默认 `true` |
 | `localApi.host` | 否 | 默认 `127.0.0.1` |
 | `localApi.port` | 否 | 本地 API 端口，多实例不能重复 |

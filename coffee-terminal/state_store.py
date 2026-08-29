@@ -6,7 +6,7 @@ import json
 import sqlite3
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -260,6 +260,12 @@ class LocalStateStore:
 
     def enqueue_event(self, event: dict[str, Any]) -> None:
         with self.lock:
+            if event["type"] == "task.progress" and event.get("payload", {}).get("taskId"):
+                self.connection.execute(
+                    """DELETE FROM event_outbox WHERE event_type='task.progress'
+                         AND aggregate_id=? AND state='PENDING'""",
+                    (event["payload"]["taskId"],),
+                )
             self.connection.execute(
                 """INSERT OR IGNORE INTO event_outbox(
                        event_id, event_type, aggregate_id, payload_json, created_at
@@ -313,3 +319,13 @@ class LocalStateStore:
         result = {f"events{row['state'].title()}": row["count"] for row in event_rows}
         result.update({f"commands{row['state'].title()}": row["count"] for row in command_rows})
         return result
+
+    def prune_deliveries(self, retention_days: int = 7) -> None:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat().replace("+00:00", "Z")
+        with self.lock:
+            self.connection.execute(
+                "DELETE FROM event_outbox WHERE state='SENT' AND sent_at<?", (cutoff,)
+            )
+            self.connection.execute(
+                "DELETE FROM command_inbox WHERE delivery_state='SENT' AND updated_at<?", (cutoff,)
+            )

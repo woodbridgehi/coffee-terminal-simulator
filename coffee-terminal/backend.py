@@ -46,6 +46,7 @@ class CoffeeDeviceRuntime:
         self.sequence = 0
         self.events: list[dict[str, Any]] = []
         self.store = LocalStateStore(instance_dir / "state" / "runtime.db")
+        self.store.prune_deliveries()
         recovered_task = self.store.current_job()
         recovery_hold = bool(self.mode == "remote" and recovered_task and recovered_task.get("state") in ACTIVE_STATES)
         if recovery_hold:
@@ -575,7 +576,7 @@ class CoffeeDeviceRuntime:
         # Spread a fleet's first heartbeat over one interval; otherwise a bulk
         # simulator start creates an avoidable broker/API burst.
         next_heartbeat = time.monotonic() + random.uniform(0, max(0.0, heartbeat_seconds))
-        next_display = next_snapshot = 0.0
+        next_display = next_snapshot = next_cleanup = 0.0
         self.sync_health["threadAlive"] = True
         self.mqtt.start()
         try:
@@ -609,6 +610,9 @@ class CoffeeDeviceRuntime:
                             self.runtime["qrUrl"] = display["qrUrl"]
                             self.runtime["qrExpiresAt"] = display.get("qrExpiresAt")
                         next_display = clock + 30
+                    if clock >= next_cleanup:
+                        self.store.prune_deliveries()
+                        next_cleanup = clock + 3600
                     if self.mqtt.connected.is_set():
                         self.runtime["connection"] = "ONLINE"
                         self.sync_health.update({"lastSuccessAt": now(), "lastError": None})

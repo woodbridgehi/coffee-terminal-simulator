@@ -568,7 +568,7 @@ node --check coffee-terminal/web/drink-visual.js
 
 `remote` 现支持 `http`（兼容/恢复模式）和 `mqtt5` 两种 transport。MVP 多设备测试推荐 `mqtt5`：命令、ACK、制作事件、在线状态和 reported state 使用 MQTT 5.0；激活、凭证轮换、二维码配置、能力和库存快照继续使用 HTTPS。MQTT5 模式不轮询设备命令，`commandPollSeconds` 只对 HTTP 兼容模式生效。业务命令处理、SQLite inbox/outbox、taskId/messageId 去重和制作状态机不因 transport 改变。
 
-制作进度采用可配置的“变化或时间”上报策略：`backend.progressReport.minDeltaPercent` 默认 `5`，`maxIntervalSeconds` 默认 `5`。整杯 `overallProgress` 每变化至少 5%，或距离上次进度消息达到 5 秒（任一满足）就上报；任务/步骤开始、完成、失败、取消及告警事件始终立即上报。设备不在本地合并或丢弃这些生命周期事件，云端再将高频进度合并为 Redis 最新快照并批量落库。
+制作进度采用可配置的“变化或时间”上报策略：`backend.progressReport.minDeltaPercent` 默认 `5`，`maxIntervalSeconds` 默认 `5`。整杯 `overallProgress` 每变化至少 5%，或距离上次进度消息达到 5 秒（任一满足）就上报；在线时每条进度立即交给 MQTT，断网积压时 SQLite 仅保留同一任务的最新待发进度。任务/步骤开始、完成、失败、取消及告警事件始终立即上报并可靠保留，云端只合并 `task.progress`。MQTT 下行启用 manual ACK，命令只有进入本地有界队列后才确认，队列满时断开并依靠 QoS 1 重投。
 
 云端 v0.5 激活接口会一次性签发每设备 MQTT credential 并同步 EMQX ACL；`activate_instance.py` 会把它与 HTTP 凭证一起写入受限 `.env`。响应丢失后脚本通过 MQTT rotate 接口恢复，不能回退为共享 Broker 密码。
 

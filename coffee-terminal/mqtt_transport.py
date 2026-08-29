@@ -74,6 +74,7 @@ class Mqtt5Transport:
         self.client.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS_CLIENT)
         self.client.reconnect_delay_set(min_delay=1, max_delay=60)
         self.client.max_inflight_messages_set(20)
+        self.client.manual_ack_set(True)
         self.client.will_set(
             self.topic("presence"),
             json.dumps({"deviceId": device_id, "online": False, "reason": "last_will", "sentAt": utc_now()}),
@@ -153,8 +154,14 @@ class Mqtt5Transport:
             if command.get("deviceId") not in {None, self.device_id}:
                 raise ValueError("command target does not match device")
             self.commands.put_nowait(command)
-        except (json.JSONDecodeError, ValueError, queue.Full) as exc:
+        except queue.Full:
+            self.last_error = "command queue full; reconnecting for QoS1 redelivery"
+            self.client.disconnect()
+            return
+        except (json.JSONDecodeError, ValueError) as exc:
             self.last_error = f"invalid downlink: {exc}"
+        if message.qos:
+            self.client.ack(message.mid, message.qos)
 
     def drain_commands(self, limit: int = 20) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
