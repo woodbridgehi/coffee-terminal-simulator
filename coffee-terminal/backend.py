@@ -55,6 +55,8 @@ class CoffeeDeviceRuntime:
         self.command_cursor: str | None = self.store.get_meta("command_cursor")
         self.last_synced_capability: tuple[str, int] | None = None
         self.last_synced_inventory = -1
+        self._last_mqtt_state_fingerprint: tuple[Any, ...] | None = None
+        self._mqtt_state_revision = 0
         self.sync_health: dict[str, Any] = {"threadAlive": False, "lastSuccessAt": None, "lastError": None}
 
         recoverable = bool(recovered_task and recovered_task.get("state") in ACTIVE_STATES)
@@ -555,7 +557,10 @@ class CoffeeDeviceRuntime:
 
     def _mqtt_cloud_loop(self) -> None:
         heartbeat_seconds = float(self.config["backend"].get("heartbeatIntervalSeconds", 30))
-        next_heartbeat = next_display = next_snapshot = 0.0
+        # Spread a fleet's first heartbeat over one interval; otherwise a bulk
+        # simulator start creates an avoidable broker/API burst.
+        next_heartbeat = time.monotonic() + random.uniform(0, max(0.0, heartbeat_seconds))
+        next_display = next_snapshot = 0.0
         self.sync_health["threadAlive"] = True
         self.mqtt.start()
         try:
@@ -570,17 +575,13 @@ class CoffeeDeviceRuntime:
                     if commands:
                         self._process_commands(commands)
                     clock = time.monotonic()
+                    if self.mqtt.connected.is_set():
+                        self._publish_mqtt_state_if_changed()
+                    else:
+                        self._last_mqtt_state_fingerprint = None
                     if clock >= next_heartbeat:
                         heartbeat = self._heartbeat_payload()
                         self.mqtt.publish("heartbeat", heartbeat, qos=0)
-                        self.mqtt.publish_state({
-                            "deviceId": self.device_id,
-                            "deviceStatus": self.runtime["deviceStatus"],
-                            "currentTaskId": heartbeat.get("currentTaskId"),
-                            "currentTaskState": heartbeat.get("currentTaskState"),
-                            "currentTaskRevision": heartbeat.get("currentTaskRevision"),
-                            "sentAt": heartbeat["sentAt"],
-                        })
                         next_heartbeat = clock + heartbeat_seconds
                     self._flush_mqtt_command_results()
                     self._flush_mqtt_outbox()
@@ -677,6 +678,27 @@ class CoffeeDeviceRuntime:
             self.sequence += 1
             sequence = self.sequence
         return {"deviceId": self.device_id, "messageId": f"hb-{self.boot_id}-{sequence}", "bootId": self.boot_id, "sequence": sequence, "instanceId": self.config["instanceId"], "storeId": self.config.get("storeId"), "deviceStatus": self.runtime["deviceStatus"], "currentTaskId": task.get("taskId"), "currentTaskState": task.get("state"), "currentTaskRevision": task.get("revision"), "capabilityVersion": self.catalog.version, "inventoryVersion": self.inventory.state["version"], "deliveries": self.store.delivery_stats(), "localApiUrl": f"http://{local_api.get('host', '127.0.0.1')}:{local_api.get('port', 9101)}" if local_api.get("enabled", True) else None, "appVersion": "1.2.0", "sentAt": now()}
+
+    def _publish_mqtt_state_if_changed(self) -> None:
+        """Retain one authoritative state snapshot; heartbeats need not duplicate it."""
+        task = self.runtime.get("task") or {}
+        fingerprint = (
+            self.runtime["deviceStatus"], task.get("taskId"), task.get("state"),
+        )
+        if fingerprint == self._last_mqtt_state_fingerprint:
+            return
+        self._mqtt_state_revision += 1
+        self.mqtt.publish_state({
+            "deviceId": self.device_id,
+            "bootId": self.boot_id,
+            "stateRevision": self._mqtt_state_revision,
+            "deviceStatus": self.runtime["deviceStatus"],
+            "currentTaskId": task.get("taskId"),
+            "currentTaskState": task.get("state"),
+            "currentTaskRevision": task.get("revision"),
+            "sentAt": now(),
+        })
+        self._last_mqtt_state_fingerprint = fingerprint
 
     def _sync_snapshots(self) -> None:
         capability_key = (self.catalog.version, int(self.inventory.state["version"]))
