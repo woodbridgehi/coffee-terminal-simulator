@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Coffee Terminal · 首次安装</title>
+  <link rel="stylesheet" href="onboarding.css" />
+</head>
+<body>
+  <main class="shell">
+    <aside class="brand-panel">
+      <div class="brand-mark">☕</div>
+      <p class="eyebrow">COFFEE TERMINAL</p>
+      <h1>设备首次安装</h1>
+      <p class="brand-copy">完成部署资料与激活后，设备会自动进入咖啡终端界面。此向导仅在首次启动时出现。</p>
+      <ol class="steps"><li class="active">设备编号</li><li>门店部署</li><li>安全激活</li></ol>
+    </aside>
+    <section class="content">
+      <header><p class="eyebrow">INSTALLATION WIZARD</p><h2>配置这台咖啡终端</h2><p id="connection" class="muted">正在连接安装服务…</p></header>
+      <form id="setup-form" novalidate>
+        <section class="card">
+          <h3>1. 设备身份</h3>
+          <p class="hint">编号会自动生成受约束的设备 ID、序列号和本地实例 ID；请与后台预登记信息保持一致。</p>
+          <div class="grid two">
+            <label>设备编号 <input id="deviceNumber" inputmode="numeric" pattern="[0-9]{3,6}" maxlength="6" placeholder="例如 003" required /></label>
+            <label>生产年份 <select id="serialYear" required></select></label>
+          </div>
+          <div class="generated"><span>deviceId</span><code id="deviceIdPreview">coffee-bot-…</code><span>序列号</span><code id="serialPreview">CB-YYYY-…</code></div>
+          <label>设备展示名称 <input id="deviceName" maxlength="120" placeholder="例如 上海浦东体验店 03 号机" required /></label>
+        </section>
+        <section class="card">
+          <h3>2. 门店部署</h3>
+          <div class="grid two">
+            <label>城市 <select id="cityCode" required></select></label>
+            <label>时区 <input id="timezone" readonly /></label>
+            <label>门店编号 <input id="storeNumber" inputmode="numeric" pattern="[0-9]{3,6}" maxlength="6" placeholder="例如 001" required /></label>
+            <label>门店 ID <input id="storeIdPreview" readonly /></label>
+          </div>
+          <label>店铺名称 <input id="storeName" maxlength="120" placeholder="例如 浦东体验店" required /></label>
+          <label>店铺简介 <textarea id="storeDescription" maxlength="300" placeholder="可选，最多 300 字"></textarea></label>
+        </section>
+        <section class="card activation">
+          <h3>3. 激活</h3>
+          <p class="hint">后台预登记后生成的一次性激活码。激活码不会写入本地配置或日志。</p>
+          <label>一次性激活码 <input id="activationCode" type="password" autocomplete="one-time-code" minlength="12" placeholder="粘贴激活码" required /></label>
+        </section>
+        <p id="error" class="error" role="alert"></p>
+        <button id="submit" class="primary" type="submit">完成安装并激活</button>
+      </form>
+    </section>
+  </main>
+  <script src="onboarding.js"></script>
+</body>
+</html>

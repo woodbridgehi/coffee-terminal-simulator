@@ -83,7 +83,30 @@ config/instances/{deviceId}/
 | `localApi.allowedOrigins` | 否 | 允许访问写接口的浏览器 Origin；默认拒绝所有带 Origin 的请求 |
 | `enableConsole` | 否 | 预留开关；当前界面仍会显示控制台 |
 
-remote 模式推荐通过 `COFFEE_DEVICE_TOKEN` 环境变量或 `.secrets/{instance}.env` 注入凭证。生产式联调使用 `scripts/activate_instance.py` 和 `scripts/rotate_instance_credential.py` 管理凭证，不要把 `authToken` 写进 JSON。
+remote 模式推荐通过 `COFFEE_DEVICE_TOKEN` 环境变量或 `.secrets/{instance}.env` 注入凭证。生产式联调使用首次安装向导或 `scripts/activate_instance.py` 和 `scripts/rotate_instance_credential.py` 管理凭证，不要把 `authToken` 写进 JSON。
+
+### 首次安装配置
+
+新实例可复制一个已有实例的配方/物料目录，再使用 `config/device.bootstrap.template.json` 覆盖其 `device.json`；删除复制来的 `state/`，并为 `localApi.port` 指定未被使用的端口。例如：
+
+```bash
+cp -R config/instances/coffee-bot-002 config/instances/new-terminal
+rm -rf config/instances/new-terminal/state
+cp config/device.bootstrap.template.json config/instances/new-terminal/device.json
+# 编辑 device.json，把 localApi.port 改为未占用端口，例如 9103
+./start-instance.command new-terminal
+```
+
+不要填入设备 Token；保持 `registration.status` 为 `UNPROVISIONED` 并启动实例，模拟器只会在**首次且尚未激活**时显示安装向导。向导会限制设备编号为 3–6 位数字，并生成：
+
+```text
+deviceId:     coffee-bot-{编号}
+serialNumber: CB-{年份}-{编号}
+instanceId:   instance-coffee-bot-{编号}
+storeId:      store-{城市代码小写}-{门店编号}
+```
+
+设备必须先在后台按相同的 `deviceId` 和 `serialNumber` 预登记并取得一次性激活码。安装完成后，设备凭证自动保存至 `.secrets/{实例目录名}.env`（权限 `0600`）；`start-instance.command` 未传 `--env-file` 时会自动加载该文件。后端已有的门店资料不会被设备覆盖，只有空字段会由首次安装资料补齐。
 
 运行模式：
 

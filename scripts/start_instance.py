@@ -26,9 +26,14 @@ def main() -> None:
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--env-file", type=Path, help="optional untracked KEY=VALUE file")
     args = parser.parse_args()
+    instance_name = args.instance.removesuffix(".json")
     if args.env_file:
         load_env_file(args.env_file.resolve())
-    config = INSTANCES / args.instance.removesuffix(".json") / "device.json"
+    else:
+        default_secrets = ROOT / ".secrets" / f"{instance_name}.env"
+        if default_secrets.exists():
+            load_env_file(default_secrets)
+    config = INSTANCES / instance_name / "device.json"
     if not config.exists():
         raise SystemExit(f"配置不存在：{config}")
     config_data = json.loads(config.read_text(encoding="utf-8"))

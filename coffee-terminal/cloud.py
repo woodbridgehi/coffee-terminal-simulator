@@ -16,7 +16,7 @@ class CloudError(RuntimeError):
 
 class CloudClient:
     def __init__(self, config: dict[str, Any]) -> None:
-        self.device_id = config["deviceId"]
+        self.device_id = str(config.get("deviceId") or "")
         backend = config.get("backend", {})
         self.base_url = backend.get("baseUrl", "").rstrip("/")
         self.timeout = float(backend.get("requestTimeoutSeconds", 5))
@@ -77,11 +77,21 @@ class CloudClient:
     def display_config(self) -> dict[str, Any]:
         return self.request("GET", f"/api/v1/devices/{self.device_id}/display-config")
 
-    def activate(self, activation_code: str, device_token: str) -> dict[str, Any]:
-        return self.request(
-            "POST", "/api/v1/device-activations",
-            {"deviceId": self.device_id, "activationCode": activation_code, "deviceToken": device_token},
-        )
+    def onboarding_options(self) -> dict[str, Any]:
+        return self.request("GET", "/api/v1/device-onboarding/options")
+
+    def activate(
+        self, activation_code: str, device_token: str, profile: dict[str, Any] | None = None,
+        serial_number: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "deviceId": self.device_id, "activationCode": activation_code, "deviceToken": device_token,
+        }
+        if serial_number is not None:
+            payload["serialNumber"] = serial_number
+        if profile is not None:
+            payload["profile"] = profile
+        return self.request("POST", "/api/v1/device-activations", payload)
 
     def rotate_credential(self, new_token: str, idempotency_key: str) -> dict[str, Any]:
         return self.request(

@@ -27,3 +27,6 @@
 .inventory-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
 .inventory-actions button { padding: 0; border: 0; color: #d59a5c; background: none; cursor: pointer; font: 10px 'DM Mono'; }
 .empty-note { margin: 14px 0 0; color: #817970; font-size: 11px; }
+
+/* 使用系统等宽字体，避免依赖 Google Fonts */
+.inventory-amount,.inventory-status,.inventory-actions button{font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Monaco,Consolas,monospace}

@@ -14,11 +14,11 @@
 
 后台登记时不要把序列号误填成 `deviceId`。如果管理台登记的是 `coffee-bot`，本地 `deviceId` 也必须是 `coffee-bot`；否则激活返回 HTTP 404。
 
-## 2. 管理台登记设备
+## 2. 管理台预登记设备
 
 1. 打开 `https://coffee-api.woodbridge.top/admin` 并输入管理员 Token。
 2. 点击“登记新设备”。
-3. 填写稳定且唯一的 `deviceId`、序列号、`instanceId` 和 `storeId`。
+3. 填写稳定且唯一的 `deviceId` 与出厂序列号；新设备必须采用受约束格式。
 4. 点击“登记并生成激活码”。
 5. 复制只展示一次的激活码。创建新激活码会取消该设备此前尚未使用的旧码。
 
@@ -27,9 +27,11 @@
 ```text
 实例目录：coffee-bot-003
 deviceId：coffee-bot-003
-序列号：003
-instanceId：instance-coffee-bot-003
+序列号：CB-2026-003
+instanceId：由首次安装向导生成 instance-coffee-bot-003
 ```
+
+设备身份由后台预登记；首次启动时模拟器安装向导填写城市、店铺名称、简介和设备展示名称，并在激活成功时仅补齐后端为空的部署资料。后端已有资料不会被终端覆盖。
 
 ## 3. 配置 remote 模式
 

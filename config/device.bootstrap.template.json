@@ -1,0 +1,20 @@
+{
+  "deviceName": "未配置咖啡终端",
+  "environment": "development",
+  "backend": {
+    "mode": "remote",
+    "baseUrl": "https://coffee-api.woodbridge.top",
+    "commandPollSeconds": 2,
+    "heartbeatIntervalSeconds": 10,
+    "requestTimeoutSeconds": 8
+  },
+  "localApi": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 9103
+  },
+  "enableConsole": true,
+  "registration": {
+    "status": "UNPROVISIONED"
+  }
+}

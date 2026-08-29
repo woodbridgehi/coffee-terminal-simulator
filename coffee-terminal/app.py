@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import webview
 
 from backend import CoffeeDeviceRuntime
-from configuration import load_config
+from configuration import load_config, load_env_file
+from onboarding import OnboardingAdapter
 
 ROOT = Path(__file__).resolve().parent
 
@@ -17,7 +19,24 @@ def main() -> None:
     parser.add_argument("--debug", action="store_true", help="enable pywebview debug tools")
     args = parser.parse_args()
     config_path = args.config.resolve()
+    default_secrets = ROOT.parent / ".secrets" / f"{config_path.parent.name}.env"
+    if default_secrets.exists() and not os.environ.get("COFFEE_DEVICE_TOKEN"):
+        load_env_file(default_secrets)
     config = load_config(config_path)
+    registration = config.get("registration") or {}
+    needs_onboarding = (
+        config.get("backend", {}).get("mode", "remote") == "remote"
+        and registration.get("status") != "COMPLETED"
+        and not config.get("backend", {}).get("authToken")
+    )
+    if needs_onboarding:
+        adapter = OnboardingAdapter(config, config_path, ROOT.parent)
+        window = webview.create_window(
+            "Coffee Terminal · 首次安装", str(ROOT / "web" / "onboarding.html"),
+            js_api=adapter, width=980, height=760, min_size=(840, 650),
+        )
+        webview.start(debug=args.debug)
+        return
     try:
         adapter = CoffeeDeviceRuntime(config, config_path.parent)
     except OSError as exc:

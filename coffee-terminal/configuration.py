@@ -56,6 +56,23 @@ def load_config(path: Path) -> dict[str, Any]:
     return config
 
 
+def write_config(path: Path, config: dict[str, Any]) -> None:
+    """Atomically persist non-secret device configuration."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(config, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
 def read_env_values(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     if not path.exists():
