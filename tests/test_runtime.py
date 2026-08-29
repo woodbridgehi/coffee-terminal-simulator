@@ -278,6 +278,11 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(heartbeat["sequence"], 2)  # device.online event used sequence 1
         self.assertEqual(heartbeat["messageId"], f"hb-{self.runtime.boot_id}-2")
 
+    def test_local_runtime_reports_local_transport(self) -> None:
+        self.assertEqual(self.runtime.status()["transport"], "local")
+        self.assertEqual(self.runtime.health()["transport"], "local")
+        self.assertEqual(self.runtime.get_state()["backend"]["transport"], "local")
+
 
 if __name__ == "__main__":
     unittest.main()

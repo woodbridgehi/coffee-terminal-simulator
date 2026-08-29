@@ -28,6 +28,7 @@ def now() -> str:
 
 
 ACTIVE_STATES = {"RECEIVED", "VALIDATING", "ACKNOWLEDGED", "RUNNING", "PAUSED", "RETRY_WAIT"}
+SUPPORTED_TRANSPORTS = {"http", "mqtt5"}
 
 
 class CoffeeDeviceRuntime:
@@ -36,6 +37,9 @@ class CoffeeDeviceRuntime:
         self.instance_dir = instance_dir
         self.device_id = config["deviceId"]
         self.mode = config.get("backend", {}).get("mode", "remote")
+        self.transport_name = "local" if self.mode == "local" else str(config.get("backend", {}).get("transport", "http")).strip().lower()
+        if self.mode != "local" and self.transport_name not in SUPPORTED_TRANSPORTS:
+            raise ValueError(f"unsupported remote transport: {self.transport_name}")
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.boot_id = str(uuid.uuid4())
@@ -73,7 +77,6 @@ class CoffeeDeviceRuntime:
             "events": self.events,
         }
         self.cloud = CloudClient(config) if self.mode == "remote" else None
-        self.transport_name = str(config.get("backend", {}).get("transport", "http")).lower()
         self.mqtt = Mqtt5Transport(self.device_id, config["backend"].get("mqtt", {})) if self.cloud and self.transport_name == "mqtt5" else None
         self.local_api: DeviceApiServer | None = None
         local_api = config.get("localApi", {})
@@ -157,10 +160,10 @@ class CoffeeDeviceRuntime:
             public_backend.pop("headers", None)
             if header_names:
                 public_backend["headerNames"] = header_names
-            return {"config": public_config, "recipes": self.catalog.list(), "capabilities": self.capabilities(), "runtime": runtime, "backend": {"mode": self.mode, "baseUrl": self.config.get("backend", {}).get("baseUrl")}}
+            return {"config": public_config, "recipes": self.catalog.list(), "capabilities": self.capabilities(), "runtime": runtime, "backend": {"mode": self.mode, "transport": self.transport_name, "baseUrl": self.config.get("backend", {}).get("baseUrl")}}
 
     def health(self) -> dict[str, Any]:
-        return {"ok": True, "deviceId": self.device_id, "bootId": self.boot_id, "connection": self.runtime["connection"], "deviceStatus": self.runtime["deviceStatus"], "sync": dict(self.sync_health), "deliveries": self.store.delivery_stats(), "time": now()}
+        return {"ok": True, "deviceId": self.device_id, "bootId": self.boot_id, "transport": self.transport_name, "connection": self.runtime["connection"], "deviceStatus": self.runtime["deviceStatus"], "sync": dict(self.sync_health), "deliveries": self.store.delivery_stats(), "time": now()}
 
     def capabilities(self) -> dict[str, Any]:
         result = self.catalog.capabilities(self.device_id, self.config.get("storeId", ""))
@@ -171,7 +174,7 @@ class CoffeeDeviceRuntime:
         return {"deviceId": self.device_id, **self.inventory.snapshot()}
 
     def status(self) -> dict[str, Any]:
-        return {"deviceId": self.device_id, "instanceId": self.config["instanceId"], "storeId": self.config.get("storeId"), "connection": self.runtime["connection"], "deviceStatus": self.runtime["deviceStatus"], "currentTask": self.runtime["task"], "capabilityVersion": self.catalog.version, "inventoryVersion": self.inventory.state["version"], "sync": dict(self.sync_health), "deliveries": self.store.delivery_stats()}
+        return {"deviceId": self.device_id, "instanceId": self.config["instanceId"], "storeId": self.config.get("storeId"), "transport": self.transport_name, "connection": self.runtime["connection"], "deviceStatus": self.runtime["deviceStatus"], "currentTask": self.runtime["task"], "capabilityVersion": self.catalog.version, "inventoryVersion": self.inventory.state["version"], "sync": dict(self.sync_health), "deliveries": self.store.delivery_stats()}
 
     # Configuration and operator actions
     def reload_config(self) -> dict[str, Any]:
@@ -473,12 +476,14 @@ class CoffeeDeviceRuntime:
         completed = sum(float(item["durationSeconds"]) for item in steps[:index])
         step_progress = max(0.0, min(1.0, float(task.get("stepProgress", 0.0))))
         elapsed = min(planned, completed + float(step["durationSeconds"]) * step_progress)
+        elapsed_rounded = round(elapsed, 2)
+        remaining_rounded = round(max(0.0, planned - elapsed_rounded), 2)
         overall = 1.0 if task.get("state") == "SUCCEEDED" else (elapsed / planned if planned > 0 else 0.0)
         return {
             "stepId": step.get("id"), "stepName": step.get("name"), "stepIndex": index,
             "stepCount": len(steps), "stepProgress": step_progress,
             "overallProgress": max(0.0, min(1.0, overall)),
-            "elapsedSeconds": round(elapsed, 2), "remainingSeconds": round(max(0.0, planned - elapsed), 2),
+            "elapsedSeconds": elapsed_rounded, "remainingSeconds": remaining_rounded,
         }
 
     @classmethod

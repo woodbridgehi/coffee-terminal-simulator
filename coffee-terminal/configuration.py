@@ -7,6 +7,9 @@ from typing import Any
 import json
 
 
+SUPPORTED_REMOTE_TRANSPORTS = {"http", "mqtt5"}
+
+
 def load_env_file(path: Path) -> None:
     """Load a simple KEY=VALUE secret file without logging its contents."""
     for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -37,7 +40,18 @@ def load_config(path: Path) -> dict[str, Any]:
     if value := os.environ.get("COFFEE_REQUEST_TIMEOUT_SECONDS"):
         backend["requestTimeoutSeconds"] = float(value)
     if value := os.environ.get("COFFEE_TRANSPORT"):
-        backend["transport"] = value
+        backend["transport"] = value.strip().lower()
+    mode = str(backend.get("mode", "remote")).strip().lower()
+    transport = str(backend.get("transport", "http")).strip().lower()
+    if mode == "local":
+        backend["transport"] = "local"
+    elif transport not in SUPPORTED_REMOTE_TRANSPORTS:
+        raise ValueError(
+            f"unsupported backend.transport {transport!r}; "
+            f"expected one of {sorted(SUPPORTED_REMOTE_TRANSPORTS)}"
+        )
+    else:
+        backend["transport"] = transport
     mqtt = backend.setdefault("mqtt", {})
     mqtt_env = {
         "MQTT_HOST": ("host", str), "MQTT_PORT": ("port", int),

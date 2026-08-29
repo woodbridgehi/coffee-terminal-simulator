@@ -565,7 +565,7 @@ node --check coffee-terminal/web/drink-visual.js
 
 ## 16. MQTT 5.0 remote 模式
 
-`remote` 现支持 `http`（兼容模式）和 `mqtt5` 两种 transport。MQTT 模式中，命令、ACK、制作事件、在线状态和 reported state 使用 MQTT 5.0；激活、凭证轮换、二维码配置、能力和库存快照继续使用 HTTPS。业务命令处理、SQLite inbox/outbox、taskId/messageId 去重和制作状态机不因 transport 改变。
+`remote` 现支持 `http`（兼容/恢复模式）和 `mqtt5` 两种 transport。MVP 多设备测试推荐 `mqtt5`：命令、ACK、制作事件、在线状态和 reported state 使用 MQTT 5.0；激活、凭证轮换、二维码配置、能力和库存快照继续使用 HTTPS。MQTT5 模式不轮询设备命令，`commandPollSeconds` 只对 HTTP 兼容模式生效。业务命令处理、SQLite inbox/outbox、taskId/messageId 去重和制作状态机不因 transport 改变。
 
 云端 v0.5 激活接口会一次性签发每设备 MQTT credential 并同步 EMQX ACL；`activate_instance.py` 会把它与 HTTP 凭证一起写入受限 `.env`。响应丢失后脚本通过 MQTT rotate 接口恢复，不能回退为共享 Broker 密码。
 

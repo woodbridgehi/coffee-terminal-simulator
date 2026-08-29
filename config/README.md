@@ -38,13 +38,20 @@ config/instances/{deviceId}/
   "storeName": "台北信义体验店",
   "environment": "development",
   "backend": {
-    "mode": "local",
+    "mode": "remote",
+    "transport": "mqtt5",
     "baseUrl": "http://localhost:8080",
     "commandPollSeconds": 2,
     "heartbeatIntervalSeconds": 30,
     "requestTimeoutSeconds": 5,
     "authToken": "optional-token",
-    "headers": {"X-Test-Environment": "staging"}
+    "headers": {"X-Test-Environment": "staging"},
+    "mqtt": {
+      "host": "mqtt-api.woodbridge.top",
+      "port": 8883,
+      "keepaliveSeconds": 30,
+      "sessionExpirySeconds": 604800
+    }
   },
   "localApi": {
     "enabled": true,
@@ -68,13 +75,15 @@ config/instances/{deviceId}/
 | `storeName` | 建议 | 界面显示的门店名称 |
 | `environment` | 否 | 联调环境标签，例如 `development`、`staging` |
 | `backend.mode` | 是 | `local` 或 `remote` |
+| `backend.transport` | remote 时建议 | `mqtt5` 为设备实时主通道；`http` 为兼容/恢复模式 |
 | `backend.baseUrl` | remote 必填 | 后台 API 根地址 |
-| `backend.commandPollSeconds` | 否 | 命令轮询间隔 |
+| `backend.commandPollSeconds` | HTTP 兼容模式使用 | MQTT5 主通道不轮询设备命令，仅作为 HTTP 恢复模式参数 |
 | `backend.heartbeatIntervalSeconds` | 否 | 心跳间隔 |
 | `backend.requestTimeoutSeconds` | 否 | 单次 HTTP 超时秒数 |
 | `backend.userAgent` | 否 | 设备 HTTP 客户端标识，默认 `CoffeeTerminalSimulator/1.2.0`；避免使用通用脚本客户端签名 |
 | `backend.authToken` | 否 | 静态 Bearer Token，仅建议测试环境使用 |
 | `backend.headers` | 否 | 附加到所有后台请求的自定义请求头 |
+| `backend.mqtt` | `mqtt5` 时必填 | Broker 地址、TLS 端口、会话和每设备凭证；密码只从 `.env` 注入 |
 | `localApi.enabled` | 否 | 是否启动本地调试 API，默认 `true` |
 | `localApi.host` | 否 | 默认 `127.0.0.1` |
 | `localApi.port` | 否 | 本地 API 端口，多实例不能重复 |
@@ -111,7 +120,8 @@ storeId:      store-{城市代码小写}-{门店编号}
 运行模式：
 
 - `local`：不连接后台；模拟下单和控制命令直接作用于本机。
-- `remote`：真实轮询后台命令，发送 ACK、心跳、能力、库存和事件；界面调试动作先调用后台调试接口。
+- `remote + mqtt5`：通过 MQTT 接收命令、发送 ACK/心跳/状态/事件；激活、二维码、能力和库存快照仍走 HTTPS。
+- `remote + http`：兼容模式，使用 HTTP 轮询命令并上报设备数据，适合故障恢复和旧部署。
 
 ## 3. recipes/*.json
 

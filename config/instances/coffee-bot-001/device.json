@@ -8,10 +8,12 @@
   "environment": "development",
   "backend": {
     "mode": "remote",
+    "transport": "mqtt5",
     "baseUrl": "https://coffee-api.woodbridge.top",
     "commandPollSeconds": 2,
     "heartbeatIntervalSeconds": 10,
-    "requestTimeoutSeconds": 8
+    "requestTimeoutSeconds": 8,
+    "mqtt": {"host": "mqtt-api.woodbridge.top", "port": 8883, "keepaliveSeconds": 30, "sessionExpirySeconds": 604800}
   },
   "localApi": {"enabled": true, "host": "127.0.0.1", "port": 9101},
   "enableConsole": true
