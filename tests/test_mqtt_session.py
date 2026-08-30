@@ -87,7 +87,10 @@ class HelperPublisher:
 
     def publish_command(self, device_id: str, message_id: str) -> None:
         payload = {"deviceId": device_id, "messageId": message_id, "type": "MAKE_DRINK", "action": {"kind": "brew"}}
-        info = self.client.publish(f"v1/devices/{device_id}/down", json.dumps(payload), qos=1)
+        self.publish_raw(device_id, json.dumps(payload))
+
+    def publish_raw(self, device_id: str, payload: str) -> None:
+        info = self.client.publish(f"v1/devices/{device_id}/down", payload, qos=1)
         info.wait_for_publish(timeout=5)
         assert info.is_published(), "helper publish was not acknowledged"
 
@@ -248,6 +251,8 @@ def test_ack_generation_gate_rejects_stale_connection_mids() -> None:
     transport.client = FakeClient()
     transport.last_error = None
     transport._generation = 3
+    transport._connection_valid = True
+    transport._generation_lock = threading.Lock()
 
     stale = SimpleNamespace(qos=1, mid=9)
     assert transport._ack_if_current(stale, 2) is False
@@ -256,3 +261,125 @@ def test_ack_generation_gate_rejects_stale_connection_mids() -> None:
     current = SimpleNamespace(qos=1, mid=10)
     assert transport._ack_if_current(current, 3) is True
     assert transport.client.acks == [(10, 1)]
+
+    transport._connection_valid = False
+    refused = SimpleNamespace(qos=1, mid=11)
+    assert transport._ack_if_current(refused, 3) is False
+    assert transport.client.acks == [(10, 1)], "ACK must be refused once the connection is gone"
+
+
+def test_array_payload_does_not_kill_the_network_thread(plaintext_broker) -> None:
+    """A malformed (non-object) downlink must not crash the network loop."""
+    device_id = device_name()
+    transport = Mqtt5Transport(device_id, broker_config())
+    transport.start()
+    try:
+        assert transport.connected.wait(timeout=10), transport.last_error
+        helper = HelperPublisher()
+        try:
+            helper.publish_raw(device_id, json.dumps([1, 2, 3]))
+            helper.publish_command(device_id, "still-alive")
+        finally:
+            helper.close()
+        commands = wait_for_commands(transport, timeout=10)
+        assert any(command.get("messageId") == "still-alive" for command in commands), \
+            "network loop died on malformed payload"
+        assert paho_threads(f"paho-mqtt-client-{device_id}"), "network loop must survive malformed payloads"
+    finally:
+        transport.close()
+
+
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+def test_supervisor_recovers_when_network_thread_dies_unexpectedly(plaintext_broker) -> None:
+    """A crashing callback kills the paho loop without firing on_disconnect;
+    the stale connected flag must not stop the supervisor from recovering."""
+    device_id = device_name()
+    transport = Mqtt5Transport(device_id, broker_config())
+    original_handler = transport._on_message
+
+    def exploding(_client, _userdata, _message):
+        raise RuntimeError("simulated callback crash")
+
+    transport.client.on_message = exploding
+    transport.start()
+    try:
+        assert transport.connected.wait(timeout=10), transport.last_error
+        helper = HelperPublisher()
+        try:
+            helper.publish_command(device_id, "boom")
+        finally:
+            helper.close()
+        wait_until(
+            lambda: transport._loop_thread() is None,
+            timeout=10,
+            message="network thread never died from the crashing callback",
+        )
+        assert transport.connected.is_set(), "precondition: connected flag must be stale"
+
+        transport.client.on_message = original_handler
+        helper = HelperPublisher()
+        try:
+            helper.publish_command(device_id, "after-crash")
+        finally:
+            helper.close()
+        commands = wait_for_commands(transport, timeout=20)
+        assert any(command.get("messageId") == "after-crash" for command in commands), \
+            "supervisor did not recover the dead network thread"
+    finally:
+        transport.close()
+
+
+def test_close_during_reconnect_performs_no_loop_start() -> None:
+    """close() racing an in-flight reconnect must not leave a fresh network loop."""
+
+    class BlockingClient:
+        def __init__(self) -> None:
+            self.in_reconnect = threading.Event()
+            self.release_reconnect = threading.Event()
+            self.loop_starts = 0
+            self.disconnects = 0
+            self.loop_stops = 0
+
+        def loop_stop(self) -> None:
+            self.loop_stops += 1
+
+        def loop_start(self) -> None:
+            self.loop_starts += 1
+
+        def disconnect(self) -> None:
+            self.disconnects += 1
+
+        def reconnect(self) -> int:
+            self.in_reconnect.set()
+            assert self.release_reconnect.wait(timeout=30), "reconnect was never released"
+            return mqtt.MQTT_ERR_SUCCESS
+
+    transport = object.__new__(Mqtt5Transport)
+    transport.device_id = "device-close-race"
+    transport.connected = threading.Event()
+    transport.suspended = False
+    transport.last_error = None
+    transport._closed = False
+    transport._started = True
+    transport._lifecycle_lock = threading.Lock()
+    transport._reconnect_lock = threading.Lock()
+    transport._supervisor_stop = threading.Event()
+    transport._supervisor = None
+    transport.commands = queue.Queue(maxsize=5)
+    transport.client = BlockingClient()
+    transport._generation_lock = threading.Lock()
+
+    recover = threading.Thread(target=transport._recover_once, daemon=True)
+    recover.start()
+    assert transport.client.in_reconnect.wait(timeout=5), "recovery never entered reconnect()"
+
+    closer = threading.Thread(target=transport.close, daemon=True)
+    closer.start()
+    wait_until(lambda: transport._closed, timeout=5, message="close never marked the transport closed")
+    transport.client.release_reconnect.set()
+
+    closer.join(timeout=10)
+    recover.join(timeout=10)
+    assert not closer.is_alive() and not recover.is_alive()
+    assert transport.client.loop_starts == 0, "supervisor must not start a network loop after close"
+    assert transport.client.disconnects >= 1, "connection restored by a racing reconnect must be torn down"

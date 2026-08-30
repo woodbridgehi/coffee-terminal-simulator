@@ -4,6 +4,7 @@ import json
 import queue
 import sys
 import tempfile
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -33,6 +34,8 @@ def transport_with_capacity(capacity: int = 1) -> Mqtt5Transport:
     transport.commands = queue.Queue(maxsize=capacity)
     transport.client = FakeClient()
     transport.last_error = None
+    transport._generation_lock = threading.Lock()
+    transport._connection_valid = True
     return transport
 
 

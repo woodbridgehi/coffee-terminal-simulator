@@ -56,12 +56,12 @@ coffee-terminal-simulator/
 
 ## 2. 安装与启动
 
-项目已有 `.venv` 时可直接运行。重新安装环境：
+项目已有 `.venv` 时可直接运行。重新安装环境（依赖统一从锁文件安装，避免传递依赖漂移；直接依赖源见 `coffee-terminal/requirements.txt`）：
 
 ```bash
 cd /Users/alex/Downloads/armaster/coffee-terminal-simulator
 uv venv --managed-python --python 3.12 .venv
-uv pip install --python .venv/bin/python -r coffee-terminal/requirements.txt
+uv pip install --python .venv/bin/python -r requirements.lock
 ```
 
 启动单台设备：
