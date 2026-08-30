@@ -8,7 +8,7 @@ import ssl
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 import paho.mqtt.client as mqtt
 import socks
@@ -26,6 +26,16 @@ class MqttTransportError(RuntimeError):
 
 class RoutedMqttClient(mqtt.Client):
     """Connect through a local TCP tunnel while preserving broker hostname for TLS SNI."""
+
+    before_reconnect: Callable[[], None] | None = None
+
+    def reconnect(self) -> mqtt.MQTTErrorCode:
+        # Paho's on_pre_connect runs AFTER clearing outbound packets. Fence
+        # before super(), including automatic reconnects, so old ACKs cannot
+        # be appended after that clear and then sent on the new socket.
+        if self.before_reconnect is not None:
+            self.before_reconnect()
+        return super().reconnect()
 
     def __init__(self, *args: Any, connect_host: str | None = None, connect_port: int | None = None, **kwargs: Any) -> None:
         self._route_host = connect_host
@@ -65,6 +75,7 @@ class Mqtt5Transport:
 
     SUPERVISOR_INTERVAL_SECONDS = 0.3
     RECONNECT_BACKOFF_MAX_SECONDS = 60.0
+    SUBSCRIBE_TIMEOUT_SECONDS = 10.0
 
     def __init__(self, device_id: str, config: dict[str, Any]) -> None:
         self.device_id = device_id
@@ -85,7 +96,11 @@ class Mqtt5Transport:
         self._started = False
         self._lifecycle_lock = threading.Lock()
         self._reconnect_lock = threading.Lock()
-        self._generation_lock = threading.Lock()
+        # ACK may synchronously reenter on_disconnect on a socket write error.
+        # Never hold this lock over loop_stop/join or blocking reconnect I/O.
+        self._generation_lock = threading.RLock()
+        self._pending_subscribe_mid: int | None = None
+        self._subscribe_deadline = 0.0
         self._supervisor_stop = threading.Event()
         self._supervisor: threading.Thread | None = None
         self.client = RoutedMqttClient(
@@ -119,6 +134,8 @@ class Mqtt5Transport:
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
+        self.client.on_subscribe = self._on_subscribe
+        self.client.before_reconnect = self._invalidate_connection
 
     def topic(self, suffix: str) -> str:
         return f"v1/devices/{self.device_id}/{suffix}"
@@ -159,21 +176,20 @@ class Mqtt5Transport:
                 self.publish_presence(False, "graceful_shutdown")
             except MqttTransportError:
                 pass
+        self._invalidate_connection()
         # Take the reconnect lock so a supervisor reconnect in flight either
         # observes the closed flag and tears its fresh connection down, or we
         # tear it down here; close returns with no new connection or loop left.
         with self._reconnect_lock:
             try:
-                self.client.disconnect()
+                self._disconnect()
             except Exception:  # pragma: no cover - paho defensive
                 pass
             try:
                 self.client.loop_stop()
             except Exception:  # pragma: no cover - paho defensive
                 pass
-        with self._generation_lock:
-            self._connection_valid = False
-        self.connected.clear()
+        self._invalidate_connection()
         supervisor = self._supervisor
         if supervisor is not None and supervisor is not threading.current_thread():
             supervisor.join(timeout=5)
@@ -187,12 +203,8 @@ class Mqtt5Transport:
                 self.publish_presence(False, "simulated_offline")
             except MqttTransportError:
                 pass
-        with self._generation_lock:
-            # Deliberate disconnect invalidates the generation immediately;
-            # do not rely on the on_disconnect callback timing.
-            self._connection_valid = False
         try:
-            self.client.disconnect()
+            self._disconnect()
         except Exception:  # pragma: no cover - paho defensive
             pass
         # The network loop terminates on its own; the supervisor stays idle
@@ -210,11 +222,8 @@ class Mqtt5Transport:
     # Connection supervision
     # ------------------------------------------------------------------
     def _loop_thread(self) -> threading.Thread | None:
-        name = f"paho-mqtt-client-{self.device_id}"
-        for thread in threading.enumerate():
-            if thread.name == name and thread.is_alive():
-                return thread
-        return None
+        thread = getattr(self.client, "_thread", None)
+        return thread if thread is not None and thread.is_alive() else None
 
     def _supervise(self) -> None:
         failures = 0
@@ -224,13 +233,15 @@ class Mqtt5Transport:
                 failures = 0
                 next_retry_at = 0.0
                 continue
+            self._check_subscription_timeout()
             if self._loop_thread() is not None:
                 # The network loop is alive: healthy, or retrying on its own
                 # (initial connect / transient failures). A live loop is the
                 # source of truth; a stale `connected` flag from a crashed
                 # loop must never mask recovery.
-                failures = 0
-                next_retry_at = 0.0
+                if self.connected.is_set():
+                    failures = 0
+                    next_retry_at = 0.0
                 continue
             if time.monotonic() < next_retry_at:
                 continue
@@ -247,6 +258,7 @@ class Mqtt5Transport:
         with self._reconnect_lock:
             if self._closed or self.suspended or self._supervisor_stop.is_set():
                 return
+            self._invalidate_connection()
             log.warning(
                 "MQTT network loop is dead; supervisor restoring connection device=%s", self.device_id
             )
@@ -264,7 +276,7 @@ class Mqtt5Transport:
             if self._closed or self.suspended or self._supervisor_stop.is_set():
                 log.warning("close raced the reconnect; discarding restored connection")
                 try:
-                    self.client.disconnect()
+                    self._disconnect()
                 except Exception:  # pragma: no cover - paho defensive
                     pass
                 return
@@ -277,6 +289,10 @@ class Mqtt5Transport:
     # Network callbacks (signal only; never join or reconnect inline)
     # ------------------------------------------------------------------
     def _on_connect(self, client: mqtt.Client, _userdata: object, flags: Any, reason: Any, _properties: Any) -> None:
+        self._invalidate_connection()
+        if self._closed or self.suspended:
+            self._disconnect()
+            return
         if reason.is_failure:
             self.last_error = f"CONNECT rejected: {reason}"
             self.connected.clear()
@@ -287,28 +303,58 @@ class Mqtt5Transport:
                 "MQTT session not present for device=%s; broker may have dropped queued QoS1 downlink",
                 self.device_id,
             )
-        result, _ = client.subscribe(self.topic("down"), qos=1)
-        if result != mqtt.MQTT_ERR_SUCCESS:
-            self.last_error = f"subscribe failed: {mqtt.error_string(result)}"
-            self.connected.clear()
-            client.disconnect()
-            return
         with self._generation_lock:
             self._generation += 1
             self._connection_valid = True
-        self.last_error = None
-        self.connected.set()
+            self._subscribe_deadline = time.monotonic() + self.SUBSCRIBE_TIMEOUT_SECONDS
+        result, mid = client.subscribe(self.topic("down"), qos=1)
+        if result != mqtt.MQTT_ERR_SUCCESS:
+            self.last_error = f"subscribe failed: {mqtt.error_string(result)}"
+            self.connected.clear()
+            self._disconnect()
+            return
+        with self._generation_lock:
+            self._pending_subscribe_mid = mid
+
+    def _on_subscribe(self, _client: mqtt.Client, _userdata: object, mid: int, reasons: Any, _properties: Any) -> None:
+        with self._generation_lock:
+            if not self._connection_valid or mid != self._pending_subscribe_mid or self._closed or self.suspended:
+                return
+            failed = len(reasons) != 1 or any(reason.is_failure or reason.value != 1 for reason in reasons)
+            if not failed:
+                self._pending_subscribe_mid = None
+                self._subscribe_deadline = 0.0
+                self.last_error = None
+                self.connected.set()
+        if failed:
+            self.last_error = f"required QoS1 subscription rejected/downgraded: {reasons}"
+            self._disconnect()
+            return
         try:
             self.publish_presence(True, "connected")
         except MqttTransportError as exc:
             self.last_error = f"presence publish failed: {exc}"
 
-    def _on_disconnect(self, _client: mqtt.Client, _userdata: object, _flags: Any, reason: Any, _properties: Any) -> None:
-        self.connected.clear()
+    def _invalidate_connection(self) -> None:
         with self._generation_lock:
-            # The generation number stays for diagnostics, but from this
-            # moment it no longer authorises any ACK on this connection.
             self._connection_valid = False
+            self.connected.clear()
+            self._pending_subscribe_mid = None
+            self._subscribe_deadline = 0.0
+
+    def _disconnect(self) -> None:
+        self._invalidate_connection()
+        self.client.disconnect()
+
+    def _check_subscription_timeout(self) -> None:
+        with self._generation_lock:
+            expired = self._subscribe_deadline and time.monotonic() >= self._subscribe_deadline
+        if expired:
+            self.last_error = "MQTT SUBACK timed out; reconnecting"
+            self._disconnect()
+
+    def _on_disconnect(self, _client: mqtt.Client, _userdata: object, _flags: Any, reason: Any, _properties: Any) -> None:
+        self._invalidate_connection()
         if reason.is_failure and not self.suspended:
             self.last_error = f"disconnected: {reason}"
 
@@ -326,14 +372,17 @@ class Mqtt5Transport:
             self.commands.put_nowait(command)
         except queue.Full:
             self.last_error = "command queue full; reconnecting for QoS1 redelivery"
-            with self._generation_lock:
-                self._connection_valid = False
-            self.client.disconnect()
+            self._disconnect()
             return
-        except Exception as exc:
-            # Any malformed downlink (arrays, bad JSON, wrong shape) is
-            # recorded and ACKed; it must never crash the network thread.
+        except (ValueError, UnicodeError) as exc:
             self.last_error = f"invalid downlink: {exc}"
+        except Exception as exc:
+            # Local execution/allocation failures are NOT permanent bad input.
+            # Leave unacknowledged and request broker redelivery.
+            self.last_error = f"downlink processing failed: {exc}"
+            log.exception("downlink processing failed")
+            self._disconnect()
+            return
         self._ack_if_current(message, generation)
 
     def _ack_if_current(self, message: mqtt.MQTTMessage, generation: int) -> bool:

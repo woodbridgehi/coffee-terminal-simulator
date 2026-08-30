@@ -567,6 +567,10 @@ node --check coffee-terminal/web/drink-visual.js
 
 连接生命周期（2026-08-30 B1.1）：设备 Client ID 即 `deviceId`，MQTT 5 会话为持久会话（`clean_start=False` + `sessionExpirySeconds`，默认 7 天）；进程重启/对象重建后离线期间排队的 QoS 1 下行命令会被 Broker 重投，CONNACK `sessionPresent=false` 时记录警告而非静默。Paho 网络循环在主动 `disconnect()`（模拟离线暂停、命令队列背压）后终止且不会自愈；传输层唯一的监督线程在循环死亡后执行 `loop_stop → reconnect → loop_start`（指数退避，上限 60s），网络回调只记录状态。`close()` 幂等且终态：关闭后 `start()`/`resume()` 报错，不残留线程、不再重连。下行 ACK 携带连接代次（generation），旧连接的 MID 不会在新连接上被确认。
 
+本轮直接复核修复：在 Paho 重连开始、清理发送队列之前撤销旧 ACK 权限，覆盖自动重连和监督器恢复；可重入代次锁允许 ACK 写失败同步进入断线回调，锁内不执行 join 或阻塞连接。`connected` 与上线 presence 等待下行订阅的成功 QoS1 SUBACK；拒绝、QoS0 降级、10 秒未确认则断开并退避恢复。每代连接清理订阅 MID，不继承旧确认状态。格式错误可记录后 ACK；队列满或内存分配等内部异常不 ACK，断开等待重投。
+
+这些改动仍不包含 B1.2 持久 Inbox：命令目前入内存队列后即 ACK，进程崩溃窗口尚未关闭。详见后端 [B1.1 修复记录](../coffee-cloud-mvp/docs/mqtt-lifecycle-review-2026-08-30.md)。本轮仅本地验证，未同步 VPS。
+
 制作进度采用可配置的“变化或时间”上报策略：`backend.progressReport.minDeltaPercent` 默认 `5`，`maxIntervalSeconds` 默认 `5`。整杯 `overallProgress` 每变化至少 5%，或距离上次进度消息达到 5 秒（任一满足）就上报；在线时每条进度立即交给 MQTT，断网积压时 SQLite 仅保留同一任务的最新待发进度。任务/步骤开始、完成、失败、取消及告警事件始终立即上报并可靠保留，云端只合并 `task.progress`。MQTT 下行启用 manual ACK，命令只有进入本地有界队列后才确认，队列满时断开并依靠 QoS 1 重投。
 
 云端 v0.5 激活接口会一次性签发每设备 MQTT credential 并同步 EMQX ACL；`activate_instance.py` 会把它与 HTTP 凭证一起写入受限 `.env`。响应丢失后脚本通过 MQTT rotate 接口恢复，不能回退为共享 Broker 密码。

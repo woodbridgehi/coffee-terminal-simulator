@@ -29,8 +29,7 @@ class FakeClient:
 
 
 def transport_with_capacity(capacity: int = 1) -> Mqtt5Transport:
-    transport = object.__new__(Mqtt5Transport)
-    transport.device_id = "device-1"
+    transport = Mqtt5Transport("device-1", {"password": "test"})
     transport.commands = queue.Queue(maxsize=capacity)
     transport.client = FakeClient()
     transport.last_error = None
