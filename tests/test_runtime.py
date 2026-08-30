@@ -169,7 +169,12 @@ class RuntimeTest(unittest.TestCase):
         self.assertTrue(self.runtime.start_demo_order("coffee-v1")["ok"])
         self.wait_for_step("brew")
         self.runtime.failures.force_fail_next = True
-        self.wait_for("FAILED")
+        self.wait_for("RETRY_WAIT")
+        self.assertEqual(self.runtime.runtime["deviceStatus"], "BUSY")
+        self.assertTrue(any(event["type"] == "task.retry_wait" for event in self.runtime.events))
+        self.assertFalse(any(event["type"] == "task.failed" for event in self.runtime.events))
+        self.assertFalse(self.runtime.command("clear")["ok"])
+        self.assertFalse(self.runtime.start_demo_order("coffee-v1")["ok"])
         after_failure = {item["materialId"]: item for item in self.runtime.inventory_snapshot()["materials"]}
         self.assertEqual(after_failure["beans"]["onHand"], 30)
 
@@ -241,6 +246,49 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(self.runtime.runtime["deviceStatus"], "RECOVERING")
         time.sleep(0.4)
         self.assertEqual(self.runtime.runtime["task"]["state"], "PAUSED")
+        self.assertTrue(recovered["recoveryHold"])
+        for action in ("resume", "retry", "skip"):
+            result = self.runtime._apply_command(action, command["taskId"])
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["reasonCode"], "RECOVERY_REQUIRES_RECONCILIATION")
+        self.assertTrue(self.runtime._apply_command("cancel", command["taskId"])["ok"])
+        self.assertEqual(self.runtime.runtime["deviceStatus"], "IDLE")
+
+    def test_retry_exhaustion_is_final_and_cannot_be_resumed(self) -> None:
+        self.runtime.runtime["override"]["offline"] = True
+        self.assertTrue(self.runtime.start_demo_order("coffee-v1")["ok"])
+        task = self.runtime.runtime["task"]
+        task.update(state="RUNNING", stepIndex=1)
+        step = task["recipe"]["steps"][1]
+        profile = self.runtime.failures.profile(step)
+        self.runtime._fail_task(task, step, profile, consume=False)
+        self.assertEqual(task["state"], "RETRY_WAIT")
+        self.assertTrue(self.runtime.command("retry")["ok"])
+        self.assertEqual(task["attempt"], 2)
+        self.assertEqual(task["stepRetries"]["brew"], 1)
+        self.runtime._fail_task(task, step, profile, consume=False)
+        self.assertEqual(task["state"], "FAILED")
+        self.assertFalse(task["failure"]["retryable"])
+        for action in ("retry", "resume", "skip"):
+            self.assertFalse(self.runtime.command(action)["ok"])
+        self.assertEqual(task["state"], "FAILED")
+        self.assertEqual(sum(event["type"] == "task.failed" for event in self.runtime.events), 1)
+
+    def test_ordinary_pause_can_resume_and_retry_wait_can_cancel(self) -> None:
+        self.runtime.runtime["override"]["offline"] = True
+        self.assertTrue(self.runtime.start_demo_order("coffee-v1")["ok"])
+        task = self.runtime.runtime["task"]
+        task.update(state="RUNNING", stepIndex=1)
+        self.assertTrue(self.runtime.command("pause")["ok"])
+        self.assertFalse(self.runtime.command("clear")["ok"])
+        self.assertTrue(self.runtime.command("resume")["ok"])
+        step = task["recipe"]["steps"][1]
+        self.runtime._fail_task(task, step, self.runtime.failures.profile(step), consume=False)
+        self.assertEqual(task["state"], "RETRY_WAIT")
+        self.assertTrue(self.runtime.command("cancel")["ok"])
+        self.assertEqual(task["state"], "CANCELLED")
+        self.assertEqual(self.runtime.runtime["deviceStatus"], "IDLE")
+        self.assertTrue(all(item["reserved"] == 0 for item in self.runtime.inventory_snapshot()["materials"]))
 
     def test_command_inbox_rejects_same_id_with_different_payload(self) -> None:
         command = {"messageId": "cmd-conflict", "type": "RELOAD_CONFIG"}

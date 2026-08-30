@@ -128,7 +128,7 @@ maxServings = min(floor(material.available / recipe.requiredAmount))
 
 库存状态按 `onHand` 与阈值判定：低于或等于严重阈值为 `CRITICAL`，否则低于或等于低库存阈值为 `LOW`，其余为 `OK`。状态跨越阈值时会上报 `inventory.low`、`inventory.critical` 或 `inventory.recovered`。
 
-启动时会读取持久化的 `onHand`。若 `runtime.db` 中有可恢复的活动任务，则保留该任务预占：local 模式从最近模拟检查点继续，remote 模式进入 `RECOVERING/PAUSED`，等待后台对账或明确继续命令；没有活动任务时清理遗留预占。真实硬件接入后仍必须使用传感器和动作日志裁决，不能把模拟恢复直接视为安全续做。
+启动时会读取持久化的 `onHand`。若 `runtime.db` 中有可恢复的活动任务，则保留该任务预占：local 模式从最近模拟检查点继续，remote 模式进入 `RECOVERING/PAUSED`，禁止普通 resume/retry/skip，等待物理结果核对与受控取消；没有活动任务时清理遗留预占。真实硬件接入后仍必须使用传感器和动作日志裁决，不能把模拟恢复直接视为安全续做。无任务遗留预占的进一步对账属于后续库存整改。
 
 ## 6. 故障模型
 
@@ -157,7 +157,8 @@ effectiveRate = 1 - (1 - globalRate) × (1 - profileRate)
 ```text
 ACKNOWLEDGED -> RUNNING -> SUCCEEDED
                      ├── PAUSED -> RUNNING
-                     ├── FAILED -> RUNNING（重试）
+                     ├── RETRY_WAIT -> RUNNING（限次重试）
+                     ├── FAILED（终态，不能重试）
                      └── CANCELLED
 ```
 
@@ -246,6 +247,8 @@ ACK/命令结果和关键事件先写 SQLite，再由云端线程至少一次发
 - 配置重载尚未使用签名不可变包，真实 OTA、硬件驱动、传感器、急停和安全互锁仍不存在。
 
 ## 12. 后续生产化方向
+
+2026-08-30 状态一致性整改：可重试故障采用 `RETRY_WAIT/task.retry_wait`，保持设备忙碌，不再先发最终失败再复活任务。最终失败不可 retry/resume。远程重启的未完成任务携带 `recoveryHold`，禁止普通恢复、重试和跳步，等待物理结果核对与受控取消；普通主动暂停仍可恢复。云端将此类恢复映射为 `HOLD`，不能仅凭新的 started/resume 解除。参见 [API 状态协议](API.md#暂停重试与重启恢复2026-08-30)。下列 SQLite 原子性和传输可靠性工作仍未在本批完成。
 
 若要从模拟器演进为真实终端代理，建议按顺序增加：
 

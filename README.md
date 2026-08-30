@@ -16,6 +16,8 @@
 
 当前 `v1.2` 是可靠性优化版：命令 Inbox、制作任务、命令游标和待发事件使用每实例 SQLite 持久化；重启可恢复模拟任务，重复任务不会再次制作，ACK/命令结果和事件会持久重试。
 
+2026-08-30 状态整改：可重试故障进入 `RETRY_WAIT` 并保持设备忙碌，最终 `FAILED` 不允许复活；远程重启的未完成任务进入恢复保护，禁止直接 resume/retry/skip。云端支持带权限、版本与幂等校验的 HOLD 人工结案，但结案不代表硬件已停止。详见 [状态协议](coffee-terminal/API.md#暂停重试与重启恢复2026-08-30)。本批不包含 MQTT 持久接收和 SQLite 跨对象原子性整改，也未部署 VPS。
+
 远程接入已支持一次性激活和凭证轮换工具。设备 Token 只保存在被 Git 忽略且权限为 `0600` 的 `.secrets/` 文件中，不写入 `device.json`。
 
 ## 1. 项目结构
@@ -58,8 +60,8 @@ coffee-terminal-simulator/
 
 ```bash
 cd /Users/alex/Downloads/armaster/coffee-terminal-simulator
-python3 -m venv .venv
-.venv/bin/python -m pip install -r coffee-terminal/requirements.txt
+uv venv --managed-python --python 3.12 .venv
+uv pip install --python .venv/bin/python -r coffee-terminal/requirements.txt
 ```
 
 启动单台设备：
@@ -102,12 +104,7 @@ python3 -m venv .venv
   --env-file .secrets/coffee-bot-002.env --duration 60
 ```
 
-若进程在制作中退出，remote 模式重启后任务会停在恢复保护态；确认云端状态后才可在测试中显式恢复：
-
-```bash
-.venv/bin/python scripts/run_headless.py coffee-bot-002 \
-  --env-file .secrets/coffee-bot-002.env --duration 60 --resume-recovered
-```
+若进程在制作中退出，remote 模式重启后任务会停在 `RECOVERING/PAUSED`，带 `recoveryHold=true`。必须核对设备实际结果与云端 HOLD，受控取消旧任务后才能接下一杯。旧 `--resume-recovered` 参数不再允许绕过恢复保护（会报错退出）；不要通过编辑状态文件恢复制作。
 
 ### 2.1 首次激活与轮换
 
@@ -423,7 +420,7 @@ curl -X POST http://127.0.0.1:9101/device/v1/inventory/adjustments \
 
 - `inventory.json` 保存 `onHand`、预占、库存版本和步骤消耗键。
 - `runtime.db` 使用 SQLite WAL 保存命令 Inbox、当前/历史任务、命令游标以及命令结果和事件 Outbox。
-- 重启会保留 `onHand`；存在可恢复任务时也保留该任务预占。local 模式从最近检查点继续模拟；remote 模式进入 `RECOVERING/PAUSED`，等待后台对账或明确继续命令。
+- 重启会保留 `onHand`；存在可恢复任务时也保留该任务预占。local 模式从最近检查点继续模拟；remote 模式进入 `RECOVERING/PAUSED`，等待核对物理结果与受控取消，不能直接继续制作。
 - 新增物料时会使用该物料的 `initialOnHand`。
 - 已存在物料不能直接更换单位；需要迁移或重建库存状态。
 - 只删除 `inventory.json` 会重置库存但保留任务/去重历史，可能形成不一致；测试环境需要完全重置时，应关闭进程后同时删除该实例的 `inventory.json` 和 `runtime.db*`。
@@ -454,7 +451,7 @@ curl -X POST http://127.0.0.1:9101/device/v1/inventory/adjustments \
 
 - `timing=before`：步骤开始前失败，通常不消耗本步骤物料。
 - `timing=after`：步骤计时完成后失败，可用 `consumeOnFailure` 表示物料是否已经投入。
-- 重试必须满足 `retryable=true`、未超过 `maxRetries` 且剩余物料足够。
+- 重试必须处于 `RETRY_WAIT`，满足 `retryable=true`、未超过 `maxRetries` 且剩余物料足够；`FAILED` 是不可复活的最终态。
 - 控制台失败率滑块只覆盖当前进程，不修改 JSON。
 - “下一步失败”只作用一次，用于测试失败订单、告警、退款和售后流程。
 - “模拟断网”暂停云端通信；当前实现也会暂停本地任务计时，恢复网络后继续。

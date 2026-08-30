@@ -22,7 +22,7 @@ const mockApi = (() => {
     const step = task.recipe.steps[task.stepIndex];
     task.stepProgress += .25 / step.durationSeconds;
     if (task.stepProgress < 1) return;
-    if (runtime.override.forceFailNext) { runtime.override.forceFailNext = false; task.state = 'FAILED'; task.message = `${step.name}故障`; task.failure = { code: 'SIMULATED_FAILURE', retryable: true }; runtime.deviceStatus = 'FAILED'; event('task.failed', task.message); return; }
+    if (runtime.override.forceFailNext) { runtime.override.forceFailNext = false; const retryable = (task.stepRetries?.[step.id] || 0) < 1; task.state = retryable ? 'RETRY_WAIT' : 'FAILED'; task.message = `${step.name}故障`; task.failure = { code: 'SIMULATED_FAILURE', retryable }; runtime.deviceStatus = retryable ? 'BUSY' : 'FAILED'; event(retryable ? 'task.retry_wait' : 'task.failed', task.message); return; }
     for (const item of step.consumes || []) { const material = materials.find((entry) => entry.materialId === item.materialId); if (material) material.onHand = Math.max(0, material.onHand - item.amount); }
     event('step.completed', `${step.name}完成`); task.stepIndex += 1; task.stepProgress = 0;
     if (task.stepIndex >= task.recipe.steps.length) { task.stepIndex -= 1; task.stepProgress = 1; task.state = 'SUCCEEDED'; task.message = '咖啡制作完成，请取杯'; runtime.deviceStatus = 'READY'; event('task.succeeded', task.message); }
@@ -30,12 +30,13 @@ const mockApi = (() => {
   }, 250);
   return {
     get_state: async () => ({ config: { deviceId: 'coffee-bot-001', deviceName: 'COFFEE BOT 001' }, recipes: [recipe], capabilities: { products: [{ recipeId: recipe.recipeId, available: true, maxServings: 13 }] }, runtime }),
-    start_demo_order: async () => { if (runtime.task && ['ACKNOWLEDGED', 'RUNNING', 'PAUSED'].includes(runtime.task.state)) return { ok: false, error: '设备已有执行中的任务' }; runtime.task = { taskId: 'task-browser-preview', orderId: 'order-1024', recipe, state: 'RUNNING', stepIndex: 0, stepProgress: 0, message: '开始制作', attempt: 1 }; runtime.deviceStatus = 'BUSY'; event('task.started', '开始模拟制作'); return { ok: true }; },
+    start_demo_order: async () => { if (runtime.task && ['ACKNOWLEDGED', 'RUNNING', 'PAUSED', 'RETRY_WAIT'].includes(runtime.task.state)) return { ok: false, error: '设备已有执行中的任务' }; runtime.task = { taskId: 'task-browser-preview', orderId: 'order-1024', recipe, state: 'RUNNING', stepIndex: 0, stepProgress: 0, message: '开始制作', attempt: 1 }; runtime.deviceStatus = 'BUSY'; event('task.started', '开始模拟制作'); return { ok: true }; },
     command: async (action) => {
       if (action === 'toggle-offline') { runtime.override.offline = !runtime.override.offline; runtime.connection = runtime.override.offline ? 'OFFLINE' : 'ONLINE'; event('device.connection', runtime.override.offline ? '网络已断开' : '网络已恢复'); return { ok: true }; }
       if (action === 'force-fail') { runtime.override.forceFailNext = true; event('debug.failure-armed', '下一执行步骤将强制失败'); return { ok: true }; }
       const task = runtime.task; if (!task) return { ok: false, error: '没有当前任务' };
-      if (action === 'pause' && task.state === 'RUNNING') task.state = 'PAUSED'; else if (action === 'resume' && task.state === 'PAUSED') task.state = 'RUNNING'; else if (action === 'skip' && ['RUNNING', 'PAUSED'].includes(task.state)) task.stepProgress = 1; else if (action === 'retry' && task.state === 'FAILED') { task.state = 'RUNNING'; task.stepProgress = 0; } else if (action === 'clear' && ['SUCCEEDED', 'FAILED'].includes(task.state)) { runtime.task = null; runtime.deviceStatus = 'IDLE'; } else return { ok: false, error: '当前状态不支持该操作' };
+      if (task.recoveryHold && ['resume', 'retry', 'skip'].includes(action)) return { ok: false, error: '请先核对重启前的制作结果' };
+      if (action === 'pause' && task.state === 'RUNNING') task.state = 'PAUSED'; else if (action === 'resume' && task.state === 'PAUSED') task.state = 'RUNNING'; else if (action === 'skip' && ['RUNNING', 'PAUSED'].includes(task.state)) task.stepProgress = 1; else if (action === 'retry' && task.state === 'RETRY_WAIT' && task.failure?.retryable) { const stepId = task.recipe.steps[task.stepIndex].id; task.stepRetries ||= {}; task.stepRetries[stepId] = (task.stepRetries[stepId] || 0) + 1; task.attempt += 1; task.state = 'RUNNING'; task.stepProgress = 0; runtime.deviceStatus = 'BUSY'; } else if (action === 'clear' && ['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(task.state)) { runtime.task = null; runtime.deviceStatus = 'IDLE'; } else return { ok: false, error: '当前状态不支持该操作' };
       event(`task.${action}`, `执行调试命令：${action}`); return { ok: true };
     },
     update_override: async (payload) => { Object.assign(runtime.override, payload); return { ok: true }; }, save_recipe: async () => ({ ok: true }), reload_config: async () => ({ ok: true }),
@@ -71,6 +72,10 @@ function render(data) {
   renderRecipes(recipes, capabilities); renderInventory(runtime.inventory);
   if (!$('#recipeEditor').matches(':focus')) { const selected = recipes.find((item) => item.recipeId === selectedRecipeId); if (selected && $('#recipeEditor').dataset.recipeId !== selected.recipeId) { $('#recipeEditor').value = JSON.stringify(selected, null, 2); $('#recipeEditor').dataset.recipeId = selected.recipeId; } }
   const isReady = task?.state === 'SUCCEEDED'; const isFailed = task?.state === 'FAILED'; const isMaking = task && ['RECEIVED', 'VALIDATING', 'ACKNOWLEDGED', 'RUNNING', 'PAUSED', 'RETRY_WAIT'].includes(task.state);
+  $('#retryTask').disabled = task?.state !== 'RETRY_WAIT' || !task?.failure?.retryable || !!task?.recoveryHold;
+  $('#pauseResume').disabled = !['RUNNING', 'PAUSED'].includes(task?.state) || !!task?.recoveryHold;
+  $('#skipStep').disabled = !['RUNNING', 'PAUSED'].includes(task?.state) || !!task?.recoveryHold;
+  $('#clearButton').disabled = !['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(task?.state);
   setVisible('#idleView', !task); setVisible('#makingView', isMaking); setVisible('#readyView', isReady); setVisible('#errorView', isFailed);
   if (isMaking) { window.DrinkVisual?.render(task); window.DrinkVisual?.updateProgress(task); } else window.DrinkVisual?.reset();
   if (task) {

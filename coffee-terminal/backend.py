@@ -51,7 +51,7 @@ class CoffeeDeviceRuntime:
         recovery_hold = bool(self.mode == "remote" and recovered_task and recovered_task.get("state") in ACTIVE_STATES)
         if recovery_hold:
             previous_state = recovered_task.get("state")
-            recovered_task.update({"state": "PAUSED", "message": "重启恢复后等待后台对账或人工继续", "recoveryPreviousState": previous_state})
+            recovered_task.update({"state": "PAUSED", "message": "重启恢复后等待后台对账，禁止直接继续制作", "recoveryPreviousState": previous_state, "recoveryHold": True})
             self.store.save_job(recovered_task)
         self.command_cursor: str | None = self.store.get_meta("command_cursor")
         self.last_synced_capability: tuple[str, int] | None = None
@@ -139,7 +139,7 @@ class CoffeeDeviceRuntime:
             "ACKNOWLEDGED": "RESERVED",
             "RUNNING": "BUSY",
             "PAUSED": "BUSY",
-            "RETRY_WAIT": "FAILED",
+            "RETRY_WAIT": "BUSY",
             "FAILED": "FAILED",
             "SUCCEEDED": "READY",
             "CANCELLED": "IDLE",
@@ -362,6 +362,8 @@ class CoffeeDeviceRuntime:
                 return {"ok": False, "reasonCode": "NO_ACTIVE_TASK", "error": "没有当前任务"}
             if target_task_id and target_task_id != task.get("taskId"):
                 return {"ok": False, "reasonCode": "TASK_MISMATCH", "error": "命令目标不是当前任务", "currentTaskId": task.get("taskId"), "targetTaskId": target_task_id}
+            if task.get("recoveryHold") and action in {"resume", "retry", "skip"}:
+                return {"ok": False, "reasonCode": "RECOVERY_REQUIRES_RECONCILIATION", "error": "重启后的物理结果未知，需核对结果并受控取消旧任务，不能直接继续制作"}
             if action == "pause" and task["state"] == "RUNNING":
                 task["state"] = "PAUSED"; task["message"] = "任务已暂停"; self._persist_task(task); self._emit("task.paused", task["message"], self._task_ref(task))
             elif action == "resume" and task["state"] == "PAUSED":
@@ -371,7 +373,7 @@ class CoffeeDeviceRuntime:
                 self.inventory.release(task["taskId"], self.inventory.requirements({"steps": [step]}))
                 self._emit("step.skipped", f"已跳过 {step['name']}", {**self._task_ref(task), "stepId": step["id"]})
                 self._advance_step(task)
-            elif action == "retry" and task["state"] == "FAILED":
+            elif action == "retry" and task["state"] == "RETRY_WAIT":
                 failure = task.get("failure", {})
                 step_id = failure.get("stepId")
                 retries_used = int(task.get("stepRetries", {}).get(step_id, 0))
@@ -384,6 +386,7 @@ class CoffeeDeviceRuntime:
                     return {"ok": False, "error": "重试所需物料不足", "details": detail}
                 task.setdefault("stepRetries", {})[step_id] = retries_used + 1
                 task.update({"state": "RUNNING", "stepProgress": 0.0, "stepElapsed": 0.0, "stepPrechecked": False, "attempt": task.get("attempt", 1) + 1, "message": "任务重试"})
+                self.runtime["deviceStatus"] = "BUSY"
                 task.update(self._task_progress_fields(task))
                 self._persist_task(task); self._emit("task.retry", "任务开始重试", self._task_ref(task)); self._inventory_changed()
             elif action == "cancel" and task["state"] in ACTIVE_STATES:
@@ -446,14 +449,16 @@ class CoffeeDeviceRuntime:
         if consume:
             self._consume_step(task, step)
         self.inventory.release(task["taskId"])
-        task["state"] = "FAILED"; task["message"] = profile["message"]
         retries_used = int(task.get("stepRetries", {}).get(step["id"], 0))
         max_retries = int(profile.get("maxRetries", 0))
-        task["failure"] = {"code": profile["errorCode"], "stepId": step["id"], "retryable": bool(profile.get("retryable")) and retries_used < max_retries, "retriesUsed": retries_used, "maxRetries": max_retries, "consumedOnFailure": consume}
-        self.runtime["deviceStatus"] = "FAILED"
+        retryable = bool(profile.get("retryable")) and retries_used < max_retries
+        task["state"] = "RETRY_WAIT" if retryable else "FAILED"
+        task["message"] = profile["message"]
+        task["failure"] = {"code": profile["errorCode"], "stepId": step["id"], "retryable": retryable, "retriesUsed": retries_used, "maxRetries": max_retries, "consumedOnFailure": consume}
+        self.runtime["deviceStatus"] = "BUSY" if retryable else "FAILED"
         self._progress_reports.pop(task["taskId"], None)
         self._persist_task(task)
-        self._emit("task.failed", task["message"], {**self._task_ref(task), "failure": task["failure"]})
+        self._emit("task.retry_wait" if retryable else "task.failed", task["message"], {**self._task_ref(task), "failure": task["failure"]})
         self._inventory_changed()
 
     def _advance_step(self, task: dict[str, Any]) -> None:

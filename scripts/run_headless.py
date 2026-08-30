@@ -21,7 +21,7 @@ def main() -> None:
     parser.add_argument("--env-file", type=Path)
     parser.add_argument("--duration", type=float, default=0, help="exit after N seconds; 0 means until interrupted")
     parser.add_argument("--status-every", type=float, default=5)
-    parser.add_argument("--resume-recovered", action="store_true", help="explicitly resume a PAUSED crash-recovery task")
+    parser.add_argument("--resume-recovered", action="store_true", help="legacy option; remote recoveryHold tasks reject resume and require reconciliation")
     args = parser.parse_args()
     if args.env_file:
         load_env_file(args.env_file.resolve())

@@ -453,11 +453,11 @@ POST /api/v1/devices/{deviceId}/events
 
 `inventory.reserved.payload.materials` 是整杯按 `materialId` 汇总的预占映射。预占释放目前通过后续库存快照反映，没有单独的 `inventory.released` 事件。
 
-### 8.4 失败事件
+### 8.4 故障等待重试事件
 
 ```json
 {
-  "type": "task.failed",
+  "type": "task.retry_wait",
   "payload": {
     "taskId": "task-001",
     "orderId": "order-1024",
@@ -474,7 +474,7 @@ POST /api/v1/devices/{deviceId}/events
 }
 ```
 
-后台应以 `failure.retryable` 为设备当前判定，不应只根据错误码自行假设可以重试。
+以上故障尚可重试，不能触发退款或释放设备。重试耗尽或不可重试时才发送 `task.failed`，其中 `failure.retryable=false`，该任务随后不得重试。后台不应只根据错误码自行假设可以重试。
 
 事件发送前进入 SQLite Outbox，网络失败后跨重启重发。后台必须容忍至少一次投递产生的重复与乱序，以 `eventId` 去重，并以任务 revision、库存版本和完整快照做状态校正。永久 4xx 会进入终端死信而不是阻塞队首，运营侧应监控健康接口中的积压和死信数量。
 
@@ -865,4 +865,11 @@ QUEUED → DISPATCHED → ACCEPTED → MAKING → READY
    └──────────────→ CANCELLED / EXPIRED / FAILED
 ```
 
-同一设备只派发一个活动任务。客户只能取消仍在 `QUEUED` 的订单；命令已经交给设备后，网页不能越过终端安全状态机强制取消。当前不收款，因此失败不触发退款；支付接入后必须增加独立 payment/refund 状态机和幂等 webhook Inbox。
+同一设备只派发一个活动任务。客户只能取消仍在 `QUEUED` 的订单；命令已经交给设备后，网页不能越过终端安全状态机强制取消。在线支付的退款由云端独立 payment/refund 状态机处理；设备不直接调用支付渠道。`TEST_FREE` 不产生真实退款。
+
+### 暂停、重试与重启恢复（2026-08-30）
+
+- 可重试且未耗尽次数：设备 `RETRY_WAIT`、`deviceStatus=BUSY`，发送 `task.retry_wait`。云端任务同为 `RETRY_WAIT`，订单仍 `MAKING`，不退款、不派下一杯。`retry` 仅允许此状态，增加 attempt 后发送 `task.retry`；耗尽或不可重试才发送最终 `task.failed`。
+- 普通 `task.paused` / `task.resumed` 对应暂停/恢复；`FAILED`、`SUCCEEDED`、`CANCELLED` 不允许 retry/resume 复活。`clear` 不允许删除暂停或等待重试中的任务。`task.cancelled` 是最终放弃，云端幂等创建必要的退款意图。
+- 远程模式重启时，未完成任务变为 `PAUSED`、`recoveryHold=true`、设备 `RECOVERING`，发送带新 `taskRevision` 的 `task.recovered`。云端进入 `HOLD`；普通 resume/retry/skip 被拒绝，需核对实际结果，并通过受控取消释放旧任务。云端业务裁决不等于硬件已经停止。
+- 生命周期事件携带 `taskId`、`orderId`、`taskRevision`；云端统一检查订单、任务和制作命令关联。旧 revision、相同 revision 的冲突及终态后的事件不会倒退状态。进度仍按 5% 增量或最长 5 秒上报，云端仅缓存最新进度，不由此更新 SQL 制作状态。
