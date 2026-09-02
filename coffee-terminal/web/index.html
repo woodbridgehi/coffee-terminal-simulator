@@ -25,21 +25,28 @@
       </header>
 
       <div class="display-content" id="idleView">
-        <p class="quiet-label">新鲜现制 · 即点即做</p>
-        <h1>扫码点咖啡</h1>
+        <div class="idle-quote-wrap" id="idleQuoteWrap">
+          <p class="idle-quote" id="idleQuote">“ 每一颗咖啡豆，都跨越了北回归线的阳光与海拔 ”</p>
+        </div>
+        <p class="quiet-label">WOODBRIDGE RESERVE · 精品现磨</p>
+        <h1>扫码即刻制作</h1>
         <p class="subhead">用手机扫描下方二维码，即可下单并观看制作过程</p>
-        <div class="qr-frame"><img id="qrImage" alt="咖啡下单二维码" /></div>
+        <div class="qr-frame" id="qrFrame">
+          <div class="qr-ambient-glow"></div>
+          <img id="qrImage" alt="咖啡下单二维码" />
+        </div>
         <p class="qr-note" id="qrNote">扫码后 <b>在手机完成点单与支付</b>，咖啡即刻开始制作</p>
       </div>
 
       <div class="making-view is-hidden" id="makingView">
         <p class="quiet-label" id="orderId">订单处理中</p>
         <div class="pickup-badge mini" id="makingPickupBadge">
-          <span class="pickup-label">取单号</span>
+          <span class="pickup-label">取杯口令</span>
           <strong class="pickup-number" id="makingPickupCode">—</strong>
         </div>
         <h1 id="recipeName">冰拿铁</h1>
         <div class="coffee-stage" id="coffeeStage" aria-hidden="true">
+          <div class="coffee-halo" id="coffeeHalo"></div>
           <svg class="drink-visual" viewBox="0 0 360 320" role="presentation">
             <defs>
               <clipPath id="drinkClip"><path id="drinkClipPath" d="M92 78 L108 254 Q111 278 136 282 H224 Q249 278 252 254 L268 78 Z" /></clipPath>
@@ -48,10 +55,12 @@
               <filter id="softShadow"><feGaussianBlur stdDeviation="7"/></filter>
             </defs>
             <ellipse class="drink-shadow" cx="180" cy="292" rx="88" ry="12" />
-            <g class="drink-pour-system">
-              <path class="brew-nozzle" d="M163 12 H197 L194 38 H166 Z" />
-              <path class="pour-stream brew-stream" id="brewStream" d="M180 36 V126" />
-              <path class="pour-stream milk-stream" id="milkStream" d="M207 34 Q210 77 196 130" />
+            <g class="pour-group">
+              <path class="brew-nozzle" d="M166 12 H194 V24 H166 Z" />
+              <path class="pour-stream brew-stream" id="brewStream" d="M180 24 V138" />
+              <circle class="brew-droplet" id="brewDroplet1" cx="180" cy="46" r="3.5" />
+              <circle class="brew-droplet" id="brewDroplet2" cx="180" cy="68" r="2.8" />
+              <path class="pour-stream milk-stream" id="milkStream" d="M180 24 V138" />
               <path class="pour-stream water-stream" id="waterStream" d="M151 36 Q150 76 165 132" />
             </g>
             <g class="steam-group">
@@ -87,14 +96,15 @@
       </div>
 
       <div class="ready-view is-hidden" id="readyView">
+        <p class="ready-kicker">— CRAFTED WITH CARE · 倾心现磨 —</p>
         <div class="ready-mark">✓</div>
-        <div class="pickup-badge" id="readyPickupBadge">
-          <span class="pickup-label">取杯口令 / 取单号</span>
+        <div class="pickup-badge pickup-seal" id="readyPickupBadge">
+          <span class="pickup-label">ORDER NO. / 取杯口令</span>
           <strong class="pickup-number" id="readyPickupCode">—</strong>
         </div>
         <p class="quiet-label">订单已完成</p>
         <h1>请取走您的咖啡</h1>
-        <p class="subhead" id="readyOrder">请核对取单号与饮品</p>
+        <p class="subhead" id="readyOrder">请核对取单号与饮品 · 慢品醇香</p>
         <p class="countdown-note" id="readyCountdown">10 秒后自动返回点单待机</p>
         <button class="clear-button" id="clearButton">返回待机</button>
       </div>

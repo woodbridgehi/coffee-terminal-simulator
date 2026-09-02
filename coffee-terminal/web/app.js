@@ -187,10 +187,22 @@ function render(data) {
     $('#taskTitle').textContent = task.recipe?.name || '咖啡制作';
     $('#taskMeta').textContent = `${displayOrderNo} · ${task.message || ''}`;
     $('#recipeName').textContent = task.recipe?.name || '精品咖啡';
+function enrichStepName(name) {
+  if (!name) return '正在精心制作';
+  if (name.includes('准备') || name.includes('落杯') || name.includes('cup')) return '臻选温杯 · 唤醒风味基底';
+  if (name.includes('萃取') || name.includes('brew')) return '黄金萃取 · 激发坚果黑巧醇香';
+  if (name.includes('牛奶') || name.includes('鲜奶') || name.includes('milk')) return '微泡打发 · 注入丝绒鲜奶';
+  if (name.includes('水') || name.includes('water')) return '清润滴滤 · 舒展纯正原香';
+  if (name.includes('冰') || name.includes('ice')) return '纯净冰晶 · 晶透锁鲜降温';
+  if (name.includes('糖浆') || name.includes('榛果') || name.includes('syrup')) return '风味注入 · 调和特调醇韵';
+  if (name.includes('封杯') || name.includes('出杯') || name.includes('serve')) return '倾心敬奉 · 专属封盖就绪';
+  return name;
+}
+
     $('#orderId').textContent = `订单 ${displayOrderNo}`;
     $('#makingPickupCode').textContent = pickupCode;
     $('#readyPickupCode').textContent = pickupCode;
-    $('#currentStep').textContent = task.message || '正在准备';
+    $('#currentStep').textContent = enrichStepName(task.message);
     $('#stepCount').textContent = `步骤 ${task.stepIndex + 1} / ${total}`;
     $('#displayProgress').style.width = `${Math.round(Math.max(0, Math.min(1, overall)) * 100)}%`;
     const seconds = Math.max(0, Math.ceil(Number.isFinite(task.remainingSeconds) ? task.remainingSeconds : planned - elapsed));
@@ -277,4 +289,23 @@ $('#failureRate').onchange = (event) => invoke('update_override', { globalFailur
 $('#recipeSelect').onchange = (event) => { selectedRecipeId = event.target.value; const recipe = state.recipes.find((item) => item.recipeId === selectedRecipeId); $('#recipeEditor').value = JSON.stringify(recipe, null, 2); $('#recipeEditor').dataset.recipeId = selectedRecipeId; };
 $('#saveRecipe').onclick = async () => { const result = await invoke('save_recipe', $('#recipeEditor').value); if (result?.ok) toast('配方已保存并刷新能力'); };
 $('#inventoryList').onclick = (event) => { const button = event.target.closest('[data-refill]'); if (button) invoke('adjust_inventory', { materialId: button.dataset.refill, mode: 'SET', amount: Number(button.dataset.capacity), reason: 'OPERATOR_REFILL' }); };
+const BARISTA_QUOTES = [
+  '“ 每一颗咖啡豆，都跨越了北回归线的阳光与海拔 ”',
+  '“ 9 bar 恒压萃取与 92°C 水温交响，唤醒原生醇香 ”',
+  '“ 暂停匆忙脚步，慢享一杯现磨的馥郁与温度 ”',
+  '“ 丝绒般微泡鲜奶，给浓缩以温柔拥抱 ”',
+  '“ 每一杯好咖啡，都是献给专注日常的礼赞 ”',
+];
+let quoteIndex = 0;
+setInterval(() => {
+  const quoteEl = $('#idleQuote');
+  if (!quoteEl || $('#idleView')?.classList.contains('is-hidden')) return;
+  quoteEl.classList.add('fade-out');
+  setTimeout(() => {
+    quoteIndex = (quoteIndex + 1) % BARISTA_QUOTES.length;
+    quoteEl.textContent = BARISTA_QUOTES[quoteIndex];
+    quoteEl.classList.remove('fade-out');
+  }, 600);
+}, 7500);
+
 refresh(); setInterval(refresh, 700);

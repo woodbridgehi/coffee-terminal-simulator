@@ -4,6 +4,25 @@
   margin: 0;
   display: grid;
   place-items: center;
+  position: relative;
+}
+
+.coffee-halo {
+  position: absolute;
+  width: 250px;
+  height: 250px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(215, 182, 126, .24) 0%, rgba(183, 138, 82, .08) 48%, transparent 72%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: .75;
+  filter: blur(12px);
+  animation: halo-pulse 3.6s ease-in-out infinite;
+}
+
+@keyframes halo-pulse {
+  0%, 100% { transform: scale(.95); opacity: .55; }
+  50% { transform: scale(1.06); opacity: .92; }
 }
 
 .drink-visual {
@@ -11,6 +30,8 @@
   height: 276px;
   overflow: visible;
   transform: translateY(7px);
+  position: relative;
+  z-index: 1;
 }
 
 .drink-shadow { fill: rgba(83, 49, 25, .16); filter: url(#softShadow); }
@@ -27,10 +48,11 @@
 .ice-cube { fill: rgba(242, 250, 252, .66); stroke: rgba(143, 180, 189, .72); stroke-width: 2; }
 .brew-nozzle { fill: #4a342a; opacity: 0; }
 .pour-stream { fill: none; stroke-linecap: round; stroke-width: 7; opacity: 0; transform-origin: top center; }
+.brew-droplet { fill: #5b311d; opacity: 0; }
 .brew-stream { stroke: #5b311d; }
 .milk-stream { stroke: #ead5b6; filter: drop-shadow(0 0 1px rgba(86, 54, 34, .42)); }
 .water-stream { stroke: rgba(133, 185, 199, .78); stroke-width: 6; }
-.aroma { fill: none; stroke: rgba(167, 113, 65, .38); stroke-width: 5; stroke-linecap: round; opacity: 0; }
+.aroma { fill: none; stroke: rgba(183, 138, 82, .45); stroke-width: 4.5; stroke-linecap: round; opacity: 0; filter: blur(.6px); }
 .lid-group { opacity: 0; transform: translateY(-34px); }
 .cup-lid-svg { fill: #3d2b22; stroke: #2e211b; stroke-width: 2; }
 .lid-top { fill: none; stroke: #b6875d; stroke-width: 8; stroke-linecap: round; }

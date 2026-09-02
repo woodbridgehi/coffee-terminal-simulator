@@ -90,8 +90,11 @@
       play(stage.querySelectorAll('.ice-drop'), { translateY: [-58, 0], opacity: [0, 1], delay: window.anime.stagger(130), duration: 850, ease: 'outBounce' });
       play(contents, { translateY: [3, 0], duration: 480, delay: 620, ease: 'out(3)' });
     } else if (cue === 'brew-stream') {
-      play('#brewStream', { scaleY: [.08, 1], opacity: [.35, 1], duration: 760, loop: true, alternate: true, ease: 'inOutSine' });
+      play('#brewDroplet1', { translateY: [0, 78], opacity: [0, 1, 0], duration: 680, delay: 80, ease: 'inQuad' });
+      play('#brewDroplet2', { translateY: [0, 78], opacity: [0, 1, 0], duration: 720, delay: 360, ease: 'inQuad' });
+      play('#brewStream', { scaleY: [.08, 1], opacity: [.35, 1], delay: 400, duration: 760, loop: true, alternate: true, ease: 'inOutSine' });
       play('.liquid-top', { translateY: [7, 0], duration: 1100, loop: true, alternate: true, ease: 'inOutSine' });
+      play('.foam-layer', { scale: [.95, 1.04], opacity: [.28, .62], duration: 1400, loop: true, alternate: true, ease: 'inOutSine' });
     } else if (cue === 'milk-pour') {
       play('#milkStream', { scaleY: [.1, 1], opacity: [.3, 1], duration: 880, loop: true, alternate: true, ease: 'inOutSine' });
       play('.liquid-base', { translateY: [10, 0], duration: 1300, loop: true, alternate: true, ease: 'inOutSine' });
@@ -114,14 +117,13 @@
     // Steam only for hot drinks. Layered rise + sway + fade reads as wispy steam (cheaper than a turbulence filter).
     if (stage.dataset.profile === 'americano' || stage.dataset.profile === 'espresso') {
       play('.aroma', {
-        translateY: [14, -26],
-        translateX: [-3, 4],
-        scaleY: [.9, 1.25],
-        opacity: [0, .5],
-        delay: window.anime.stagger(220),
-        duration: 2600,
+        translateY: [14, -30],
+        translateX: [-4, 5],
+        scaleY: [.85, 1.3],
+        opacity: [0, .6, 0],
+        delay: window.anime.stagger(240),
+        duration: 2800,
         loop: true,
-        alternate: true,
         ease: 'inOutSine',
       });
     }
