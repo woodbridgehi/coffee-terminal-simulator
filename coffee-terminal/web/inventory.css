@@ -9,23 +9,23 @@
   grid-template-columns: 1fr auto;
   gap: 7px 12px;
   padding: 10px;
-  border: 1px solid #343639;
-  border-radius: 5px;
-  background: #151617;
+  border: 1px solid var(--k-border);
+  border-radius: 8px;
+  background: var(--k-s1);
 }
 
-.inventory-name { color: #eee7df; font-size: 12px; }
-.inventory-amount { color: #aaa198; font: 10px 'DM Mono'; }
-.inventory-status { align-self: start; padding: 3px 6px; border-radius: 3px; font: 500 9px 'DM Mono'; }
-.inventory-status.ok { color: #70d69c; background: rgba(112, 214, 156, .1); }
-.inventory-status.low { color: #e8ae64; background: rgba(232, 174, 100, .1); }
-.inventory-status.critical { color: #ee806f; background: rgba(238, 128, 111, .1); }
+.inventory-name { color: var(--k-fg); font-size: 12px; }
+.inventory-amount { color: var(--k-sub); font: 10px var(--font-mono); }
+.inventory-status { align-self: start; padding: 3px 7px; border:1px solid currentColor;border-radius: 6px; font: 600 9px var(--font-mono); }
+.inventory-status.ok { color: var(--k-live); background: rgba(85,200,147,.08); }
+.inventory-status.low { color: #edb158; background: rgba(237,177,88,.08); }
+.inventory-status.critical { color: #ff7766; background: rgba(255,119,102,.08); }
 .inventory-bar { grid-column: 1 / -1; height: 4px; overflow: hidden; border-radius: 4px; background: #2b2d2f; }
-.inventory-bar span { display: block; height: 100%; background: #72bc8d; }
+.inventory-bar span { display: block; height: 100%; background: var(--k-live); }
 .inventory-item.low .inventory-bar span { background: #d89a51; }
 .inventory-item.critical .inventory-bar span { background: #d46554; }
 .inventory-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
-.inventory-actions button { padding: 0; border: 0; color: #d59a5c; background: none; cursor: pointer; font: 10px 'DM Mono'; }
+.inventory-actions button { padding: 0; border: 0; color: var(--k-brass); background: none; cursor: pointer; font: 10px var(--font-mono); }
 .empty-note { margin: 14px 0 0; color: #817970; font-size: 11px; }
 
 /* 使用系统等宽字体，避免依赖 Google Fonts */

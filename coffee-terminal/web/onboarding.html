@@ -3,52 +3,56 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Coffee Terminal · 首次安装</title>
-  <link rel="stylesheet" href="onboarding.css" />
+  <title>Coffee Terminal · 设备配对</title>
+  <link rel="icon" href="assets/brand/monogram-ct.svg" />
+  <link rel="stylesheet" href="onboarding.css?v=pairing-20260901" />
 </head>
 <body>
   <main class="shell">
-    <aside class="brand-panel">
-      <div class="brand-mark">☕</div>
-      <p class="eyebrow">COFFEE TERMINAL</p>
-      <h1>设备首次安装</h1>
-      <p class="brand-copy">完成部署资料与激活后，设备会自动进入咖啡终端界面。此向导仅在首次启动时出现。</p>
-      <ol class="steps"><li class="active">设备编号</li><li>门店部署</li><li>安全激活</li></ol>
+    <aside class="brand">
+      <div class="brand-lockup"><img src="assets/brand/logo-symbol.svg" alt="" /><span>COFFEE TERMINAL</span></div>
+      <h1>设备首次配对</h1>
+      <p class="brand-copy">本机已生成独立的软件身份。商户确认门店和设备名称后，终端会自动领取运行凭证，不需要人工激活码。</p>
+      <ol class="steps" id="steps">
+        <li class="step current" data-step="1"><span class="step-dot">1</span><span><b>软件身份</b><small>本机密钥 · 出厂模拟 SN</small></span></li>
+        <li class="step" data-step="2"><span class="step-dot">2</span><span><b>商户配对</b><small>配对码 · 门店 · 设备名称</small></span></li>
+        <li class="step" data-step="3"><span class="step-dot">3</span><span><b>自动接入</b><small>正式凭证 · MQTT · 上线</small></span></li>
+      </ol>
+      <img class="brand-art" src="assets/brand/badges/precision-brew.svg" alt="" />
     </aside>
     <section class="content">
-      <header><p class="eyebrow">INSTALLATION WIZARD</p><h2>配置这台咖啡终端</h2><p id="connection" class="muted">正在连接安装服务…</p></header>
-      <form id="setup-form" novalidate>
-        <section class="card">
-          <h3>1. 设备身份</h3>
-          <p class="hint">编号会自动生成受约束的设备 ID、序列号和本地实例 ID；请与后台预登记信息保持一致。</p>
-          <div class="grid two">
-            <label>设备编号 <input id="deviceNumber" inputmode="numeric" pattern="[0-9]{3,6}" maxlength="6" placeholder="例如 003" required /></label>
-            <label>生产年份 <select id="serialYear" required></select></label>
+      <header class="content-head">
+        <div class="connection" id="connection"><span></span>正在创建安全配对会话…</div>
+        <p class="eyebrow" id="stepEyebrow">STEP 1 / 3 · 软件身份</p>
+        <h2 id="stepTitle">正在准备这台终端</h2>
+        <p class="desc" id="stepDesc">设备编号由云端分配；设备名称和门店归属由商户后台确认。</p>
+      </header>
+      <div class="form-scroll">
+        <section class="success-panel" id="successPanel" hidden>
+          <div class="success-icon">✓</div><h2>设备已完成配对</h2>
+          <p>正式 HTTP 与 MQTT 凭证已安全写入本地。关闭此窗口后重新启动，即可进入咖啡终端。</p>
+          <div class="success-meta"><div><small>DEVICE ID</small><b id="sumDeviceId">—</b></div><div><small>模拟器 SN</small><b id="sumSerial">—</b></div><div><small>设备名称</small><b id="sumDeviceName">—</b></div><div><small>所属门店</small><b id="sumStoreName">—</b></div></div>
+        </section>
+        <section class="card pairing-card" id="pairingPanel" hidden>
+          <div class="identity-grid">
+            <div><small>模拟器出厂序列号</small><b id="serialNumber">—</b></div>
+            <div><small>云端设备 ID</small><b id="deviceId">—</b></div>
           </div>
-          <div class="generated"><span>deviceId</span><code id="deviceIdPreview">coffee-bot-…</code><span>序列号</span><code id="serialPreview">CB-YYYY-…</code></div>
-          <label>设备展示名称 <input id="deviceName" maxlength="120" placeholder="例如 上海浦东体验店 03 号机" required /></label>
-        </section>
-        <section class="card">
-          <h3>2. 门店部署</h3>
-          <div class="grid two">
-            <label>城市 <select id="cityCode" required></select></label>
-            <label>时区 <input id="timezone" readonly /></label>
-            <label>门店编号 <input id="storeNumber" inputmode="numeric" pattern="[0-9]{3,6}" maxlength="6" placeholder="例如 001" required /></label>
-            <label>门店 ID <input id="storeIdPreview" readonly /></label>
+          <div class="pairing-code-wrap">
+            <small>请在商户后台「我的设备 → 配对新设备」输入以下配对码</small>
+            <strong id="pairingCode">—</strong>
+            <span id="expiresAt">—</span>
           </div>
-          <label>店铺名称 <input id="storeName" maxlength="120" placeholder="例如 浦东体验店" required /></label>
-          <label>店铺简介 <textarea id="storeDescription" maxlength="300" placeholder="可选，最多 300 字"></textarea></label>
+          <div class="pairing-status" id="pairingStatus"><i></i><div><b>等待商户确认</b><p>商户确认门店和设备名称后，本机将自动领取正式凭证。</p></div></div>
+          <p class="security-note">这是软件模拟身份，用于验证完整配对流程。真实硬件将由安全芯片完成同样的签名证明；配对码短时有效且只能使用一次。</p>
         </section>
-        <section class="card activation">
-          <h3>3. 激活</h3>
-          <p class="hint">后台预登记后生成的一次性激活码。激活码不会写入本地配置或日志。</p>
-          <label>一次性激活码 <input id="activationCode" type="password" autocomplete="one-time-code" minlength="12" placeholder="粘贴激活码" required /></label>
-        </section>
-        <p id="error" class="error" role="alert"></p>
-        <button id="submit" class="primary" type="submit">完成安装并激活</button>
-      </form>
+      </div>
+      <footer class="wizard-foot">
+        <p id="error" role="alert"></p>
+        <div><span id="footNote">正在连接云端配对服务…</span><button id="retryBtn" class="btn ghost" type="button" hidden>重新生成配对码</button><button id="refreshBtn" class="btn primary" type="button" disabled>刷新配对状态</button></div>
+      </footer>
     </section>
   </main>
-  <script src="onboarding.js"></script>
+  <script src="onboarding.js?v=pairing-20260901"></script>
 </body>
 </html>

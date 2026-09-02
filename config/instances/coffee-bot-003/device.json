@@ -1,0 +1,35 @@
+{
+  "instanceId": "instance-coffee-bot-003",
+  "deviceId": "coffee-bot-756050",
+  "deviceName": "展厅 1 号",
+  "operatorId": "operator-demo-003",
+  "storeId": "store-demo-beijing-01",
+  "storeName": "AI 原点社区总店",
+  "cityCode": "CN-BJ",
+  "timezone": "Asia/Shanghai",
+  "environment": "development",
+  "backend": {
+    "mode": "remote",
+    "transport": "mqtt5",
+    "baseUrl": "https://coffee-api.woodbridge.top",
+    "requestTimeoutSeconds": 8,
+    "mqtt": {}
+  },
+  "localApi": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 9103
+  },
+  "enableConsole": true,
+  "serialNumber": "SIM-71313411E01C0680",
+  "registration": {
+    "status": "COMPLETED",
+    "completedAt": "2026-09-01T12:24:41.567758Z",
+    "profileSource": "SIMULATOR_PAIRING"
+  },
+  "simulatorIdentity": {
+    "kind": "SIMULATOR_SOFTWARE",
+    "serialNumber": "SIM-71313411E01C0680",
+    "publicKeyFingerprint": "2c349a3c9bef31b13a5a488e95abf6a9332083f96f9032033761aa619b86aa09"
+  }
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from http.client import IncompleteRead, RemoteDisconnected
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -39,18 +40,23 @@ class CloudClient:
     ) -> dict[str, Any]:
         body = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
         headers = {**self.headers, **(extra_headers or {})}
-        request = Request(f"{self.base_url}{path}", data=body, method=method, headers=headers)
-        try:
-            with urlopen(request, timeout=self.timeout) as response:
-                raw = response.read().decode("utf-8")
-                return json.loads(raw) if raw else {}
-        except HTTPError as exc:
-            retryable = exc.code in {408, 425, 429} or 500 <= exc.code <= 599
-            raise CloudError(str(exc), status=exc.code, retryable=retryable) from exc
-        except json.JSONDecodeError as exc:
-            raise CloudError(f"后台响应不是有效 JSON：{exc}", retryable=False) from exc
-        except (URLError, TimeoutError, OSError) as exc:
-            raise CloudError(str(exc), retryable=True) from exc
+        attempts = 2 if method.upper() in {"GET", "PUT"} else 1
+        for attempt in range(attempts):
+            request = Request(f"{self.base_url}{path}", data=body, method=method, headers=headers)
+            try:
+                with urlopen(request, timeout=self.timeout) as response:
+                    raw = response.read().decode("utf-8")
+                    return json.loads(raw) if raw else {}
+            except HTTPError as exc:
+                retryable = exc.code in {408, 425, 429} or 500 <= exc.code <= 599
+                raise CloudError(str(exc), status=exc.code, retryable=retryable) from exc
+            except json.JSONDecodeError as exc:
+                raise CloudError(f"后台响应不是有效 JSON：{exc}", retryable=False) from exc
+            except (IncompleteRead, RemoteDisconnected, URLError, TimeoutError, OSError) as exc:
+                if attempt + 1 < attempts:
+                    continue
+                raise CloudError(f"后台连接中断：{exc}", retryable=True) from exc
+        raise AssertionError("unreachable")
 
     def commands(self, cursor: str | None) -> dict[str, Any]:
         query = urlencode({"after": cursor or "", "limit": 10})
@@ -101,6 +107,16 @@ class CloudClient:
 
     def rotate_mqtt_credential(self) -> dict[str, Any]:
         return self.request("POST", f"/api/v1/devices/{self.device_id}/mqtt-credentials/rotate", {})
+
+    def simulator_pairing_session(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.request("POST", "/api/v1/simulator-bootstrap/sessions", payload)
+
+    def simulator_pairing_status(self, session_id: str, payload: dict[str, str]) -> dict[str, Any]:
+        query = urlencode(payload)
+        return self.request("GET", f"/api/v1/simulator-bootstrap/sessions/{session_id}?{query}")
+
+    def simulator_pairing_complete(self, session_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.request("POST", f"/api/v1/simulator-bootstrap/sessions/{session_id}/complete", payload)
 
     def debug_order(self, recipe_id: str, requested_at: str) -> dict[str, Any]:
         return self.request("POST", f"/api/v1/devices/{self.device_id}/debug/orders", {"deviceId": self.device_id, "recipeId": recipe_id, "source": "terminal-console", "requestedAt": requested_at})

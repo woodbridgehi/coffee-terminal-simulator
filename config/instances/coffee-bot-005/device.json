@@ -1,0 +1,14 @@
+{
+  "instanceId": "instance-coffee-bot-005",
+  "deviceId": "coffee-bot-005",
+  "deviceName": "深圳南山 1 号机",
+  "operatorId": "operator-demo-005",
+  "storeId": "store-demo-shenzhen-01",
+  "storeName": "深圳南山体验店",
+  "cityCode": "CN-SZ",
+  "timezone": "Asia/Shanghai",
+  "environment": "development",
+  "backend": {"mode": "remote", "transport": "mqtt5", "baseUrl": "https://coffee-api.woodbridge.top", "requestTimeoutSeconds": 8},
+  "localApi": {"enabled": true, "host": "127.0.0.1", "port": 9105},
+  "enableConsole": true
+}

@@ -15,6 +15,41 @@ from cloud import CloudClient  # noqa: E402
 
 
 class CloudClientIdentityTest(unittest.TestCase):
+    def test_get_retries_an_incomplete_response_once(self) -> None:
+        attempts = 0
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_args: object) -> None:
+                return
+
+            def do_GET(self) -> None:
+                nonlocal attempts
+                attempts += 1
+                raw = json.dumps({"status": "PAIRED"}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                if attempts > 1:
+                    self.wfile.write(raw)
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            client = CloudClient({
+                "deviceId": "device-1",
+                "backend": {"baseUrl": f"http://127.0.0.1:{server.server_port}"},
+            })
+            result = client.request("GET", "/pairing-status")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+        self.assertEqual(result, {"status": "PAIRED"})
+        self.assertEqual(attempts, 2)
+
     def test_activation_and_rotation_contracts(self) -> None:
         received: list[tuple[str, dict[str, str], dict]] = []
 

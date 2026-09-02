@@ -13,6 +13,7 @@ from typing import Any
 
 from cloud import CloudClient, CloudError
 from configuration import read_env_values, write_config, write_env_values
+from simulator_identity import SimulatorIdentity
 
 NUMBER_RE = re.compile(r"^[0-9]{3,6}$")
 
@@ -23,6 +24,8 @@ class OnboardingAdapter:
         self.config_path = config_path
         self.instance_dir = config_path.parent
         self.simulator_root = simulator_root
+        self.identity = SimulatorIdentity(simulator_root, self.instance_dir.name)
+        self.pairing_session_id: str | None = None
 
     def get_setup_state(self) -> dict[str, Any]:
         backend = self.config.get("backend", {})
@@ -42,6 +45,114 @@ class OnboardingAdapter:
             return CloudClient(self.config).onboarding_options()
         except CloudError as exc:
             return {"ok": False, "error": f"无法读取安装选项：{exc}"}
+
+    def _secret_paths(self) -> tuple[Path, Path]:
+        secret_path = self.simulator_root / ".secrets" / f"{self.instance_dir.name}.env"
+        return secret_path, secret_path.with_name(f"{secret_path.name}.pairing-pending")
+
+    def _pending_device_token(self) -> tuple[str, dict[str, str], Path, Path]:
+        secret_path, pending_path = self._secret_paths()
+        pending = read_env_values(pending_path if pending_path.exists() else secret_path)
+        token = pending.get("COFFEE_DEVICE_TOKEN")
+        if not token:
+            token = secrets.token_urlsafe(48)
+            pending["COFFEE_DEVICE_TOKEN"] = token
+            write_env_values(pending_path, pending)
+        return token, pending, secret_path, pending_path
+
+    def get_pairing_state(self) -> dict[str, Any]:
+        """Create a development-only pairing session using the local key pair."""
+        try:
+            nonce, proof = self.identity.proof("bootstrap")
+            response = CloudClient(self.config).simulator_pairing_session({
+                "serialNumber": self.identity.serial_number,
+                "publicKeyPem": self.identity.public_key_pem,
+                "nonce": nonce,
+                "proof": proof,
+            })
+            self._pending_device_token()
+            self.pairing_session_id = str(response["sessionId"])
+            return {
+                "ok": True,
+                "serialNumber": self.identity.serial_number,
+                "sessionId": self.pairing_session_id,
+                "deviceId": response.get("deviceId"),
+                "pairingCode": response.get("pairingCode"),
+                "expiresAt": response.get("expiresAt"),
+                "status": response.get("status"),
+                "publicKeyFingerprint": response.get("publicKeyFingerprint"),
+            }
+        except (CloudError, KeyError, OSError, TypeError, ValueError) as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def get_pairing_status(self) -> dict[str, Any]:
+        try:
+            if not self.pairing_session_id:
+                return {"ok": False, "error": "尚未创建配对会话"}
+            nonce, proof = self.identity.proof("status")
+            response = CloudClient(self.config).simulator_pairing_status(self.pairing_session_id, {
+                "serialNumber": self.identity.serial_number,
+                "nonce": nonce,
+                "proof": proof,
+            })
+            return {"ok": True, **response}
+        except (CloudError, OSError, TypeError, ValueError) as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def complete_pairing(self) -> dict[str, Any]:
+        try:
+            if not self.pairing_session_id:
+                raise ValueError("尚未创建配对会话")
+            device_token, pending, secret_path, pending_path = self._pending_device_token()
+            nonce, proof = self.identity.proof("provision")
+            response = CloudClient(self.config).simulator_pairing_complete(self.pairing_session_id, {
+                "serialNumber": self.identity.serial_number,
+                "nonce": nonce,
+                "proof": proof,
+                "deviceToken": device_token,
+            })
+            device_id = str(response.get("deviceId") or "")
+            mqtt = response.get("mqttCredential")
+            if not device_id or not isinstance(mqtt, dict) or not mqtt.get("password"):
+                raise ValueError("配对已确认，但设备凭证签发不完整；请重试")
+            pending.update({
+                "COFFEE_TRANSPORT": "mqtt5",
+                "MQTT_HOST": str(mqtt.get("host") or "mqtt-api.woodbridge.top"),
+                "MQTT_PORT": str(mqtt.get("port") or 8883),
+                "MQTT_USERNAME": str(mqtt.get("username") or device_id),
+                "MQTT_PASSWORD": str(mqtt["password"]),
+            })
+            write_env_values(pending_path, pending)
+            profile = response.get("profile") if isinstance(response.get("profile"), dict) else {}
+            persisted = {key: value for key, value in self.config.items() if key != "_configPath"}
+            persisted.update({
+                "deviceId": device_id,
+                "serialNumber": self.identity.serial_number,
+                "instanceId": persisted.get("instanceId") or f"instance-{device_id}",
+                "deviceName": profile.get("deviceName") or persisted.get("deviceName") or device_id,
+                "storeName": profile.get("storeName") or persisted.get("storeName") or "",
+                "registration": {
+                    "status": "COMPLETED",
+                    "completedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "profileSource": "SIMULATOR_PAIRING",
+                },
+                "simulatorIdentity": {
+                    "kind": "SIMULATOR_SOFTWARE",
+                    "serialNumber": self.identity.serial_number,
+                    "publicKeyFingerprint": response.get("publicKeyFingerprint"),
+                },
+            })
+            pending_path.replace(secret_path)
+            secret_path.chmod(0o600)
+            write_config(self.config_path, persisted)
+            return {
+                "ok": True, "deviceId": device_id,
+                "serialNumber": self.identity.serial_number,
+                "deviceName": persisted["deviceName"],
+                "storeName": persisted["storeName"],
+            }
+        except (CloudError, OSError, TypeError, ValueError) as exc:
+            return {"ok": False, "error": str(exc)}
 
     @staticmethod
     def _number(value: Any, name: str) -> str:

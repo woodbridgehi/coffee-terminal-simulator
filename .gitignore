@@ -4,9 +4,33 @@ __pycache__/
 .venv/
 venv/
 .secrets/
+.identity/
 
 # Runtime inventory is device-local mutable state.
 config/instances/*/state/inventory.json
 config/instances/*/state/runtime.db
 config/instances/*/state/runtime.db-wal
 config/instances/*/state/runtime.db-shm
+
+# ---- 以下为补充（避免与上方原有规则重复）----
+# Lint / 类型检查 / 测试缓存
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Node（tests/*.mjs、web/vendor 之外可能安装依赖）
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# IDE / 编辑器
+.idea/
+.vscode/
+
+# 日志与临时文件
+*.log
+*.tmp
+*.swp

@@ -86,6 +86,14 @@ uv pip install --python .venv/bin/python -r requirements.lock
 
 `start-all.command` 会扫描 `config/instances/*/device.json`。每个实例启动独立窗口、独立本地 API 端口和独立库存文件。
 
+当前演示环境额外预置了三台实例：
+
+| 实例 | 城市 | 门店 | 饮品数 | 本地 API |
+|---|---|---|---:|---:|
+| `coffee-bot-003` | 北京 | 北京朝阳体验店 | 4 | 9103 |
+| `coffee-bot-004` | 上海 | 上海静安体验店 | 4 | 9104 |
+| `coffee-bot-005` | 深圳 | 深圳南山体验店 | 4 | 9105 |
+
 当前示例：
 
 - `coffee-bot-001`：已切换为 `remote` 模式；实例目录名为 `coffee-bot-001`，当前协议 `deviceId` 是管理台登记的 `coffee-bot`。
