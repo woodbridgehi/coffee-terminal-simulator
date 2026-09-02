@@ -253,7 +253,8 @@ class CoffeeDeviceRuntime:
                 return {"ok": True, **self.cloud.debug_order(recipe_id, now())}
             except CloudError as exc:
                 return {"ok": False, "error": f"后台调试下单失败：{exc}"}
-        return self._accept_task({"messageId": f"local-{uuid.uuid4()}", "type": "MAKE_DRINK", "taskId": f"task-{uuid.uuid4().hex[:10]}", "orderId": f"order-{uuid.uuid4().hex[:6]}", "recipeId": recipe_id})
+        demo_order_no = f"C{datetime.now().strftime('%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        return self._accept_task({"messageId": f"local-{uuid.uuid4()}", "type": "MAKE_DRINK", "taskId": f"task-{uuid.uuid4().hex[:10]}", "orderId": f"order-{uuid.uuid4().hex[:6]}", "orderNo": demo_order_no, "recipeId": recipe_id})
 
     def _accept_task(self, command: dict[str, Any]) -> dict[str, Any]:
         with self.lock:
@@ -292,7 +293,7 @@ class CoffeeDeviceRuntime:
                 return self._reject(command, "MATERIAL_INSUFFICIENT", detail or {})
             execution_recipe = self.catalog.materialize_execution_recipe(recipe)
             planned_duration = sum(float(step["durationSeconds"]) for step in execution_recipe["steps"])
-            task = {"taskId": command["taskId"], "orderId": command.get("orderId"), "messageId": command.get("messageId"), "recipe": execution_recipe, "state": "ACKNOWLEDGED", "stepIndex": 0, "stepProgress": 0.0, "overallProgress": 0.0, "stepElapsed": 0.0, "elapsedSeconds": 0.0, "remainingSeconds": planned_duration, "stepPrechecked": False, "attempt": 1, "stepRetries": {}, "plannedDurationSeconds": planned_duration, "message": "任务已接受，准备制作"}
+            task = {"taskId": command["taskId"], "orderId": command.get("orderId"), "orderNo": command.get("orderNo"), "messageId": command.get("messageId"), "recipe": execution_recipe, "state": "ACKNOWLEDGED", "stepIndex": 0, "stepProgress": 0.0, "overallProgress": 0.0, "stepElapsed": 0.0, "elapsedSeconds": 0.0, "remainingSeconds": planned_duration, "stepPrechecked": False, "attempt": 1, "stepRetries": {}, "plannedDurationSeconds": planned_duration, "message": "任务已接受，准备制作"}
             self._progress_reports[task["taskId"]] = (0.0, time.monotonic())
             self.runtime["task"] = task; self.runtime["deviceStatus"] = "RESERVED"
             self._persist_task(task)

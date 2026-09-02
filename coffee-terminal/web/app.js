@@ -66,13 +66,15 @@ function renderInventory(snapshot) {
 }
 
 let readyTimer = null;
+let readyDeadline = 0;
 let cancelledTimer = null;
+let cancelledDeadline = 0;
 let lastQrUrl = '';
 
-function formatPickupCode(orderId, taskId) {
-  const raw = String(orderId || taskId || '').trim();
+function formatPickupCode(orderNo, orderId, taskId) {
+  // 优先匹配业务单号（如 C0903-8E1A0F -> 8E1A），与手机端保持绝对一致
+  const raw = String(orderNo || orderId || taskId || '').trim();
   if (!raw) return '—';
-  // Match standard order format like C0903-8E1A0F -> 8E1A
   const hyphenParts = raw.split('-');
   if (hyphenParts.length >= 2) {
     const last = hyphenParts[hyphenParts.length - 1];
@@ -84,48 +86,46 @@ function formatPickupCode(orderId, taskId) {
   return raw.slice(-4).toUpperCase();
 }
 
-function startReadyCountdown() {
+function startReadyCountdown(durationSeconds = 10) {
   if (readyTimer) return;
-  let remaining = 15;
+  readyDeadline = Date.now() + durationSeconds * 1000;
   const updateNote = () => {
+    const remaining = Math.max(0, Math.ceil((readyDeadline - Date.now()) / 1000));
     const el = $('#readyCountdown');
     if (el) el.textContent = `${remaining} 秒后自动返回点单待机`;
     if (remaining <= 0) {
-      clearInterval(readyTimer);
-      readyTimer = null;
+      stopReadyCountdown();
       invoke('command', 'clear');
-      return;
     }
-    remaining -= 1;
   };
   updateNote();
-  readyTimer = setInterval(updateNote, 1000);
+  readyTimer = setInterval(updateNote, 250);
 }
 
 function stopReadyCountdown() {
   if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
+  readyDeadline = 0;
 }
 
-function startCancelledCountdown() {
+function startCancelledCountdown(durationSeconds = 10) {
   if (cancelledTimer) return;
-  let remaining = 10;
+  cancelledDeadline = Date.now() + durationSeconds * 1000;
   const updateNote = () => {
+    const remaining = Math.max(0, Math.ceil((cancelledDeadline - Date.now()) / 1000));
     const el = $('#cancelledCountdown');
     if (el) el.textContent = `${remaining} 秒后自动返回点单待机`;
     if (remaining <= 0) {
-      clearInterval(cancelledTimer);
-      cancelledTimer = null;
+      stopCancelledCountdown();
       invoke('command', 'clear');
-      return;
     }
-    remaining -= 1;
   };
   updateNote();
-  cancelledTimer = setInterval(updateNote, 1000);
+  cancelledTimer = setInterval(updateNote, 250);
 }
 
 function stopCancelledCountdown() {
   if (cancelledTimer) { clearInterval(cancelledTimer); cancelledTimer = null; }
+  cancelledDeadline = 0;
 }
 
 function render(data) {
@@ -177,16 +177,17 @@ function render(data) {
   if (isMaking) { window.DrinkVisual?.render(task); window.DrinkVisual?.updateProgress(task); } else window.DrinkVisual?.reset();
   $('#taskState').className = `state ${String(task?.state || 'idle').toLowerCase()}`;
   if (task) {
-    const pickupCode = formatPickupCode(task.orderId, task.taskId);
+    const pickupCode = formatPickupCode(task.orderNo, task.orderId, task.taskId);
     const total = task.recipe?.steps?.length || 1;
     const planned = task.plannedDurationSeconds || (task.recipe?.steps || []).reduce((sum, step) => sum + Number(step.durationSeconds || 0), 0);
     const elapsed = (task.recipe?.steps || []).slice(0, task.stepIndex).reduce((sum, step) => sum + Number(step.durationSeconds || 0), 0) + Number(task.recipe?.steps?.[task.stepIndex]?.durationSeconds || 0) * Number(task.stepProgress || 0);
     const overall = Number.isFinite(task.overallProgress) ? task.overallProgress : (planned > 0 ? elapsed / planned : 0);
+    const displayOrderNo = task.orderNo || task.orderId || task.taskId;
     $('#taskState').textContent = task.state;
     $('#taskTitle').textContent = task.recipe?.name || '咖啡制作';
-    $('#taskMeta').textContent = `${task.orderId || task.taskId} · ${task.message || ''}`;
+    $('#taskMeta').textContent = `${displayOrderNo} · ${task.message || ''}`;
     $('#recipeName').textContent = task.recipe?.name || '精品咖啡';
-    $('#orderId').textContent = `订单 ${task.orderId || task.taskId}`;
+    $('#orderId').textContent = `订单 ${displayOrderNo}`;
     $('#makingPickupCode').textContent = pickupCode;
     $('#readyPickupCode').textContent = pickupCode;
     $('#currentStep').textContent = task.message || '正在准备';
@@ -194,7 +195,7 @@ function render(data) {
     $('#displayProgress').style.width = `${Math.round(Math.max(0, Math.min(1, overall)) * 100)}%`;
     const seconds = Math.max(0, Math.ceil(Number.isFinite(task.remainingSeconds) ? task.remainingSeconds : planned - elapsed));
     $('#remainingTime').textContent = `预计还需 ${seconds} 秒`;
-    $('#readyOrder').textContent = `取餐码 ${pickupCode} · ${task.recipe?.name || '咖啡'}`;
+    $('#readyOrder').textContent = `取餐码 ${pickupCode} · ${displayOrderNo}`;
     if (isHold) {
       $('#errorLabel').textContent = '安全核验中';
       $('#errorTitle').textContent = '设备正在自检';
