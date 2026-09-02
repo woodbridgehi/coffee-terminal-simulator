@@ -145,13 +145,22 @@ class CoffeeDeviceRuntime:
             "CANCELLED": "IDLE",
         }.get(str(task.get("state")), "RECOVERING")
 
-    @staticmethod
-    def _qr_data_url(value: str) -> str:
+    _qr_cache: dict[str, str] = {}
+
+    @classmethod
+    def _qr_data_url(cls, value: str) -> str:
         if not value:
             return ""
+        cached = cls._qr_cache.get(value)
+        if cached:
+            return cached
         image = qrcode.make(value, border=2)
         buffer = BytesIO(); image.save(buffer, format="PNG")
-        return "data:image/png;base64," + b64encode(buffer.getvalue()).decode("ascii")
+        encoded = "data:image/png;base64," + b64encode(buffer.getvalue()).decode("ascii")
+        if len(cls._qr_cache) > 50:
+            cls._qr_cache.clear()
+        cls._qr_cache[value] = encoded
+        return encoded
 
     # pywebview and local API reads
     def get_state(self) -> dict[str, Any]:

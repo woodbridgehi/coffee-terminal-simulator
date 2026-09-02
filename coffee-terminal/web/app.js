@@ -65,41 +65,214 @@ function renderInventory(snapshot) {
   if (html !== renderCache.inventory) { renderCache.inventory = html; $('#inventoryList').innerHTML = html; }
 }
 
+let readyTimer = null;
+let cancelledTimer = null;
+let lastQrUrl = '';
+
+function formatPickupCode(orderId, taskId) {
+  const raw = String(orderId || taskId || '').trim();
+  if (!raw) return '—';
+  // Match standard order format like C0903-8E1A0F -> 8E1A
+  const hyphenParts = raw.split('-');
+  if (hyphenParts.length >= 2) {
+    const last = hyphenParts[hyphenParts.length - 1];
+    if (last.length >= 4) return last.slice(0, 4).toUpperCase();
+    return last.toUpperCase();
+  }
+  const digits = raw.match(/\d{3,4}$/);
+  if (digits) return digits[0];
+  return raw.slice(-4).toUpperCase();
+}
+
+function startReadyCountdown() {
+  if (readyTimer) return;
+  let remaining = 15;
+  const updateNote = () => {
+    const el = $('#readyCountdown');
+    if (el) el.textContent = `${remaining} 秒后自动返回点单待机`;
+    if (remaining <= 0) {
+      clearInterval(readyTimer);
+      readyTimer = null;
+      invoke('command', 'clear');
+      return;
+    }
+    remaining -= 1;
+  };
+  updateNote();
+  readyTimer = setInterval(updateNote, 1000);
+}
+
+function stopReadyCountdown() {
+  if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
+}
+
+function startCancelledCountdown() {
+  if (cancelledTimer) return;
+  let remaining = 10;
+  const updateNote = () => {
+    const el = $('#cancelledCountdown');
+    if (el) el.textContent = `${remaining} 秒后自动返回点单待机`;
+    if (remaining <= 0) {
+      clearInterval(cancelledTimer);
+      cancelledTimer = null;
+      invoke('command', 'clear');
+      return;
+    }
+    remaining -= 1;
+  };
+  updateNote();
+  cancelledTimer = setInterval(updateNote, 1000);
+}
+
+function stopCancelledCountdown() {
+  if (cancelledTimer) { clearInterval(cancelledTimer); cancelledTimer = null; }
+}
+
 function render(data) {
   state = data; const { config, runtime, recipes, capabilities } = data; const task = runtime.task;
   $('#deviceName').textContent = config.deviceName; $('#deviceTag').textContent = config.deviceId;
   $('#connectionText').textContent = runtime.connection === 'ONLINE' ? '设备在线' : runtime.connection === 'CONNECTING' ? '正在连接后台' : '设备离线';
   $('#consoleConnectionText').textContent = runtime.connection === 'ONLINE' ? 'DEVICE ONLINE' : runtime.connection === 'CONNECTING' ? 'CONNECTING' : 'DEVICE OFFLINE';
   $('.connection').classList.toggle('offline', runtime.connection !== 'ONLINE');
-  if (runtime.qrDataUrl) $('#qrImage').src = runtime.qrDataUrl; $('.qr-frame').style.visibility = runtime.connection === 'ONLINE' ? 'visible' : 'hidden';
+  if (runtime.qrDataUrl && runtime.qrDataUrl !== lastQrUrl) {
+    lastQrUrl = runtime.qrDataUrl;
+    $('#qrImage').src = runtime.qrDataUrl;
+  }
+  $('.qr-frame').style.visibility = runtime.connection === 'ONLINE' ? 'visible' : 'hidden';
   $('#qrNote').innerHTML = runtime.connection === 'ONLINE' ? '扫码后 <b>在手机完成点单与支付</b>，咖啡即刻开始制作' : '设备离线，暂不接受新订单';
   renderRecipes(recipes, capabilities); renderInventory(runtime.inventory);
   if (!$('#recipeEditor').matches(':focus')) { const selected = recipes.find((item) => item.recipeId === selectedRecipeId); if (selected && $('#recipeEditor').dataset.recipeId !== selected.recipeId) { $('#recipeEditor').value = JSON.stringify(selected, null, 2); $('#recipeEditor').dataset.recipeId = selected.recipeId; } }
-  const isReady = task?.state === 'SUCCEEDED'; const isFailed = task?.state === 'FAILED'; const isMaking = task && ['RECEIVED', 'VALIDATING', 'ACKNOWLEDGED', 'RUNNING', 'PAUSED', 'RETRY_WAIT'].includes(task.state);
+
+  const isReady = task?.state === 'SUCCEEDED';
+  const isCancelled = task?.state === 'CANCELLED';
+  const isFailed = task?.state === 'FAILED';
+  const isHold = !!task?.recoveryHold || task?.state === 'HOLD' || runtime.deviceStatus === 'RECOVERING';
+  const isMaking = task && ['RECEIVED', 'VALIDATING', 'ACKNOWLEDGED', 'RUNNING', 'PAUSED', 'RETRY_WAIT'].includes(task.state) && !isHold;
+  const isIdle = !task;
+
   $('#retryTask').disabled = task?.state !== 'RETRY_WAIT' || !task?.failure?.retryable || !!task?.recoveryHold;
   $('#pauseResume').disabled = !['RUNNING', 'PAUSED'].includes(task?.state) || !!task?.recoveryHold;
   $('#skipStep').disabled = !['RUNNING', 'PAUSED'].includes(task?.state) || !!task?.recoveryHold;
   $('#clearButton').disabled = !['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(task?.state);
-  setVisible('#idleView', !task); setVisible('#makingView', isMaking); setVisible('#readyView', isReady); setVisible('#errorView', isFailed);
+  $('#errorClearBtn').disabled = !['FAILED', 'CANCELLED'].includes(task?.state) && !isHold;
+
+  setVisible('#idleView', isIdle);
+  setVisible('#makingView', isMaking);
+  setVisible('#readyView', isReady);
+  setVisible('#cancelledView', isCancelled);
+  setVisible('#errorView', isFailed || isHold);
+
+  if (isReady) {
+    startReadyCountdown();
+  } else {
+    stopReadyCountdown();
+  }
+
+  if (isCancelled) {
+    startCancelledCountdown();
+  } else {
+    stopCancelledCountdown();
+  }
+
   if (isMaking) { window.DrinkVisual?.render(task); window.DrinkVisual?.updateProgress(task); } else window.DrinkVisual?.reset();
   $('#taskState').className = `state ${String(task?.state || 'idle').toLowerCase()}`;
   if (task) {
-    const total = task.recipe.steps.length; const planned = task.plannedDurationSeconds || task.recipe.steps.reduce((sum, step) => sum + Number(step.durationSeconds || 0), 0); const elapsed = task.recipe.steps.slice(0, task.stepIndex).reduce((sum, step) => sum + Number(step.durationSeconds || 0), 0) + Number(task.recipe.steps[task.stepIndex]?.durationSeconds || 0) * Number(task.stepProgress || 0); const overall = Number.isFinite(task.overallProgress) ? task.overallProgress : (planned > 0 ? elapsed / planned : 0); $('#taskState').textContent = task.state; $('#taskTitle').textContent = task.recipe.name; $('#taskMeta').textContent = `${task.orderId || task.taskId} · ${task.message}`; $('#recipeName').textContent = task.recipe.name; $('#orderId').textContent = `订单 ${task.orderId || task.taskId}`; $('#currentStep').textContent = task.message; $('#stepCount').textContent = `步骤 ${task.stepIndex + 1} / ${total}`; $('#displayProgress').style.width = `${Math.round(Math.max(0, Math.min(1, overall)) * 100)}%`;
-    const seconds = Math.max(0, Math.ceil(Number.isFinite(task.remainingSeconds) ? task.remainingSeconds : planned - elapsed)); $('#remainingTime').textContent = `预计还需 ${seconds} 秒`; $('#readyOrder').textContent = `订单 ${task.orderId || task.taskId} · ${task.recipe.name}`; $('#errorMessage').textContent = task.failure ? `${task.failure.code} · ${task.message}` : '请稍候或联系门店工作人员'; $('#pauseResume').textContent = task.state === 'PAUSED' ? '继续' : '暂停';
-  } else { $('#taskState').textContent = 'IDLE'; $('#taskTitle').textContent = '暂无制作任务'; $('#taskMeta').textContent = '等待销售服务下发订单'; }
-  if (document.activeElement !== $('#failureRate')) $('#failureRate').value = Math.round((runtime.override.globalFailureRate || 0) * 100); $('#failureValue').textContent = `${$('#failureRate').value}%`; $('#toggleOffline').textContent = runtime.override.offline ? '恢复网络' : '模拟断网'; const eventSig = `${runtime.events.length}:${runtime.events[0]?.occurredAt || ''}`; if (eventSig !== renderCache.events) { renderCache.events = eventSig; $('#eventLog').innerHTML = runtime.events.map((entry) => `<div class="event"><time>${fmtTime(entry.occurredAt)}</time><div>${escapeHtml(entry.message)}<span class="event-type">${escapeHtml(entry.type)}</span></div></div>`).join(''); }
+    const pickupCode = formatPickupCode(task.orderId, task.taskId);
+    const total = task.recipe?.steps?.length || 1;
+    const planned = task.plannedDurationSeconds || (task.recipe?.steps || []).reduce((sum, step) => sum + Number(step.durationSeconds || 0), 0);
+    const elapsed = (task.recipe?.steps || []).slice(0, task.stepIndex).reduce((sum, step) => sum + Number(step.durationSeconds || 0), 0) + Number(task.recipe?.steps?.[task.stepIndex]?.durationSeconds || 0) * Number(task.stepProgress || 0);
+    const overall = Number.isFinite(task.overallProgress) ? task.overallProgress : (planned > 0 ? elapsed / planned : 0);
+    $('#taskState').textContent = task.state;
+    $('#taskTitle').textContent = task.recipe?.name || '咖啡制作';
+    $('#taskMeta').textContent = `${task.orderId || task.taskId} · ${task.message || ''}`;
+    $('#recipeName').textContent = task.recipe?.name || '精品咖啡';
+    $('#orderId').textContent = `订单 ${task.orderId || task.taskId}`;
+    $('#makingPickupCode').textContent = pickupCode;
+    $('#readyPickupCode').textContent = pickupCode;
+    $('#currentStep').textContent = task.message || '正在准备';
+    $('#stepCount').textContent = `步骤 ${task.stepIndex + 1} / ${total}`;
+    $('#displayProgress').style.width = `${Math.round(Math.max(0, Math.min(1, overall)) * 100)}%`;
+    const seconds = Math.max(0, Math.ceil(Number.isFinite(task.remainingSeconds) ? task.remainingSeconds : planned - elapsed));
+    $('#remainingTime').textContent = `预计还需 ${seconds} 秒`;
+    $('#readyOrder').textContent = `取餐码 ${pickupCode} · ${task.recipe?.name || '咖啡'}`;
+    if (isHold) {
+      $('#errorLabel').textContent = '安全核验中';
+      $('#errorTitle').textContent = '设备正在自检';
+      $('#errorMessage').textContent = '终端刚刚重启或恢复，正在确认物理制作结果，请稍候…';
+      setVisible('#errorClearBtn', false);
+    } else if (isFailed) {
+      $('#errorLabel').textContent = '制作暂时中断';
+      $('#errorTitle').textContent = '设备正在处理';
+      $('#errorMessage').textContent = task.failure ? `${task.failure.code} · ${task.message}` : '请稍候或联系门店工作人员';
+      setVisible('#errorClearBtn', true);
+    }
+    $('#pauseResume').textContent = task.state === 'PAUSED' ? '继续' : '暂停';
+  } else {
+    $('#taskState').textContent = 'IDLE';
+    $('#taskTitle').textContent = '暂无制作任务';
+    $('#taskMeta').textContent = '等待销售服务下发订单';
+  }
+  if (document.activeElement !== $('#failureRate')) $('#failureRate').value = Math.round((runtime.override.globalFailureRate || 0) * 100);
+  $('#failureValue').textContent = `${$('#failureRate').value}%`;
+  $('#toggleOffline').textContent = runtime.override.offline ? '恢复网络' : '模拟断网';
+  const eventSig = `${runtime.events.length}:${runtime.events[0]?.occurredAt || ''}`;
+  if (eventSig !== renderCache.events) {
+    renderCache.events = eventSig;
+    $('#eventLog').innerHTML = runtime.events.map((entry) => `<div class="event"><time>${fmtTime(entry.occurredAt)}</time><div>${escapeHtml(entry.message)}<span class="event-type">${escapeHtml(entry.type)}</span></div></div>`).join('');
+  }
 }
 
 async function refresh() { try { render(await api().get_state()); } catch (error) { toast(`连接终端失败：${error.message}`); } }
 async function invoke(method, ...args) { try { const result = await api()[method](...args); if (!result?.ok) toast(result?.error || '操作失败'); await refresh(); return result; } catch (error) { toast(`操作失败：${error.message}`); return null; } }
 
 const setConsole = (open) => $('.app-shell').classList.toggle('console-open', open);
-$('#consoleTrigger').onclick = () => setConsole(true); $('#closeConsole').onclick = () => setConsole(false); $('#demoOrder').onclick = () => invoke('start_demo_order', $('#recipeSelect').value); $('#forceFail').onclick = () => invoke('command', 'force-fail'); $('#toggleOffline').onclick = () => invoke('command', 'toggle-offline'); $('#pauseResume').onclick = () => invoke('command', state?.runtime.task?.state === 'PAUSED' ? 'resume' : 'pause'); $('#skipStep').onclick = () => invoke('command', 'skip'); $('#retryTask').onclick = () => invoke('command', 'retry'); $('#clearButton').onclick = () => invoke('command', 'clear');
+
+// Kiosk / Debug mode handling
+const debugQuery = typeof URLSearchParams === 'function' && typeof location !== 'undefined'
+  ? new URLSearchParams(location.search || '')
+  : null;
+const isDebugMode = debugQuery?.get('debug') === '1';
+if (isDebugMode) {
+  $('#consoleTrigger').classList.remove('kiosk-hidden');
+}
+
+// Secret technician gesture: 5 clicks on logo within 2.5s
+let secretClicks = 0;
+let secretTimer = null;
+const secretArea = $('#brandSecretArea');
+if (secretArea) {
+  secretArea.onclick = () => {
+    secretClicks += 1;
+    clearTimeout(secretTimer);
+    if (secretClicks >= 5) {
+      secretClicks = 0;
+      setConsole(!$('.app-shell').classList.contains('console-open'));
+      toast('已通过技术人员手势切换控制台');
+    } else {
+      secretTimer = setTimeout(() => { secretClicks = 0; }, 2500);
+    }
+  };
+}
+
+$('#consoleTrigger').onclick = () => setConsole(true);
+$('#closeConsole').onclick = () => setConsole(false);
+$('#demoOrder').onclick = () => invoke('start_demo_order', $('#recipeSelect').value);
+$('#forceFail').onclick = () => invoke('command', 'force-fail');
+$('#toggleOffline').onclick = () => invoke('command', 'toggle-offline');
+$('#pauseResume').onclick = () => invoke('command', state?.runtime.task?.state === 'PAUSED' ? 'resume' : 'pause');
+$('#skipStep').onclick = () => invoke('command', 'skip');
+$('#retryTask').onclick = () => invoke('command', 'retry');
+$('#clearButton').onclick = () => { stopReadyCountdown(); invoke('command', 'clear'); };
+$('#cancelledClearBtn').onclick = () => { stopCancelledCountdown(); invoke('command', 'clear'); };
+$('#errorClearBtn').onclick = () => invoke('command', 'clear');
+
 document.addEventListener?.('keydown', (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setConsole(!$('.app-shell').classList.contains('console-open')); }
   if (event.key === 'Escape') setConsole(false);
 });
-$('#reloadConfig').onclick = async () => { const result = await invoke('reload_config'); if (result?.ok) toast('本地配置已刷新'); }; $('#failureRate').oninput = (event) => { $('#failureValue').textContent = `${event.target.value}%`; }; $('#failureRate').onchange = (event) => invoke('update_override', { globalFailureRate: Number(event.target.value) / 100 });
+$('#reloadConfig').onclick = async () => { const result = await invoke('reload_config'); if (result?.ok) toast('本地配置已刷新'); };
+$('#failureRate').oninput = (event) => { $('#failureValue').textContent = `${event.target.value}%`; };
+$('#failureRate').onchange = (event) => invoke('update_override', { globalFailureRate: Number(event.target.value) / 100 });
 $('#recipeSelect').onchange = (event) => { selectedRecipeId = event.target.value; const recipe = state.recipes.find((item) => item.recipeId === selectedRecipeId); $('#recipeEditor').value = JSON.stringify(recipe, null, 2); $('#recipeEditor').dataset.recipeId = selectedRecipeId; };
 $('#saveRecipe').onclick = async () => { const result = await invoke('save_recipe', $('#recipeEditor').value); if (result?.ok) toast('配方已保存并刷新能力'); };
 $('#inventoryList').onclick = (event) => { const button = event.target.closest('[data-refill]'); if (button) invoke('adjust_inventory', { materialId: button.dataset.refill, mode: 'SET', amount: Number(button.dataset.capacity), reason: 'OPERATOR_REFILL' }); };

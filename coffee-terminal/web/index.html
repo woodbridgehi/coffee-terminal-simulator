@@ -19,9 +19,9 @@
   <main class="app-shell" id="app">
     <section class="display" aria-label="顾客显示屏">
       <header class="display-header">
-        <div class="brand-connection"><svg class="brand-symbol" aria-hidden="true"><use href="#mk-symbol"/></svg><span class="brand-divider"></span><div class="connection"><span class="status-dot"></span><span id="connectionText">设备在线</span></div></div>
+        <div class="brand-connection" id="brandSecretArea" role="button" tabindex="0" title="双击或连击 5 次切换控制台"><svg class="brand-symbol" aria-hidden="true"><use href="#mk-symbol"/></svg><span class="brand-divider"></span><div class="connection"><span class="status-dot"></span><span id="connectionText">设备在线</span></div></div>
         <div class="device-lockup"><div class="device-name" id="deviceName">COFFEE BOT 001</div><span class="device-tag" id="deviceTag">coffee-bot-001</span></div>
-        <button class="console-trigger" id="consoleTrigger" title="打开开发控制台" aria-label="打开开发控制台"><svg aria-hidden="true"><use href="#mk-terminal"/></svg><span>开发控制台</span><kbd>⌘K</kbd></button>
+        <button class="console-trigger kiosk-hidden" id="consoleTrigger" title="打开开发控制台" aria-label="打开开发控制台"><svg aria-hidden="true"><use href="#mk-terminal"/></svg><span>开发控制台</span><kbd>⌘K</kbd></button>
       </header>
 
       <div class="display-content" id="idleView">
@@ -34,6 +34,10 @@
 
       <div class="making-view is-hidden" id="makingView">
         <p class="quiet-label" id="orderId">订单处理中</p>
+        <div class="pickup-badge mini" id="makingPickupBadge">
+          <span class="pickup-label">取单号</span>
+          <strong class="pickup-number" id="makingPickupCode">—</strong>
+        </div>
         <h1 id="recipeName">冰拿铁</h1>
         <div class="coffee-stage" id="coffeeStage" aria-hidden="true">
           <svg class="drink-visual" viewBox="0 0 360 320" role="presentation">
@@ -84,17 +88,32 @@
 
       <div class="ready-view is-hidden" id="readyView">
         <div class="ready-mark">✓</div>
+        <div class="pickup-badge" id="readyPickupBadge">
+          <span class="pickup-label">取杯口令 / 取单号</span>
+          <strong class="pickup-number" id="readyPickupCode">—</strong>
+        </div>
         <p class="quiet-label">订单已完成</p>
         <h1>请取走您的咖啡</h1>
-        <p class="subhead" id="readyOrder">请核对订单号</p>
+        <p class="subhead" id="readyOrder">请核对取单号与饮品</p>
+        <p class="countdown-note" id="readyCountdown">15 秒后自动返回点单待机</p>
         <button class="clear-button" id="clearButton">返回待机</button>
+      </div>
+
+      <div class="cancelled-view is-hidden" id="cancelledView">
+        <div class="cancelled-mark">✕</div>
+        <p class="quiet-label">订单已取消</p>
+        <h1>制作已安全终止</h1>
+        <p class="subhead" id="cancelledMessage">本单未产生扣款或款项已按原路退回</p>
+        <p class="countdown-note" id="cancelledCountdown">10 秒后自动返回点单待机</p>
+        <button class="clear-button" id="cancelledClearBtn">返回待机</button>
       </div>
 
       <div class="error-view is-hidden" id="errorView">
         <div class="error-mark">!</div>
-        <p class="quiet-label">制作暂时中断</p>
-        <h1>设备正在处理</h1>
+        <p class="quiet-label" id="errorLabel">制作暂时中断</p>
+        <h1 id="errorTitle">设备正在处理</h1>
         <p class="subhead" id="errorMessage">请稍候或联系门店工作人员</p>
+        <button class="clear-button is-hidden" id="errorClearBtn">返回待机</button>
       </div>
 
       <footer class="display-footer"><span class="footer-brand"><svg aria-hidden="true"><use href="#mk-symbol"/></svg>COFFEE TERMINAL</span><i></i><span id="footerMessage">精品咖啡 · 新鲜现制</span></footer>
