@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from http.client import IncompleteRead, RemoteDisconnected
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -29,13 +28,6 @@ class CloudClient:
             "X-Device-Id": self.device_id,
             **backend.get("headers", {}),
         }
-        # Optional Cloudflare Access service-token headers are read only from the
-        # process environment and are never persisted or exposed to the webview.
-        access_id = os.environ.get("COFFEE_CF_ACCESS_CLIENT_ID") or os.environ.get("CF_ACCESS_CLIENT_ID")
-        access_secret = os.environ.get("COFFEE_CF_ACCESS_CLIENT_SECRET") or os.environ.get("CF_ACCESS_CLIENT_SECRET")
-        if access_id and access_secret:
-            self.headers["CF-Access-Client-Id"] = access_id
-            self.headers["CF-Access-Client-Secret"] = access_secret
         if backend.get("authToken"):
             self.headers["Authorization"] = f"Bearer {backend['authToken']}"
 

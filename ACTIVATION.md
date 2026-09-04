@@ -2,17 +2,6 @@
 
 本文用于本地多个模拟器实例接入 `https://coffee-api.woodbridge.top`。激活码和设备 Token 都是秘密信息，不要粘贴到聊天、工单、截图或 Git。
 
-## Cloudflare Access Service Token（可选）
-
-如果 Cloudflare Access 对设备所访问的 HTTP hostname/path 要求 Service Token，可将它放进实例对应的未跟踪秘密文件（权限 `600`），不要写入 `device.json`：
-
-```text
-COFFEE_CF_ACCESS_CLIENT_ID=<client-id>
-COFFEE_CF_ACCESS_CLIENT_SECRET=<client-secret>
-```
-
-模拟器会为 HTTP 请求自动附加 `CF-Access-Client-Id` 和 `CF-Access-Client-Secret`。这只影响模拟器进程；凭据不会返回到终端网页、不会进入 Git，也不会替代设备自身的 `Authorization: Bearer` Token。浏览器商户/运维页面不能使用这个共享 secret，应继续使用 Cloudflare 的交互式登录策略。SSH 仍使用独立的 Cloudflare Access SSH 应用和 `cloudflared access ssh`，不要把 HTTP Service Token 填入 SSH 配置。
-
 ## 1. 先确认三个标识
 
 以下标识用途不同：

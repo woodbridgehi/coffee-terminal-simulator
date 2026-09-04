@@ -6,7 +6,6 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from unittest.mock import patch
 
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -16,16 +15,6 @@ from cloud import CloudClient  # noqa: E402
 
 
 class CloudClientIdentityTest(unittest.TestCase):
-    def test_optional_cloudflare_service_token_is_environment_only(self) -> None:
-        with patch.dict(
-            "os.environ",
-            {"COFFEE_CF_ACCESS_CLIENT_ID": "client.access", "COFFEE_CF_ACCESS_CLIENT_SECRET": "secret"},
-            clear=False,
-        ):
-            client = CloudClient({"deviceId": "device-1", "backend": {"baseUrl": "https://example.test"}})
-        self.assertEqual(client.headers["CF-Access-Client-Id"], "client.access")
-        self.assertEqual(client.headers["CF-Access-Client-Secret"], "secret")
-
     def test_get_retries_an_incomplete_response_once(self) -> None:
         attempts = 0
 
