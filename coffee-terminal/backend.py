@@ -16,9 +16,11 @@ import qrcode
 
 from catalog import RecipeCatalog
 from cloud import CloudClient, CloudError
+from configuration import write_config
 from failures import FailurePolicy
 from inventory import InventoryError, InventoryManager
 from local_api import DeviceApiServer
+from locales import normalize_locale
 from mqtt_transport import Mqtt5Transport, MqttTransportError
 from state_store import LocalStateStore, StateStoreError
 
@@ -193,6 +195,16 @@ class CoffeeDeviceRuntime:
         return {"deviceId": self.device_id, "instanceId": self.config["instanceId"], "storeId": self.config.get("storeId"), "transport": self.transport_name, "connection": self.runtime["connection"], "deviceStatus": self.runtime["deviceStatus"], "currentTask": self.runtime["task"], "capabilityVersion": self.catalog.version, "inventoryVersion": self.inventory.state["version"], "sync": dict(self.sync_health), "deliveries": self.store.delivery_stats()}
 
     # Configuration and operator actions
+    def set_ui_locale(self, locale: str) -> dict[str, Any]:
+        normalized = normalize_locale(locale)
+        with self.lock:
+            persisted = {key: value for key, value in self.config.items() if key != "_configPath"}
+            persisted.setdefault("ui", {})["locale"] = normalized
+            config_path = Path(str(self.config.get("_configPath") or self.instance_dir / "device.json"))
+            write_config(config_path, persisted)
+            self.config.setdefault("ui", {})["locale"] = normalized
+        return {"ok": True, "locale": normalized}
+
     def reload_config(self) -> dict[str, Any]:
         with self.lock:
             task = self.runtime.get("task")

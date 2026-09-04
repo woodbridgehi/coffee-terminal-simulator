@@ -53,6 +53,14 @@ class ConfigurationTest(unittest.TestCase):
             config = load_config(path)
             self.assertEqual(config["backend"]["transport"], "local")
 
+    def test_ui_locale_is_normalized_with_safe_chinese_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "device.json"
+            path.write_text(json.dumps({"deviceId": "coffee-bot-002", "ui": {"locale": "en-GB"}, "backend": {"mode": "local"}}), encoding="utf-8")
+            self.assertEqual(load_config(path)["ui"]["locale"], "en-US")
+            path.write_text(json.dumps({"deviceId": "coffee-bot-002", "ui": {"locale": "../../bad"}, "backend": {"mode": "local"}}), encoding="utf-8")
+            self.assertEqual(load_config(path)["ui"]["locale"], "zh-CN")
+
     def test_env_file_rejects_malformed_line(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "device.env"

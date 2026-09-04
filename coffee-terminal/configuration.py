@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 import json
 
+from locales import normalize_locale
+
 
 SUPPORTED_REMOTE_TRANSPORTS = {"http", "mqtt5"}
 
@@ -27,6 +29,8 @@ def load_env_file(path: Path) -> None:
 
 def load_config(path: Path) -> dict[str, Any]:
     config = json.loads(path.read_text(encoding="utf-8"))
+    ui = config.setdefault("ui", {})
+    ui["locale"] = normalize_locale(ui.get("locale") or config.pop("uiLocale", None))
     backend = config.setdefault("backend", {})
 
     if value := os.environ.get("COFFEE_BACKEND_BASE_URL"):

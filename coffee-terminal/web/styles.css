@@ -56,3 +56,4 @@
   .display-content,.making-view,.ready-view,.cancelled-view,.error-view{padding:20px 14px 28px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+.terminal-locale{position:fixed;right:18px;top:68px;z-index:50;display:flex;align-items:center;gap:7px;font:600 11px/1.2 system-ui;color:var(--muted,#75675d)}.terminal-locale select{height:32px;border:1px solid rgba(52,34,25,.18);border-radius:9px;background:#fffaf2;padding:0 26px 0 9px;color:#342219}

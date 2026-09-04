@@ -1,6 +1,13 @@
 const $ = (selector) => document.querySelector(selector);
+const terminalI18n = globalThis.TerminalI18n || {
+  t: key => key,
+  setLocale: value => String(value || '').toLowerCase().startsWith('en') ? 'en-US' : 'zh-CN',
+  getLocale: () => 'zh-CN',
+};
+const t = (key, params = {}) => terminalI18n.t(key, params);
 let state = null;
 let selectedRecipeId = null;
+let localeInitialized = false;
 const renderCache = { recipes: '', inventory: '', events: '' };
 
 const mockApi = (() => {
@@ -29,7 +36,8 @@ const mockApi = (() => {
     else task.message = task.recipe.steps[task.stepIndex].name;
   }, 250);
   return {
-    get_state: async () => ({ config: { deviceId: 'coffee-bot-001', deviceName: 'COFFEE BOT 001' }, recipes: [recipe], capabilities: { products: [{ recipeId: recipe.recipeId, available: true, maxServings: 13 }] }, runtime }),
+    get_state: async () => ({ config: { deviceId: 'coffee-bot-001', deviceName: 'COFFEE BOT 001', ui: { locale: 'zh-CN' } }, recipes: [recipe], capabilities: { products: [{ recipeId: recipe.recipeId, available: true, maxServings: 13 }] }, runtime }),
+    set_ui_locale: async (locale) => ({ ok: true, locale }),
     start_demo_order: async () => { if (runtime.task && ['ACKNOWLEDGED', 'RUNNING', 'PAUSED', 'RETRY_WAIT'].includes(runtime.task.state)) return { ok: false, error: '设备已有执行中的任务' }; runtime.task = { taskId: 'task-browser-preview', orderId: 'order-1024', recipe, state: 'RUNNING', stepIndex: 0, stepProgress: 0, message: '开始制作', attempt: 1 }; runtime.deviceStatus = 'BUSY'; event('task.started', '开始模拟制作'); return { ok: true }; },
     command: async (action) => {
       if (action === 'toggle-offline') { runtime.override.offline = !runtime.override.offline; runtime.connection = runtime.override.offline ? 'OFFLINE' : 'ONLINE'; event('device.connection', runtime.override.offline ? '网络已断开' : '网络已恢复'); return { ok: true }; }
@@ -47,7 +55,7 @@ const mockApi = (() => {
 const api = () => window.pywebview?.api || mockApi;
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 const setVisible = (selector, visible) => $(selector).classList.toggle('is-hidden', !visible);
-const fmtTime = (value) => new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const fmtTime = (value) => new Date(value).toLocaleTimeString(terminalI18n.getLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 function toast(message) { const element = $('#toast'); element.textContent = message; element.classList.remove('is-hidden'); clearTimeout(toast.timer); toast.timer = setTimeout(() => element.classList.add('is-hidden'), 2600); }
 
 function renderRecipes(recipes, capabilities) {
@@ -92,7 +100,7 @@ function startReadyCountdown(durationSeconds = 10) {
   const updateNote = () => {
     const remaining = Math.max(0, Math.ceil((readyDeadline - Date.now()) / 1000));
     const el = $('#readyCountdown');
-    if (el) el.textContent = `${remaining} 秒后自动返回点单待机`;
+    if (el) el.textContent = t('terminal.returnCountdown', { seconds: remaining });
     if (remaining <= 0) {
       stopReadyCountdown();
       invoke('command', 'clear');
@@ -113,7 +121,7 @@ function startCancelledCountdown(durationSeconds = 10) {
   const updateNote = () => {
     const remaining = Math.max(0, Math.ceil((cancelledDeadline - Date.now()) / 1000));
     const el = $('#cancelledCountdown');
-    if (el) el.textContent = `${remaining} 秒后自动返回点单待机`;
+    if (el) el.textContent = t('terminal.returnCountdown', { seconds: remaining });
     if (remaining <= 0) {
       stopCancelledCountdown();
       invoke('command', 'clear');
@@ -130,8 +138,14 @@ function stopCancelledCountdown() {
 
 function render(data) {
   state = data; const { config, runtime, recipes, capabilities } = data; const task = runtime.task;
+  if (!localeInitialized) {
+    localeInitialized = true;
+    const locale = terminalI18n.setLocale(config.ui?.locale || 'zh-CN');
+    $('#localeSelect').value = locale;
+  }
+  $('#idleQuote').textContent = t(`terminal.quote.${BARISTA_QUOTES[quoteIndex]}`);
   $('#deviceName').textContent = config.deviceName; $('#deviceTag').textContent = config.deviceId;
-  $('#connectionText').textContent = runtime.connection === 'ONLINE' ? '设备在线' : runtime.connection === 'CONNECTING' ? '正在连接后台' : '设备离线';
+  $('#connectionText').textContent = runtime.connection === 'ONLINE' ? t('terminal.connection.online') : runtime.connection === 'CONNECTING' ? t('terminal.connection.connecting') : t('terminal.connection.offline');
   $('#consoleConnectionText').textContent = runtime.connection === 'ONLINE' ? 'DEVICE ONLINE' : runtime.connection === 'CONNECTING' ? 'CONNECTING' : 'DEVICE OFFLINE';
   $('.connection').classList.toggle('offline', runtime.connection !== 'ONLINE');
   if (runtime.qrDataUrl && runtime.qrDataUrl !== lastQrUrl) {
@@ -139,7 +153,7 @@ function render(data) {
     $('#qrImage').src = runtime.qrDataUrl;
   }
   $('.qr-frame').style.visibility = runtime.connection === 'ONLINE' ? 'visible' : 'hidden';
-  $('#qrNote').innerHTML = runtime.connection === 'ONLINE' ? '扫码后 <b>在手机完成点单与支付</b>，咖啡即刻开始制作' : '设备离线，暂不接受新订单';
+  $('#qrNote').textContent = runtime.connection === 'ONLINE' ? t('terminal.qr.online') : t('terminal.qr.offline');
   renderRecipes(recipes, capabilities); renderInventory(runtime.inventory);
   if (!$('#recipeEditor').matches(':focus')) { const selected = recipes.find((item) => item.recipeId === selectedRecipeId); if (selected && $('#recipeEditor').dataset.recipeId !== selected.recipeId) { $('#recipeEditor').value = JSON.stringify(selected, null, 2); $('#recipeEditor').dataset.recipeId = selected.recipeId; } }
 
@@ -184,50 +198,50 @@ function render(data) {
     const overall = Number.isFinite(task.overallProgress) ? task.overallProgress : (planned > 0 ? elapsed / planned : 0);
     const displayOrderNo = task.orderNo || task.orderId || task.taskId;
     $('#taskState').textContent = task.state;
-    $('#taskTitle').textContent = task.recipe?.name || '咖啡制作';
+    $('#taskTitle').textContent = task.recipe?.name || t('terminal.task.coffee');
     $('#taskMeta').textContent = `${displayOrderNo} · ${task.message || ''}`;
-    $('#recipeName').textContent = task.recipe?.name || '精品咖啡';
+    $('#recipeName').textContent = task.recipe?.name || t('terminal.task.specialty');
 function enrichStepName(name) {
-  if (!name) return '正在精心制作';
-  if (name.includes('准备') || name.includes('落杯') || name.includes('cup')) return '臻选温杯 · 唤醒风味基底';
-  if (name.includes('萃取') || name.includes('brew')) return '黄金萃取 · 激发坚果黑巧醇香';
-  if (name.includes('牛奶') || name.includes('鲜奶') || name.includes('milk')) return '微泡打发 · 注入丝绒鲜奶';
-  if (name.includes('水') || name.includes('water')) return '清润滴滤 · 舒展纯正原香';
-  if (name.includes('冰') || name.includes('ice')) return '纯净冰晶 · 晶透锁鲜降温';
-  if (name.includes('糖浆') || name.includes('榛果') || name.includes('syrup')) return '风味注入 · 调和特调醇韵';
-  if (name.includes('封杯') || name.includes('出杯') || name.includes('serve')) return '倾心敬奉 · 专属封盖就绪';
+  if (!name) return t('terminal.step.default');
+  if (name.includes('准备') || name.includes('落杯') || name.includes('cup')) return t('terminal.step.cup');
+  if (name.includes('萃取') || name.includes('brew')) return t('terminal.step.brew');
+  if (name.includes('牛奶') || name.includes('鲜奶') || name.includes('milk')) return t('terminal.step.milk');
+  if (name.includes('水') || name.includes('water')) return t('terminal.step.water');
+  if (name.includes('冰') || name.includes('ice')) return t('terminal.step.ice');
+  if (name.includes('糖浆') || name.includes('榛果') || name.includes('syrup')) return t('terminal.step.syrup');
+  if (name.includes('封杯') || name.includes('出杯') || name.includes('serve')) return t('terminal.step.serve');
   return name;
 }
 
-    $('#orderId').textContent = `订单 ${displayOrderNo}`;
+    $('#orderId').textContent = `${t('terminal.order.processing')} · ${displayOrderNo}`;
     $('#makingPickupCode').textContent = pickupCode;
     $('#readyPickupCode').textContent = pickupCode;
     $('#currentStep').textContent = enrichStepName(task.message);
-    $('#stepCount').textContent = `步骤 ${task.stepIndex + 1} / ${total}`;
+    $('#stepCount').textContent = t('terminal.step', { current: task.stepIndex + 1, total });
     $('#displayProgress').style.width = `${Math.round(Math.max(0, Math.min(1, overall)) * 100)}%`;
     const seconds = Math.max(0, Math.ceil(Number.isFinite(task.remainingSeconds) ? task.remainingSeconds : planned - elapsed));
-    $('#remainingTime').textContent = `预计还需 ${seconds} 秒`;
-    $('#readyOrder').textContent = `取餐码 ${pickupCode} · ${displayOrderNo}`;
+    $('#remainingTime').textContent = t('terminal.remaining', { seconds });
+    $('#readyOrder').textContent = t('terminal.ready.order', { code: pickupCode, orderNo: displayOrderNo });
     if (isHold) {
-      $('#errorLabel').textContent = '安全核验中';
-      $('#errorTitle').textContent = '设备正在自检';
-      $('#errorMessage').textContent = '终端刚刚重启或恢复，正在确认物理制作结果，请稍候…';
+      $('#errorLabel').textContent = t('terminal.hold.kicker');
+      $('#errorTitle').textContent = t('terminal.hold.title');
+      $('#errorMessage').textContent = t('terminal.hold.desc');
       setVisible('#errorClearBtn', false);
     } else if (isFailed) {
-      $('#errorLabel').textContent = '制作暂时中断';
-      $('#errorTitle').textContent = '设备正在处理';
-      $('#errorMessage').textContent = task.failure ? `${task.failure.code} · ${task.message}` : '请稍候或联系门店工作人员';
+      $('#errorLabel').textContent = t('terminal.error.kicker');
+      $('#errorTitle').textContent = t('terminal.error.title');
+      $('#errorMessage').textContent = task.failure ? `${task.failure.code} · ${task.message}` : t('terminal.error.desc');
       setVisible('#errorClearBtn', true);
     }
-    $('#pauseResume').textContent = task.state === 'PAUSED' ? '继续' : '暂停';
+    $('#pauseResume').textContent = task.state === 'PAUSED' ? t('terminal.action.resume') : t('terminal.action.pause');
   } else {
     $('#taskState').textContent = 'IDLE';
-    $('#taskTitle').textContent = '暂无制作任务';
-    $('#taskMeta').textContent = '等待销售服务下发订单';
+    $('#taskTitle').textContent = t('terminal.task.none');
+    $('#taskMeta').textContent = t('terminal.task.waiting');
   }
   if (document.activeElement !== $('#failureRate')) $('#failureRate').value = Math.round((runtime.override.globalFailureRate || 0) * 100);
   $('#failureValue').textContent = `${$('#failureRate').value}%`;
-  $('#toggleOffline').textContent = runtime.override.offline ? '恢复网络' : '模拟断网';
+  $('#toggleOffline').textContent = runtime.override.offline ? t('terminal.action.online') : t('terminal.action.offline');
   const eventSig = `${runtime.events.length}:${runtime.events[0]?.occurredAt || ''}`;
   if (eventSig !== renderCache.events) {
     renderCache.events = eventSig;
@@ -235,8 +249,8 @@ function enrichStepName(name) {
   }
 }
 
-async function refresh() { try { render(await api().get_state()); } catch (error) { toast(`连接终端失败：${error.message}`); } }
-async function invoke(method, ...args) { try { const result = await api()[method](...args); if (!result?.ok) toast(result?.error || '操作失败'); await refresh(); return result; } catch (error) { toast(`操作失败：${error.message}`); return null; } }
+async function refresh() { try { render(await api().get_state()); } catch (error) { toast(t('terminal.error.connect', { message: error.message })); } }
+async function invoke(method, ...args) { try { const result = await api()[method](...args); if (!result?.ok) toast(result?.error || t('terminal.error.operationGeneric')); await refresh(); return result; } catch (error) { toast(t('terminal.error.operation', { message: error.message })); return null; } }
 
 const setConsole = (open) => $('.app-shell').classList.toggle('console-open', open);
 
@@ -248,6 +262,18 @@ const isDebugMode = debugQuery?.get('debug') === '1';
 if (isDebugMode) {
   $('#consoleTrigger').classList.remove('kiosk-hidden');
 }
+
+$('#localeSelect').onchange = async event => {
+  const locale = terminalI18n.setLocale(event.target.value);
+  event.target.value = locale;
+  if (state) {
+    state.config.ui ||= {};
+    state.config.ui.locale = locale;
+    renderCache.recipes = ''; renderCache.inventory = ''; renderCache.events = '';
+    render(state);
+  }
+  try { await api().set_ui_locale(locale); } catch (error) { toast(t('terminal.error.operation', { message: error.message })); }
+};
 
 // Secret technician gesture: 5 clicks on logo within 2.5s
 let secretClicks = 0;
@@ -289,13 +315,7 @@ $('#failureRate').onchange = (event) => invoke('update_override', { globalFailur
 $('#recipeSelect').onchange = (event) => { selectedRecipeId = event.target.value; const recipe = state.recipes.find((item) => item.recipeId === selectedRecipeId); $('#recipeEditor').value = JSON.stringify(recipe, null, 2); $('#recipeEditor').dataset.recipeId = selectedRecipeId; };
 $('#saveRecipe').onclick = async () => { const result = await invoke('save_recipe', $('#recipeEditor').value); if (result?.ok) toast('配方已保存并刷新能力'); };
 $('#inventoryList').onclick = (event) => { const button = event.target.closest('[data-refill]'); if (button) invoke('adjust_inventory', { materialId: button.dataset.refill, mode: 'SET', amount: Number(button.dataset.capacity), reason: 'OPERATOR_REFILL' }); };
-const BARISTA_QUOTES = [
-  '“ 每一颗咖啡豆，都跨越了北回归线的阳光与海拔 ”',
-  '“ 9 bar 恒压萃取与 92°C 水温交响，唤醒原生醇香 ”',
-  '“ 暂停匆忙脚步，慢享一杯现磨的馥郁与温度 ”',
-  '“ 丝绒般微泡鲜奶，给浓缩以温柔拥抱 ”',
-  '“ 每一杯好咖啡，都是献给专注日常的礼赞 ”',
-];
+const BARISTA_QUOTES = [0, 1, 2, 3, 4];
 let quoteIndex = 0;
 setInterval(() => {
   const quoteEl = $('#idleQuote');
@@ -303,7 +323,7 @@ setInterval(() => {
   quoteEl.classList.add('fade-out');
   setTimeout(() => {
     quoteIndex = (quoteIndex + 1) % BARISTA_QUOTES.length;
-    quoteEl.textContent = BARISTA_QUOTES[quoteIndex];
+    quoteEl.textContent = t(`terminal.quote.${BARISTA_QUOTES[quoteIndex]}`);
     quoteEl.classList.remove('fade-out');
   }, 600);
 }, 7500);

@@ -13,6 +13,7 @@ from typing import Any
 
 from cloud import CloudClient, CloudError
 from configuration import read_env_values, write_config, write_env_values
+from locales import normalize_locale
 from simulator_identity import SimulatorIdentity
 
 NUMBER_RE = re.compile(r"^[0-9]{3,6}$")
@@ -38,7 +39,16 @@ class OnboardingAdapter:
             "storeName": self.config.get("storeName", ""),
             "storeDescription": self.config.get("storeDescription", ""),
             "cityCode": self.config.get("cityCode", "CN-SH"),
+            "uiLocale": normalize_locale(self.config.get("ui", {}).get("locale")),
         }
+
+    def set_ui_locale(self, locale: str) -> dict[str, Any]:
+        normalized = normalize_locale(locale)
+        persisted = {key: value for key, value in self.config.items() if key != "_configPath"}
+        persisted.setdefault("ui", {})["locale"] = normalized
+        write_config(self.config_path, persisted)
+        self.config.setdefault("ui", {})["locale"] = normalized
+        return {"ok": True, "locale": normalized}
 
     def get_options(self) -> dict[str, Any]:
         try:
@@ -131,6 +141,7 @@ class OnboardingAdapter:
                 "instanceId": persisted.get("instanceId") or f"instance-{device_id}",
                 "deviceName": profile.get("deviceName") or persisted.get("deviceName") or device_id,
                 "storeName": profile.get("storeName") or persisted.get("storeName") or "",
+                "ui": {**persisted.get("ui", {}), "locale": normalize_locale(profile.get("uiLocale") or persisted.get("ui", {}).get("locale"))},
                 "registration": {
                     "status": "COMPLETED",
                     "completedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -247,6 +258,7 @@ class OnboardingAdapter:
                 "storeDescription": final_profile.get("storeDescription") or store_description,
                 "cityCode": final_profile.get("cityCode") or city_code,
                 "timezone": final_profile.get("timezone") or timezone,
+                "ui": {**persisted.get("ui", {}), "locale": normalize_locale(final_profile.get("uiLocale") or persisted.get("ui", {}).get("locale"))},
                 "registration": {
                     "status": "COMPLETED",
                     "completedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),

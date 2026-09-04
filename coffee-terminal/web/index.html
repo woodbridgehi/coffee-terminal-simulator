@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="drink-visual.css?v=20260901" />
 </head>
 <body>
+  <label class="terminal-locale" for="localeSelect"><span data-i18n="language.label">语言</span><select id="localeSelect"><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label>
   <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
     <defs>
       <symbol id="mk-symbol" viewBox="0 0 64 64" fill="none"><rect x="17" y="15" width="25" height="35" rx="7" stroke="currentColor" stroke-width="4"/><path d="M42 27a7 7 0 0 1 0 12" stroke="currentColor" stroke-width="4"/><path d="M24.5 27h11" stroke="var(--bm-brass,#B78A52)" stroke-width="4" stroke-linecap="round"/></symbol>
@@ -19,9 +20,9 @@
   <main class="app-shell" id="app">
     <section class="display" aria-label="顾客显示屏">
       <header class="display-header">
-        <div class="brand-connection" id="brandSecretArea" role="button" tabindex="0" title="双击或连击 5 次切换控制台"><svg class="brand-symbol" aria-hidden="true"><use href="#mk-symbol"/></svg><span class="brand-divider"></span><div class="connection"><span class="status-dot"></span><span id="connectionText">设备在线</span></div></div>
+        <div class="brand-connection" id="brandSecretArea" role="button" tabindex="0" title="双击或连击 5 次切换控制台"><svg class="brand-symbol" aria-hidden="true"><use href="#mk-symbol"/></svg><span class="brand-divider"></span><div class="connection"><span class="status-dot"></span><span id="connectionText" data-i18n="terminal.connection.online">设备在线</span></div></div>
         <div class="device-lockup"><div class="device-name" id="deviceName">COFFEE BOT 001</div><span class="device-tag" id="deviceTag">coffee-bot-001</span></div>
-        <button class="console-trigger kiosk-hidden" id="consoleTrigger" title="打开开发控制台" aria-label="打开开发控制台"><svg aria-hidden="true"><use href="#mk-terminal"/></svg><span>开发控制台</span><kbd>⌘K</kbd></button>
+        <button class="console-trigger kiosk-hidden" id="consoleTrigger" title="打开开发控制台" data-i18n-title="terminal.console.open" aria-label="打开开发控制台" data-i18n-aria-label="terminal.console.open"><svg aria-hidden="true"><use href="#mk-terminal"/></svg><span data-i18n="terminal.console.title">开发控制台</span><kbd>⌘K</kbd></button>
       </header>
 
       <div class="display-content" id="idleView">
@@ -29,19 +30,19 @@
           <p class="idle-quote" id="idleQuote">“ 每一颗咖啡豆，都跨越了北回归线的阳光与海拔 ”</p>
         </div>
         <p class="quiet-label">WOODBRIDGE RESERVE · 精品现磨</p>
-        <h1>扫码即刻制作</h1>
-        <p class="subhead">用手机扫描下方二维码，即可下单并观看制作过程</p>
+        <h1 data-i18n="terminal.idle.title">扫码即刻制作</h1>
+        <p class="subhead" data-i18n="terminal.idle.sub">用手机扫描下方二维码，即可下单并观看制作过程</p>
         <div class="qr-frame" id="qrFrame">
           <div class="qr-ambient-glow"></div>
-          <img id="qrImage" alt="咖啡下单二维码" />
+          <img id="qrImage" alt="咖啡下单二维码" data-i18n-alt="terminal.qr.alt" />
         </div>
         <p class="qr-note" id="qrNote">扫码后 <b>在手机完成点单与支付</b>，咖啡即刻开始制作</p>
       </div>
 
       <div class="making-view is-hidden" id="makingView">
-        <p class="quiet-label" id="orderId">订单处理中</p>
+        <p class="quiet-label" id="orderId" data-i18n="terminal.order.processing">订单处理中</p>
         <div class="pickup-badge mini" id="makingPickupBadge">
-          <span class="pickup-label">取杯口令</span>
+          <span class="pickup-label" data-i18n="terminal.pickup">取杯口令</span>
           <strong class="pickup-number" id="makingPickupCode">—</strong>
         </div>
         <h1 id="recipeName">冰拿铁</h1>
@@ -102,20 +103,20 @@
           <span class="pickup-label">ORDER NO. / 取杯口令</span>
           <strong class="pickup-number" id="readyPickupCode">—</strong>
         </div>
-        <p class="quiet-label">订单已完成</p>
-        <h1>请取走您的咖啡</h1>
+        <p class="quiet-label" data-i18n="terminal.ready.kicker">订单已完成</p>
+        <h1 data-i18n="terminal.ready.title">请取走您的咖啡</h1>
         <p class="subhead" id="readyOrder">请核对取单号与饮品 · 慢品醇香</p>
         <p class="countdown-note" id="readyCountdown">10 秒后自动返回点单待机</p>
-        <button class="clear-button" id="clearButton">返回待机</button>
+        <button class="clear-button" id="clearButton" data-i18n="terminal.returnIdle">返回待机</button>
       </div>
 
       <div class="cancelled-view is-hidden" id="cancelledView">
         <div class="cancelled-mark">✕</div>
-        <p class="quiet-label">订单已取消</p>
-        <h1>制作已安全终止</h1>
-        <p class="subhead" id="cancelledMessage">本单未产生扣款或款项已按原路退回</p>
+        <p class="quiet-label" data-i18n="terminal.cancelled.kicker">订单已取消</p>
+        <h1 data-i18n="terminal.cancelled.title">制作已安全终止</h1>
+        <p class="subhead" id="cancelledMessage" data-i18n="terminal.cancelled.desc">本单未产生扣款或款项已按原路退回</p>
         <p class="countdown-note" id="cancelledCountdown">10 秒后自动返回点单待机</p>
-        <button class="clear-button" id="cancelledClearBtn">返回待机</button>
+        <button class="clear-button" id="cancelledClearBtn" data-i18n="terminal.returnIdle">返回待机</button>
       </div>
 
       <div class="error-view is-hidden" id="errorView">
@@ -123,14 +124,14 @@
         <p class="quiet-label" id="errorLabel">制作暂时中断</p>
         <h1 id="errorTitle">设备正在处理</h1>
         <p class="subhead" id="errorMessage">请稍候或联系门店工作人员</p>
-        <button class="clear-button is-hidden" id="errorClearBtn">返回待机</button>
+        <button class="clear-button is-hidden" id="errorClearBtn" data-i18n="terminal.returnIdle">返回待机</button>
       </div>
 
       <footer class="display-footer"><span class="footer-brand"><svg aria-hidden="true"><use href="#mk-symbol"/></svg>COFFEE TERMINAL</span><i></i><span id="footerMessage">精品咖啡 · 新鲜现制</span></footer>
     </section>
 
     <aside class="console" id="console" aria-label="开发控制台">
-      <header class="console-header"><div class="console-title"><svg class="console-mark" aria-hidden="true"><use href="#mk-monogram"/></svg><div><span class="console-kicker">DEVELOPER CONSOLE</span><h2>开发控制台</h2><span class="console-connection"><span>●</span><span id="consoleConnectionText">DEVICE ONLINE</span></span></div></div><button class="close-console" id="closeConsole" aria-label="关闭控制台">×</button></header>
+      <header class="console-header"><div class="console-title"><svg class="console-mark" aria-hidden="true"><use href="#mk-monogram"/></svg><div><span class="console-kicker">DEVELOPER CONSOLE</span><h2 data-i18n="terminal.console.title">开发控制台</h2><span class="console-connection"><span>●</span><span id="consoleConnectionText">DEVICE ONLINE</span></span></div></div><button class="close-console" id="closeConsole" aria-label="关闭控制台" data-i18n-aria-label="terminal.console.close">×</button></header>
       <div class="console-scroll">
         <section class="console-section task-section"><div class="section-heading"><span>当前任务</span><span class="state" id="taskState">IDLE</span></div><div class="task-title" id="taskTitle">暂无制作任务</div><div class="task-meta" id="taskMeta">等待销售服务下发订单</div><button class="action primary-action" id="demoOrder">模拟后台下单</button></section>
         <section class="console-section"><div class="section-heading"><span>制作配方</span><button class="text-button" id="saveRecipe">保存</button></div><select id="recipeSelect" aria-label="选择配方"></select><textarea id="recipeEditor" spellcheck="false" aria-label="配方 JSON"></textarea><p class="help">配方变更保存到本地，仅用于调试。</p></section>
@@ -142,6 +143,8 @@
     </aside>
   </main>
   <div class="toast is-hidden" id="toast"></div>
+  <script src="i18n.js?v=20260904-i18n1"></script>
+  <script src="locales.js?v=20260904-i18n1"></script>
   <script src="vendor/animejs/anime.umd.min.js"></script>
   <script src="drink-visual.js?v=20260901"></script>
   <script src="app.js?v=20260901"></script>

@@ -339,6 +339,13 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(self.runtime.health()["transport"], "local")
         self.assertEqual(self.runtime.get_state()["backend"]["transport"], "local")
 
+    def test_ui_locale_is_persisted_without_runtime_metadata(self) -> None:
+        result = self.runtime.set_ui_locale("en-GB")
+        self.assertEqual(result, {"ok": True, "locale": "en-US"})
+        saved = json.loads((self.instance / "device.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["ui"]["locale"], "en-US")
+        self.assertNotIn("_configPath", saved)
+
 
 if __name__ == "__main__":
     unittest.main()
