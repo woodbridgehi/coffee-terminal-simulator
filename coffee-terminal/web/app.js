@@ -21,6 +21,7 @@ const mockApi = (() => {
     { materialId: 'milk', name: '鲜奶', unit: 'ml', onHand: 2400, reserved: 0, capacity: 4000, status: 'OK' },
     { materialId: 'cup-16oz', name: '16oz 杯', unit: 'piece', onHand: 72, reserved: 0, capacity: 100, status: 'OK' },
   ];
+  const previewPlan = recipe.steps.map((step, stepIndex) => ({ stepId: step.id, stepName: step.name, stepIndex, durationSeconds: step.durationSeconds, visual: { version: 1, actions: [['cups'], ['brew'], ['milk']][stepIndex], materials: step.consumes.map(item => ({ ...item, name: materials.find(m => m.materialId === item.materialId)?.name || item.materialId })) } }));
   const runtime = { deviceStatus: 'IDLE', connection: 'ONLINE', qrUrl: 'https://order.example.com/q/demo-coffee-bot-001', qrDataUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https%3A%2F%2Forder.example.com%2Fq%2Fdemo-coffee-bot-001', task: null, override: { globalFailureRate: 0, forceFailNext: false, offline: false }, inventory: { inventoryVersion: 1, materials }, events: [{ type: 'device.online', message: '浏览器预览模式：本地模拟 API 已就绪', occurredAt: new Date().toISOString() }] };
   const event = (type, message) => runtime.events.unshift({ type, message, occurredAt: new Date().toISOString() });
   setInterval(() => {
@@ -38,13 +39,14 @@ const mockApi = (() => {
   return {
     get_state: async () => ({ config: { deviceId: 'coffee-bot-001', deviceName: 'COFFEE BOT 001', ui: { locale: 'zh-CN' } }, recipes: [recipe], capabilities: { products: [{ recipeId: recipe.recipeId, available: true, maxServings: 13 }] }, runtime }),
     set_ui_locale: async (locale) => ({ ok: true, locale }),
-    start_demo_order: async () => { if (runtime.task && ['ACKNOWLEDGED', 'RUNNING', 'PAUSED', 'RETRY_WAIT'].includes(runtime.task.state)) return { ok: false, error: '设备已有执行中的任务' }; runtime.task = { taskId: 'task-browser-preview', orderId: 'order-1024', recipe, state: 'RUNNING', stepIndex: 0, stepProgress: 0, message: '开始制作', attempt: 1 }; runtime.deviceStatus = 'BUSY'; event('task.started', '开始模拟制作'); return { ok: true }; },
+    start_demo_order: async () => { if (runtime.task && ['ACKNOWLEDGED', 'RUNNING', 'PAUSED', 'RETRY_WAIT'].includes(runtime.task.state)) return { ok: false, error: '设备已有执行中的任务' }; runtime.task = { taskId: `task-browser-preview-${Date.now()}`, revision: 1, stepPlan: previewPlan, orderId: 'order-1024', recipe, state: 'RUNNING', stepIndex: 0, stepProgress: 0, message: '开始制作', attempt: 1 }; runtime.deviceStatus = 'BUSY'; event('task.started', '开始模拟制作'); return { ok: true }; },
     command: async (action) => {
       if (action === 'toggle-offline') { runtime.override.offline = !runtime.override.offline; runtime.connection = runtime.override.offline ? 'OFFLINE' : 'ONLINE'; event('device.connection', runtime.override.offline ? '网络已断开' : '网络已恢复'); return { ok: true }; }
       if (action === 'force-fail') { runtime.override.forceFailNext = true; event('debug.failure-armed', '下一执行步骤将强制失败'); return { ok: true }; }
       const task = runtime.task; if (!task) return { ok: false, error: '没有当前任务' };
       if (task.recoveryHold && ['resume', 'retry', 'skip'].includes(action)) return { ok: false, error: '请先核对重启前的制作结果' };
       if (action === 'pause' && task.state === 'RUNNING') task.state = 'PAUSED'; else if (action === 'resume' && task.state === 'PAUSED') task.state = 'RUNNING'; else if (action === 'skip' && ['RUNNING', 'PAUSED'].includes(task.state)) task.stepProgress = 1; else if (action === 'retry' && task.state === 'RETRY_WAIT' && task.failure?.retryable) { const stepId = task.recipe.steps[task.stepIndex].id; task.stepRetries ||= {}; task.stepRetries[stepId] = (task.stepRetries[stepId] || 0) + 1; task.attempt += 1; task.state = 'RUNNING'; task.stepProgress = 0; runtime.deviceStatus = 'BUSY'; } else if (action === 'clear' && ['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(task.state)) { runtime.task = null; runtime.deviceStatus = 'IDLE'; } else return { ok: false, error: '当前状态不支持该操作' };
+      task.revision = (task.revision || 0) + 1;
       event(`task.${action}`, `执行调试命令：${action}`); return { ok: true };
     },
     update_override: async (payload) => { Object.assign(runtime.override, payload); return { ok: true }; }, save_recipe: async () => ({ ok: true }), reload_config: async () => ({ ok: true }),
@@ -137,6 +139,7 @@ function stopCancelledCountdown() {
 }
 
 function render(data) {
+  window.CoffeeRobotIntegration?.terminal(data);
   state = data; const { config, runtime, recipes, capabilities } = data; const task = runtime.task;
   if (!localeInitialized) {
     localeInitialized = true;
@@ -249,7 +252,7 @@ function enrichStepName(name) {
   }
 }
 
-async function refresh() { try { render(await api().get_state()); } catch (error) { toast(t('terminal.error.connect', { message: error.message })); } }
+async function refresh() { try { render(await api().get_state()); } catch (error) { window.CoffeeRobotIntegration?.disconnected(); toast(t('terminal.error.connect', { message: error.message })); } }
 async function invoke(method, ...args) { try { const result = await api()[method](...args); if (!result?.ok) toast(result?.error || t('terminal.error.operationGeneric')); await refresh(); return result; } catch (error) { toast(t('terminal.error.operation', { message: error.message })); return null; } }
 
 const setConsole = (open) => $('.app-shell').classList.toggle('console-open', open);

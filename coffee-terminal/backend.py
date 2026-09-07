@@ -23,6 +23,7 @@ from local_api import DeviceApiServer
 from locales import normalize_locale
 from mqtt_transport import Mqtt5Transport, MqttTransportError
 from state_store import LocalStateStore, StateStoreError
+from robot_view import step_plan as robot_step_plan
 
 
 def now() -> str:
@@ -171,6 +172,9 @@ class CoffeeDeviceRuntime:
             runtime["events"] = list(self.events)
             runtime["qrDataUrl"] = self._qr_data_url(runtime.get("qrUrl", ""))
             runtime["inventory"] = self.inventory.snapshot()
+            if runtime.get("task"):
+                runtime["task"] = dict(runtime["task"])
+                runtime["task"]["stepPlan"] = runtime["task"].get("stepPlan") or robot_step_plan(runtime["task"]["recipe"], self.inventory.definitions)
             public_config = json.loads(json.dumps(self.config))
             public_backend = public_config.get("backend", {})
             public_backend["authConfigured"] = bool(public_backend.pop("authToken", None))
@@ -306,11 +310,12 @@ class CoffeeDeviceRuntime:
             execution_recipe = self.catalog.materialize_execution_recipe(recipe)
             planned_duration = sum(float(step["durationSeconds"]) for step in execution_recipe["steps"])
             task = {"taskId": command["taskId"], "orderId": command.get("orderId"), "orderNo": command.get("orderNo"), "messageId": command.get("messageId"), "recipe": execution_recipe, "state": "ACKNOWLEDGED", "stepIndex": 0, "stepProgress": 0.0, "overallProgress": 0.0, "stepElapsed": 0.0, "elapsedSeconds": 0.0, "remainingSeconds": planned_duration, "stepPrechecked": False, "attempt": 1, "stepRetries": {}, "plannedDurationSeconds": planned_duration, "message": "任务已接受，准备制作"}
+            task["stepPlan"] = robot_step_plan(execution_recipe, self.inventory.definitions)
             self._progress_reports[task["taskId"]] = (0.0, time.monotonic())
             self.runtime["task"] = task; self.runtime["deviceStatus"] = "RESERVED"
             self._persist_task(task)
             self._emit("inventory.reserved", "已预占整杯所需物料", {"taskId": task["taskId"], "orderId": task.get("orderId"), "messageId": task.get("messageId"), "taskRevision": task.get("revision"), "materials": requirements})
-            step_plan = [{"stepId": step["id"], "stepName": step["name"], "stepIndex": index, "durationSeconds": step["durationSeconds"]} for index, step in enumerate(execution_recipe["steps"])]
+            step_plan = task["stepPlan"]
             self._emit("task.acknowledged", "制作任务已接受", {**self._task_ref(task), **self._progress_ref(task), "messageId": task.get("messageId"), "plannedDurationSeconds": planned_duration, "stepPlan": step_plan, "stepDurations": step_plan})
             self._ack(command, True)
             self._inventory_changed()

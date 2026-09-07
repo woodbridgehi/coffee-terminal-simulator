@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Coffee Robotics · 双臂咖啡工作站</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%23255846'/%3E%3Cpath d='M11 11h15v16H11zM26 14h5v8h-5' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="robot-scene.css">
+</head>
+<body>
+  <header class="app-header">
+    <a class="wordmark" href="robot-scene.html" aria-label="Coffee Robotics 首页"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 7h15v18H6zM21 10h6v9h-6M10 3v1m5-1v1"/></svg>Coffee Robotics</a>
+    <h1>双臂咖啡工作站</h1>
+    <div class="header-actions"><span class="local-mode"><i></i>本地演示</span><a href="index.html">返回终端 <span aria-hidden="true">↗</span></a></div>
+  </header>
+  <main class="studio">
+    <section class="viewport" id="viewport" aria-label="可交互三维咖啡工作站">
+      <div id="canvasHost"></div>
+      <div class="viewport-top"><div><h2>工作站总览</h2><p>通用六轴机械臂 · 双臂协作</p></div>
+        <div class="view-tabs" role="group" aria-label="相机视角"><button data-view="perspective" aria-pressed="true">透视</button><button data-view="top" aria-pressed="false">俯视</button><button data-view="front" aria-pressed="false">正视</button></div>
+      </div>
+      <div id="labels" class="station-labels" aria-hidden="true"></div>
+      <div class="viewport-bottom"><div class="canvas-help">拖动旋转 · 滚轮缩放 · 右键平移</div><div class="view-options"><label><input id="showLabels" type="checkbox" checked>工位</label><label><input id="showAxes" type="checkbox">坐标轴</label><button id="fitView" title="恢复完整工作站视角" aria-label="视角复位">↺</button></div></div>
+      <div class="loading" id="loading" role="status">正在构建三维工作站…</div>
+      <div class="error-overlay" id="sceneError" role="alert" hidden><h2>三维场景暂时无法显示</h2><p id="errorText"></p><button onclick="location.reload()">重新加载</button></div>
+    </section>
+    <aside class="inspector" aria-label="仿真控制面板">
+      <section class="control-section">
+        <h2>流程控制</h2>
+        <label class="field" for="recipe"><span>配方</span><select id="recipe"><option value="latte">热拿铁</option><option value="americano">美式咖啡</option><option value="vanilla">香草拿铁</option></select></label>
+        <button class="primary" id="play" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 3 11 7-11 7z"/></svg><span>开始演示</span></button>
+        <div class="secondary-row"><button id="reset" disabled>↺ <span>复位</span></button><button id="next" disabled>下一步 <span aria-hidden="true">→</span></button></div>
+        <label class="field speed" for="speed"><span>速度</span><select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        <div class="status-line"><span class="status-dot" id="statusDot"></span><span id="status" role="status">准备就绪</span><span id="clock">00:00 / 00:44</span></div>
+        <p class="description" id="description">选择配方，观看从取杯到出杯的完整流程。</p>
+      </section>
+      <section class="control-section arm-section">
+        <div class="section-heading"><h2>机械臂</h2><label class="manual-switch"><input type="checkbox" id="manual">关节调试</label></div>
+        <div class="arm-tabs" role="group" aria-label="选择机械臂"><button data-arm="left" aria-pressed="true"><i></i>左臂</button><button data-arm="right" aria-pressed="false"><i></i>右臂</button></div>
+        <div class="joint-list" id="joints"></div>
+        <p class="joint-note" id="jointNote">演示时显示关节角度；开启调试可手动调整。</p>
+      </section>
+      <footer class="inspector-footer"><span>Three.js · 运动学演示</span><p>独立本地场景，未连接云端订单。<br>不包含动力学与自动碰撞规划。</p></footer>
+    </aside>
+    <section class="timeline" aria-label="制作流程时间线">
+      <div class="timeline-header"><span>制作流程</span><span id="recipeDetail">浓缩咖啡 + 鲜奶</span><output id="percent">0%</output></div>
+      <div class="stages" id="stages"></div>
+      <input class="seek" id="seek" type="range" min="0" max="1000" value="0" aria-label="制作流程进度" disabled>
+    </section>
+  </main>
+  <noscript><p>请启用 JavaScript 以运行三维仿真场景。</p></noscript>
+  <script src="robot-scene.bundle.js" defer></script>
+</body>
+</html>

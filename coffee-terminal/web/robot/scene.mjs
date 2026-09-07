@@ -1,0 +1,131 @@
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { createArm, createCup, createWorkcell, M } from './models.mjs';
+import { STATIONS } from './sequence.mjs';
+
+export class CoffeeScene {
+  constructor(host, labelHost) {
+    this.host = host; this.labelHost = labelHost;
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color('#e5e8e5');
+    this.scene.fog = new THREE.Fog('#e5e8e5', 12, 28);
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.domElement.setAttribute('aria-label', '双六轴机械臂三维场景，可拖动旋转、滚轮缩放');
+    this.renderer.domElement.tabIndex = 0;
+    host.append(this.renderer.domElement);
+    this.camera = new THREE.PerspectiveCamera(37, 1, 0.05, 50);
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true; this.controls.dampingFactor = 0.09;
+    this.controls.minDistance = 2.5; this.controls.maxDistance = 14;
+    this.controls.maxPolarAngle = Math.PI / 2 - 0.03;
+    this.controls.target.set(0, 0.98, 0);
+    this.pmrem = new THREE.PMREMGenerator(this.renderer);
+    const room = new RoomEnvironment();
+    this.environment = this.pmrem.fromScene(room, 0.04);
+    this.scene.environment = this.environment.texture; this.scene.environmentIntensity = 0.65;
+    room.dispose();
+    this.scene.add(new THREE.HemisphereLight('#fffdf5', '#6e7f71', 2.0));
+    const sun = new THREE.DirectionalLight('#fff9ed', 3.0);
+    sun.position.set(-3, 7, 5); sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -4; sun.shadow.camera.right = 4;
+    sun.shadow.camera.top = 4; sun.shadow.camera.bottom = -4; sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 16;
+    sun.shadow.normalBias = 0.025; sun.shadow.bias = -0.0001;
+    this.scene.add(sun);
+    const rim = new THREE.DirectionalLight('#eaf4ff', 1.3); rim.position.set(3, 4, -4); this.scene.add(rim);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshStandardMaterial({ color: '#dce1da', roughness: 0.9 }));
+    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; this.scene.add(floor);
+    const grid = new THREE.GridHelper(20, 50, '#b8c3b9', '#c9d1c8'); grid.position.y = 0.002;
+    grid.material.transparent = true; grid.material.opacity = 0.40; this.scene.add(grid);
+    this.cell = createWorkcell(); this.scene.add(this.cell.group);
+    this.arms = { left: createArm('left'), right: createArm('right') };
+    Object.values(this.arms).forEach((arm) => this.scene.add(arm.group));
+    this.cup = createCup(); this.scene.add(this.cup.group);
+    this.stream = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.007, 1, 10), M.coffee.clone());
+    this.stream.visible = false; this.scene.add(this.stream);
+    this.labels = Object.entries(STATIONS).map(([id, station]) => {
+      const element = document.createElement('div'); element.className = 'station-label';
+      element.innerHTML = `<b>${station.number}</b><span>${station.name}</span>`;
+      labelHost.append(element);
+      const heights = { cups: 1.73, ice: 1.86, brew: 2.17, water: 1.84, milk: 1.86, syrup: 2.19, handoff: 1.02, lid: 1.68, pickup: 0.93 };
+      const p = new THREE.Vector3(station.position[0], heights[id], station.position[2]);
+      if (['handoff', 'pickup'].includes(id)) p.z += 0.24;
+      return { id, element, position: p };
+    });
+    this.showLabels = true; this.view = 'perspective'; this.setView('perspective');
+    this.resizeObserver = new ResizeObserver(() => this.resize()); this.resizeObserver.observe(host);
+    this.resize();
+  }
+
+  resize() {
+    const width = this.host.clientWidth, height = this.host.clientHeight;
+    if (!width || !height) return;
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix(); this.renderer.setSize(width, height);
+    if (this.lastAspect && Math.abs(this.lastAspect - width / height) > 0.15) this.setView(this.view);
+    this.lastAspect = width / height;
+  }
+
+  setView(view) {
+    this.view = view;
+    const ratio = this.host.clientWidth / Math.max(1, this.host.clientHeight);
+    const scale = Math.max(1, 1.25 / Math.max(0.6, ratio));
+    const positions = { perspective: [3.5, 3.7, 5.8], top: [0, 7.5, 0.001], front: [0, 2.0, 7.5] };
+    const p = positions[view] || positions.perspective;
+    this.controls.target.set(0, 1.0, 0.02);
+    this.camera.position.set(p[0] * scale, 1 + (p[1] - 1) * scale, p[2] * scale);
+    this.camera.lookAt(this.controls.target); this.controls.update();
+  }
+
+  apply(state) {
+    this.state = state;
+    this.arms.left.move(state.left, state.gripLeft); this.arms.right.move(state.right, state.gripRight);
+    this.cup.group.position.set(...state.cup); this.cup.group.quaternion.identity();
+    this.cup.lid.visible = state.lid; this.cup.setFill(state.fill, state.milk);
+    this.cup.ice.visible = (state.ice || 0) > 0.1;
+    this.stream.visible = !!state.stream;
+    if (state.stream) {
+      const bottom = state.cup[1] - 0.074 + state.fill * 0.15, top = 1.455;
+      this.stream.position.set(state.cup[0], (top + bottom) / 2, state.cup[2]);
+      this.stream.scale.y = top - bottom;
+      this.stream.material.color.set({ coffee: '#634023', milk: '#fff4d8', water: '#b6d9d3', syrup: '#c68c36' }[state.stream]);
+    }
+    const pressing = state.description === '压合杯盖';
+    this.cell.press.position.y = 1.42 - (pressing ? Math.sin(Math.PI * state.segmentProgress) * 0.15 : 0);
+    for (const [id, pad] of Object.entries(this.cell.pads)) {
+      pad.material.color.set(id === state.station ? '#bf9245' : '#477261');
+      pad.material.emissive.set(id === state.station ? '#6c4312' : '#000000');
+      pad.material.emissiveIntensity = 0.35;
+    }
+    for (const label of this.labels) label.element.classList.toggle('active', label.id === state.station);
+  }
+
+  render() {
+    this.controls.update(); this.renderer.render(this.scene, this.camera);
+    const width = this.host.clientWidth, height = this.host.clientHeight;
+    for (const label of this.labels) {
+      const p = label.position.clone().project(this.camera);
+      const x = (p.x * 0.5 + 0.5) * width, y = (-p.y * 0.5 + 0.5) * height;
+      label.element.hidden = !this.showLabels || p.z > 1 || p.z < -1 || x < 35 || x > width - 35 || y < 75 || y > height - 55;
+      label.element.style.left = `${x}px`; label.element.style.top = `${y}px`;
+    }
+  }
+
+  dispose() {
+    this.resizeObserver.disconnect(); this.controls.dispose();
+    const geometries = new Set(), materials = new Set(), textures = new Set();
+    this.scene.traverse((object) => {
+      if (object.geometry) geometries.add(object.geometry);
+      if (object.material) for (const mat of [object.material].flat()) materials.add(mat);
+    });
+    for (const geometry of geometries) geometry.dispose();
+    for (const mat of materials) { if (mat.map) textures.add(mat.map); mat.dispose(); }
+    for (const texture of textures) texture.dispose();
+    this.environment.dispose(); this.pmrem.dispose(); this.renderer.dispose();
+  }
+}

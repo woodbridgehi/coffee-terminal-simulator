@@ -43,6 +43,12 @@ uv pip install --python .venv/bin/python -r requirements.lock
 
 ## 演示实例
 
+### 三维双臂工作站
+
+双击 `start-robot-scene.command`，或执行 `./start-robot-scene.command`，打开本地 Three.js 三维场景。
+包含双六轴机械臂、八个工位、三种饮品流程、时间轴及关节调试；无需连接云端。
+模拟器默认二维，点击“查看三维制作”可跟随当前任务、配方和库存；手机订单状态页也可观看同一任务。上述独立页面用于自由演示。操作与接入说明见 [三维工作站](docs/robot-scene.md)。
+
 | 实例 | 城市 | 饮品数 | 本地 API |
 | --- | --- | ---: | ---: |
 | `coffee-bot-003` | 北京 | 4 | `9103` |

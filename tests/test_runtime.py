@@ -130,6 +130,9 @@ class RuntimeTest(unittest.TestCase):
         plan = acknowledged["payload"]["stepPlan"]
         self.assertEqual([(step["stepId"], step["stepName"], step["stepIndex"]) for step in plan], [("cup", "取杯", 0), ("brew", "萃取", 1)])
         self.assertEqual(acknowledged["payload"]["stepDurations"], plan)
+        self.assertEqual(self.runtime.get_state()["runtime"]["task"]["stepPlan"], plan)
+        self.assertEqual(plan[0]["visual"]["actions"], ["cups"])
+        self.assertTrue(plan[1]["visual"]["materials"])
 
         task = self.runtime.runtime["task"]
         task.update({"state": "RUNNING", "stepIndex": 1, "stepProgress": 0.5})

@@ -56,6 +56,11 @@ class RecipeCatalog:
         if "priceMinor" in recipe and (not isinstance(recipe["priceMinor"], int) or recipe["priceMinor"] <= 0):
             errors.append("priceMinor 必须是正整数（最小货币单位）")
         for step in recipe.get("steps", []):
+            if "robotActions" in step:
+                from robot_view import ACTIONS
+                actions = step["robotActions"]
+                if not isinstance(actions, list) or not actions or any(not isinstance(action, str) or action not in ACTIONS for action in actions):
+                    errors.append(f"步骤 {step.get('id')} 的 robotActions 无效")
             if not all(key in step for key in ["id", "name", "durationSeconds"]):
                 errors.append("步骤必须包含 id、name、durationSeconds")
             elif float(step["durationSeconds"]) <= 0:
