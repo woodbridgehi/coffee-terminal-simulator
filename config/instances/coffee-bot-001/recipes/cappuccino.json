@@ -1,0 +1,16 @@
+{
+  "recipeId": "cappuccino-v1",
+  "skuCode": "CAPPUCCINO",
+  "version": "1.0.0",
+  "name": "卡布奇诺",
+  "priceMinor": 1900,
+  "enabled": true,
+  "display": {"description": "双份浓缩与绵密热奶", "sortOrder": 30},
+  "visual": {"profile": "iced-latte", "cup": "ceramic-mug", "layers": ["coffee", "milk", "foam"]},
+  "steps": [
+    {"id": "prepare-cup", "name": "准备杯子", "animationCue": "cup-arrive", "durationSeconds": 8, "durationRandomization": {"minSeconds": 7, "maxSeconds": 10}, "failureProfile": "cup-dispenser", "robotActions": ["cups"], "consumes": [{"materialId": "cup-12oz", "amount": 1, "unit": "count"}]},
+    {"id": "extract-coffee", "name": "萃取双份浓缩", "animationCue": "brew-stream", "durationSeconds": 28, "durationRandomization": {"minSeconds": 25, "maxSeconds": 32}, "failureProfile": "brewer", "robotActions": ["brew"], "consumes": [{"materialId": "coffee-beans", "amount": 18, "unit": "g"}, {"materialId": "water", "amount": 45, "unit": "ml"}]},
+    {"id": "steam-milk", "name": "注入绵密热奶", "animationCue": "milk-pour", "durationSeconds": 20, "durationRandomization": {"minSeconds": 18, "maxSeconds": 23}, "failureProfile": "milk-pump", "robotActions": ["milk"], "consumes": [{"materialId": "milk", "amount": 140, "unit": "ml"}]},
+    {"id": "seal-and-serve", "name": "封杯并出杯", "animationCue": "seal", "durationSeconds": 10, "durationRandomization": {"minSeconds": 9, "maxSeconds": 13}, "failureProfile": "lid-dispenser", "robotActions": ["lid", "pickup"], "consumes": [{"materialId": "lid-12oz", "amount": 1, "unit": "count"}]}
+  ]
+}

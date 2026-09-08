@@ -1,0 +1,17 @@
+{
+  "recipeId": "iced-americano-v1",
+  "skuCode": "ICED_AMERICANO",
+  "version": "1.0.0",
+  "name": "冰美式",
+  "priceMinor": 1400,
+  "enabled": true,
+  "display": {"description": "双份浓缩、冰块与净水", "sortOrder": 15},
+  "visual": {"profile": "americano", "cup": "transparent-tall", "layers": ["coffee", "water", "ice"]},
+  "steps": [
+    {"id": "prepare-cup", "name": "准备透明杯", "animationCue": "cup-arrive", "durationSeconds": 8, "durationRandomization": {"minSeconds": 7, "maxSeconds": 10}, "failureProfile": "cup-dispenser", "robotActions": ["cups"], "consumes": [{"materialId": "cup-12oz", "amount": 1, "unit": "count"}]},
+    {"id": "add-ice", "name": "加入冰块", "animationCue": "ice-drop", "durationSeconds": 12, "durationRandomization": {"minSeconds": 10, "maxSeconds": 15}, "failureProfile": "ice-dispenser", "robotActions": ["ice"], "consumes": [{"materialId": "ice", "amount": 170, "unit": "g"}]},
+    {"id": "extract-coffee", "name": "萃取双份浓缩", "animationCue": "brew-stream", "durationSeconds": 28, "durationRandomization": {"minSeconds": 25, "maxSeconds": 32}, "failureProfile": "brewer", "robotActions": ["brew"], "consumes": [{"materialId": "coffee-beans", "amount": 18, "unit": "g"}, {"materialId": "water", "amount": 45, "unit": "ml"}]},
+    {"id": "add-cold-water", "name": "添加净水", "animationCue": "water-pour", "durationSeconds": 14, "durationRandomization": {"minSeconds": 12, "maxSeconds": 17}, "failureProfile": "water-pump", "robotActions": ["water"], "consumes": [{"materialId": "water", "amount": 160, "unit": "ml"}]},
+    {"id": "seal-and-serve", "name": "封杯并出杯", "animationCue": "seal", "durationSeconds": 10, "durationRandomization": {"minSeconds": 9, "maxSeconds": 13}, "failureProfile": "lid-dispenser", "robotActions": ["lid", "pickup"], "consumes": [{"materialId": "lid-12oz", "amount": 1, "unit": "count"}]}
+  ]
+}

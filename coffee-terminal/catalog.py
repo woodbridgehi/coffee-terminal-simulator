@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import random
 from copy import deepcopy
 from pathlib import Path
@@ -37,7 +38,7 @@ class RecipeCatalog:
                     invalid.append({"file": path.name, "errors": [f"重复 recipeId: {recipe['recipeId']}"]})
                     continue
                 recipes[recipe["recipeId"]] = recipe
-            except (json.JSONDecodeError, OSError, KeyError, TypeError, ValueError) as exc:
+            except (json.JSONDecodeError, OSError, KeyError, TypeError, ValueError, AttributeError) as exc:
                 invalid.append({"file": path.name, "errors": [str(exc)]})
         self.recipes = recipes
         self.invalid = invalid
@@ -50,12 +51,24 @@ class RecipeCatalog:
         errors = [f"缺少字段 {field}" for field in required if field not in recipe]
         if not isinstance(recipe.get("steps"), list) or not recipe.get("steps"):
             errors.append("steps 必须是非空数组")
+            return errors
         visual_profile = recipe.get("visual", {}).get("profile")
         if visual_profile and visual_profile not in VISUAL_PROFILES:
             errors.append(f"不支持的 visual.profile: {visual_profile}")
         if "priceMinor" in recipe and (not isinstance(recipe["priceMinor"], int) or recipe["priceMinor"] <= 0):
             errors.append("priceMinor 必须是正整数（最小货币单位）")
+        step_ids: set[str] = set()
         for step in recipe.get("steps", []):
+            if not isinstance(step, dict):
+                errors.append("步骤必须是对象")
+                continue
+            step_id = step.get("id")
+            if not isinstance(step_id, str) or not step_id.strip():
+                errors.append("步骤 id 必须是非空字符串")
+            elif step_id in step_ids:
+                errors.append(f"重复 stepId: {step_id}")
+            else:
+                step_ids.add(step_id)
             if "robotActions" in step:
                 from robot_view import ACTIONS
                 actions = step["robotActions"]
@@ -63,8 +76,13 @@ class RecipeCatalog:
                     errors.append(f"步骤 {step.get('id')} 的 robotActions 无效")
             if not all(key in step for key in ["id", "name", "durationSeconds"]):
                 errors.append("步骤必须包含 id、name、durationSeconds")
-            elif float(step["durationSeconds"]) <= 0:
-                errors.append(f"步骤 {step.get('id')} 时长必须大于 0")
+            else:
+                try:
+                    duration = float(step["durationSeconds"])
+                    if not math.isfinite(duration) or duration <= 0:
+                        errors.append(f"步骤 {step.get('id')} 时长必须是有限正数")
+                except (TypeError, ValueError):
+                    errors.append(f"步骤 {step.get('id')} 时长必须是数字")
             if step.get("animationCue") and step["animationCue"] not in ANIMATION_CUES:
                 errors.append(f"步骤 {step.get('id')} 使用了不支持的 animationCue: {step['animationCue']}")
             randomization = step.get("durationRandomization")
@@ -76,7 +94,7 @@ class RecipeCatalog:
                     minimum = float(randomization["minSeconds"])
                     maximum = float(randomization["maxSeconds"])
                     baseline = float(step["durationSeconds"])
-                    if minimum <= 0 or maximum < minimum:
+                    if not all(math.isfinite(n) for n in (minimum, maximum, baseline)) or minimum <= 0 or maximum < minimum:
                         errors.append(f"步骤 {step.get('id')} 的随机时长范围无效")
                     elif not minimum <= baseline <= maximum:
                         errors.append(f"步骤 {step.get('id')} 的 durationSeconds 必须位于随机范围内")
@@ -127,6 +145,7 @@ class RecipeCatalog:
                 "enabled": recipe.get("enabled", True),
                 "available": not reasons,
                 "maxServings": max_servings,
+                "materialRequirements": self.inventory.requirements(recipe),
                 "estimatedDurationSeconds": sum(item[1] for item in duration_bounds),
                 "durationRangeSeconds": {"min": sum(item[0] for item in duration_bounds), "max": sum(item[2] for item in duration_bounds)},
                 "unavailableReasons": reasons,

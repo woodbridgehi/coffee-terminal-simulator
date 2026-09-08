@@ -1,7 +1,7 @@
 {
   "recipeId": "iced-latte-v1",
   "skuCode": "ICED_LATTE",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "name": "冰拿铁",
   "priceMinor": 1800,
   "enabled": true,
@@ -15,9 +15,10 @@
       "id": "prepare-cup",
       "name": "准备杯子",
       "animationCue": "cup-arrive",
-      "durationSeconds": 5,
-      "durationRandomization": {"minSeconds": 3, "maxSeconds": 7},
+      "durationSeconds": 8,
+      "durationRandomization": {"minSeconds": 7, "maxSeconds": 10},
       "failureProfile": "cup-dispenser",
+      "robotActions": ["cups"],
       "consumes": [
         {
           "materialId": "cup-12oz",
@@ -30,9 +31,10 @@
       "id": "add-ice",
       "name": "加入冰块",
       "animationCue": "ice-drop",
-      "durationSeconds": 8,
-      "durationRandomization": {"minSeconds": 6, "maxSeconds": 11},
+      "durationSeconds": 12,
+      "durationRandomization": {"minSeconds": 10, "maxSeconds": 15},
       "failureProfile": "ice-dispenser",
+      "robotActions": ["ice"],
       "consumes": [
         {
           "materialId": "ice",
@@ -45,9 +47,10 @@
       "id": "extract-coffee",
       "name": "萃取咖啡",
       "animationCue": "brew-stream",
-      "durationSeconds": 15,
-      "durationRandomization": {"minSeconds": 13, "maxSeconds": 20},
+      "durationSeconds": 28,
+      "durationRandomization": {"minSeconds": 25, "maxSeconds": 32},
       "failureProfile": "brewer",
+      "robotActions": ["brew"],
       "consumes": [
         {
           "materialId": "coffee-beans",
@@ -65,9 +68,10 @@
       "id": "add-milk",
       "name": "添加牛奶",
       "animationCue": "milk-pour",
-      "durationSeconds": 15,
-      "durationRandomization": {"minSeconds": 12, "maxSeconds": 19},
+      "durationSeconds": 16,
+      "durationRandomization": {"minSeconds": 14, "maxSeconds": 19},
       "failureProfile": "milk-pump",
+      "robotActions": ["milk"],
       "consumes": [
         {
           "materialId": "milk",
@@ -80,9 +84,10 @@
       "id": "seal-and-serve",
       "name": "封杯并出杯",
       "animationCue": "seal",
-      "durationSeconds": 6,
-      "durationRandomization": {"minSeconds": 4, "maxSeconds": 8},
+      "durationSeconds": 10,
+      "durationRandomization": {"minSeconds": 9, "maxSeconds": 13},
       "failureProfile": "lid-dispenser",
+      "robotActions": ["lid", "pickup"],
       "consumes": [
         {
           "materialId": "lid-12oz",

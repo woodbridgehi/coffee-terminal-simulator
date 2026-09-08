@@ -96,7 +96,7 @@ For headless remote integration tests:
 
 | Instance | City | Store | Drinks | Local API |
 | --- | --- | --- | ---: | ---: |
-| `coffee-bot-003` | Beijing | Beijing Chaoyang Demo Store | 4 | `9103` |
+| `coffee-bot-003` | Beijing | Beijing Chaoyang Demo Store | 5 | `9103` |
 | `coffee-bot-004` | Shanghai | Shanghai Jing'an Demo Store | 4 | `9104` |
 | `coffee-bot-005` | Shenzhen | Shenzhen Nanshan Demo Store | 4 | `9105` |
 
@@ -136,7 +136,7 @@ Never commit `.secrets/`, `.identity/`, private keys, activation codes, or produ
 
 ## Recipes, materials and inventory
 
-Recipes and material definitions are device-local JSON files. The runtime validates recipes, calculates supported capabilities and maximum servings, and persists mutable inventory in `state/inventory.json`. A configuration reload or restart is required after editing files directly. Inventory adjustments, reservations, consumption, and releases automatically increment the inventory version and trigger a cloud snapshot update in remote mode.
+Recipes and material definitions are device-local JSON files. The runtime validates recipes, calculates supported capabilities and maximum servings, and persists mutable inventory, jobs, and outgoing events together in `state/runtime.db`. Legacy `state/inventory.json` is imported once when SQLite has no inventory; subsequent edits to that JSON do not change live stock. Stop the simulator before backing up the complete `state/` directory. A configuration reload or restart is required after editing recipe or material definitions directly. Inventory adjustments, reservations, consumption, and releases automatically increment the inventory version and trigger a cloud snapshot update in remote mode.
 
 ## Testing
 

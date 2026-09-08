@@ -1,1 +1,55 @@
-{"recipeId":"bj-latte-v1","skuCode":"BJ_LATTE","version":"1.0.0","name":"朝阳热拿铁","priceMinor":1800,"enabled":true,"display":{"description":"浓缩与鲜奶","sortOrder":20},"visual":{"profile":"iced-latte"},"steps":[{"id":"brew","name":"萃取咖啡","durationSeconds":8,"consumes":[{"materialId":"coffee-beans","amount":18,"unit":"g"},{"materialId":"water","amount":45,"unit":"ml"}]},{"id":"milk","name":"添加牛奶","durationSeconds":6,"consumes":[{"materialId":"milk","amount":180,"unit":"ml"}]},{"id":"serve","name":"封杯出杯","durationSeconds":3,"consumes":[{"materialId":"cup-12oz","amount":1,"unit":"count"},{"materialId":"lid-12oz","amount":1,"unit":"count"}]}]}
+{
+  "recipeId": "bj-latte-v1",
+  "skuCode": "BJ_LATTE",
+  "version": "1.1.0",
+  "name": "朝阳热拿铁",
+  "priceMinor": 1800,
+  "enabled": true,
+  "display": { "description": "双份浓缩与醇厚鲜奶", "sortOrder": 20 },
+  "visual": { "profile": "iced-latte", "cup": "ceramic-mug", "layers": ["coffee", "milk"] },
+  "steps": [
+    {
+      "id": "prepare-cup",
+      "name": "准备杯子",
+      "animationCue": "cup-arrive",
+      "durationSeconds": 8,
+      "durationRandomization": { "minSeconds": 7, "maxSeconds": 10 },
+      "failureProfile": "cup-dispenser",
+      "robotActions": ["cups"],
+      "consumes": [{ "materialId": "cup-12oz", "amount": 1, "unit": "count" }]
+    },
+    {
+      "id": "extract-coffee",
+      "name": "萃取双份浓缩",
+      "animationCue": "brew-stream",
+      "durationSeconds": 28,
+      "durationRandomization": { "minSeconds": 25, "maxSeconds": 32 },
+      "failureProfile": "brewer",
+      "robotActions": ["brew"],
+      "consumes": [
+        { "materialId": "coffee-beans", "amount": 18, "unit": "g" },
+        { "materialId": "water", "amount": 45, "unit": "ml" }
+      ]
+    },
+    {
+      "id": "add-milk",
+      "name": "加入鲜奶",
+      "animationCue": "milk-pour",
+      "durationSeconds": 16,
+      "durationRandomization": { "minSeconds": 14, "maxSeconds": 19 },
+      "failureProfile": "milk-pump",
+      "robotActions": ["milk"],
+      "consumes": [{ "materialId": "milk", "amount": 180, "unit": "ml" }]
+    },
+    {
+      "id": "seal-and-serve",
+      "name": "封杯并出杯",
+      "animationCue": "seal",
+      "durationSeconds": 10,
+      "durationRandomization": { "minSeconds": 9, "maxSeconds": 13 },
+      "failureProfile": "lid-dispenser",
+      "robotActions": ["lid", "pickup"],
+      "consumes": [{ "materialId": "lid-12oz", "amount": 1, "unit": "count" }]
+    }
+  ]
+}

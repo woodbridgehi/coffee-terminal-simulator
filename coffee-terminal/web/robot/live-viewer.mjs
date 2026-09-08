@@ -2,6 +2,7 @@ import { CoffeeScene } from './scene.mjs';
 import { createLivePlan, livePosition, sampleSequence, normalizeSteps } from './live-plan.mjs';
 import { createSequence } from './sequence.mjs';
 import { SnapshotGate } from './live-snapshot.mjs';
+import { PlaybackClock } from './playback-clock.mjs';
 
 const names = { IDLE:'等待订单',CREATED:'等待支付',AWAITING_PAYMENT:'等待支付',QUEUED:'订单排队中',
   DISPATCHED:'等待设备接单',ACCEPTED:'设备已接单',ACKNOWLEDGED:'设备已接单',RUNNING:'正在制作',
@@ -15,12 +16,13 @@ export function mount(root) {
   scene.renderer.shadowMap.enabled = canvasHost.clientWidth > 600;
   const idle = sampleSequence(createSequence(),0);
   scene.apply(idle); scene.cup.group.visible=false;
-  let plan=null, signature='', snapshot=null, from=0, to=0, visualTime=0, blendAt=0, updatedAt=0, alive=true, raf;
+  let plan=null, signature='', snapshot=null, updatedAt=0, alive=true, raf;
+  const clock=new PlaybackClock();
   const gate=new SnapshotGate();
   function renderInfo() {
     if (!snapshot) return;
     const stale = snapshot.state === 'RUNNING' && performance.now()-updatedAt > (snapshot.source === 'terminal' ? 4000 : 12000);
-    const status = !snapshot.connected || stale ? '等待状态同步 · 动作已停留' : names[snapshot.state] || snapshot.state;
+    const status = snapshot.collected ? '顾客已取杯' : !snapshot.connected || stale ? '等待状态同步 · 动作已停留' : names[snapshot.state] || snapshot.state;
     root.querySelector('.rv-state').textContent = status;
     root.querySelector('.rv-title').textContent = snapshot.name || '咖啡机器人';
     root.querySelector('.rv-progress').textContent = `${Math.round(Math.max(0,Math.min(1,snapshot.overallProgress))*100)}%`;
@@ -40,11 +42,10 @@ export function mount(root) {
     if (plan && snapshot.taskId) {
       const target=livePosition(snapshot,plan);
       // Smooth only BETWEEN reported states. Never predict completion or extrapolate.
-      from=visualTime; to=target; blendAt=performance.now();
-      if (newTask || changed || snapshot.state !== 'RUNNING' || !snapshot.connected || to<from) from=to;
-      scene.cup.group.visible=true;
+      clock.update(target,performance.now(),{snap:newTask || changed || snapshot.state !== 'RUNNING' || !snapshot.connected});
+      scene.cup.group.visible=!snapshot.collected;
     } else {
-      scene.apply(idle); scene.cup.group.visible=false; from=to=0;
+      scene.apply(idle); scene.cup.group.visible=false; clock.update(0,performance.now(),{snap:true});
     }
     const list=root.querySelector('.rv-materials'); list.replaceChildren();
     const step=next.steps.find((s)=>s.stepId===next.stepId) || next.steps[next.stepIndex || 0];
@@ -62,9 +63,7 @@ export function mount(root) {
     try {
     if (!document.hidden) {
       if (plan && snapshot?.taskId) {
-        const t=Math.min(1,(now-blendAt)/600);
-        visualTime=from+(to-from)*t;
-        scene.apply(sampleSequence(plan,visualTime));
+        scene.apply(sampleSequence(plan,clock.sample(now)));
         // A held/failed order never presents a success-only pickup signal.
         if(snapshot.state!=='SUCCEEDED') scene.cell.pads.pickup.material.emissive.set('#000000');
       }

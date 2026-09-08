@@ -3,6 +3,11 @@ from __future__ import annotations
 
 import json
 import random
+import re
+import tempfile
+import logging
+from copy import deepcopy
+from functools import wraps
 import threading
 import time
 import uuid
@@ -32,6 +37,24 @@ def now() -> str:
 
 ACTIVE_STATES = {"RECEIVED", "VALIDATING", "ACKNOWLEDGED", "RUNNING", "PAUSED", "RETRY_WAIT"}
 SUPPORTED_TRANSPORTS = {"http", "mqtt5"}
+
+
+def atomic_runtime(method):
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        with self.lock:
+            before = deepcopy((self.runtime, self.inventory.state, self.events, self.sequence,
+                               self.material_statuses, self._progress_reports))
+            try:
+                with self.store.transaction():
+                    return method(self, *args, **kwargs)
+            except BaseException:
+                (self.runtime, self.inventory.state, self.events, self.sequence,
+                 self.material_statuses, self._progress_reports) = before
+                self.last_synced_inventory = -1
+                self.last_synced_capability = None
+                raise
+    return wrapped
 
 
 class CoffeeDeviceRuntime:
@@ -72,6 +95,7 @@ class CoffeeDeviceRuntime:
             instance_dir / "materials.json",
             instance_dir / "state" / "inventory.json",
             clear_reservations=not recoverable,
+            state_store=self.store,
         )
         self.material_statuses = {item["materialId"]: item["status"] for item in self.inventory.snapshot()["materials"]}
         self.catalog = RecipeCatalog(instance_dir / "recipes", self.inventory)
@@ -87,6 +111,14 @@ class CoffeeDeviceRuntime:
             "events": self.events,
         }
         self.cloud = CloudClient(config) if self.mode == "remote" else None
+        pickup = self.store.get_meta('pickup_slot')
+        if pickup is None:
+            pickup = {'state': 'EMPTY', 'revision': 0}
+            if recovered_task and recovered_task.get('state') == 'SUCCEEDED':
+                pickup = {'state': 'NEEDS_CHECK', 'revision': 1, 'taskId': recovered_task['taskId'],
+                          'orderId': recovered_task.get('orderId'), 'occupiedAt': now()}
+            self.store.set_meta('pickup_slot', pickup)
+        self.runtime['pickupSlot'] = pickup
         self.mqtt = Mqtt5Transport(self.device_id, config["backend"].get("mqtt", {})) if self.cloud and self.transport_name == "mqtt5" else None
         self.local_api: DeviceApiServer | None = None
         local_api = config.get("localApi", {})
@@ -115,6 +147,10 @@ class CoffeeDeviceRuntime:
 
     def _emit(self, event_type: str, message: str, payload: dict[str, Any] | None = None, queue: bool = True) -> dict[str, Any]:
         with self.lock:
+            if event_type.startswith(("task.", "inventory.")):
+                payload = {**(payload or {}), "inventoryVersion": self.inventory.state["version"]}
+            if event_type.startswith(('task.', 'pickup.')):
+                payload = {**(payload or {}), 'pickupSlot': deepcopy(self.runtime.get('pickupSlot', {}))}
             self.sequence += 1
             event = {"schema": "coffee.device-event.v1", "eventId": str(uuid.uuid4()), "deviceId": self.device_id, "bootId": self.boot_id, "sequence": self.sequence, "occurredAt": now(), "type": event_type, "message": message, "payload": payload or {}}
             self.events.insert(0, event)
@@ -202,9 +238,9 @@ class CoffeeDeviceRuntime:
     def set_ui_locale(self, locale: str) -> dict[str, Any]:
         normalized = normalize_locale(locale)
         with self.lock:
-            persisted = {key: value for key, value in self.config.items() if key != "_configPath"}
-            persisted.setdefault("ui", {})["locale"] = normalized
             config_path = Path(str(self.config.get("_configPath") or self.instance_dir / "device.json"))
+            persisted = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {key: value for key, value in self.config.items() if key != "_configPath"}
+            persisted.setdefault("ui", {})["locale"] = normalized
             write_config(config_path, persisted)
             self.config.setdefault("ui", {})["locale"] = normalized
         return {"ok": True, "locale": normalized}
@@ -215,6 +251,14 @@ class CoffeeDeviceRuntime:
             if task and task.get("state") in ACTIVE_STATES:
                 return {"ok": False, "error": "制作任务执行期间不能刷新配置"}
             try:
+                with tempfile.TemporaryDirectory() as temporary:
+                    state_path = Path(temporary) / "inventory.json"
+                    state_path.write_text(json.dumps(self.inventory.state), encoding="utf-8")
+                    candidate_inventory = InventoryManager(self.instance_dir / "materials.json", state_path, clear_reservations=False)
+                    candidate_catalog = RecipeCatalog(self.instance_dir / "recipes", candidate_inventory)
+                    if candidate_catalog.invalid:
+                        return {"ok": False, "error": "配置校验失败，继续使用上一有效配置", "invalidRecipes": candidate_catalog.invalid}
+                    FailurePolicy(self.instance_dir / "failures.json")
                 self.inventory.reload(); self.catalog.reload(); self.failures.reload()
                 self.last_synced_capability = None; self.last_synced_inventory = -1
                 self._emit("capability.changed", "本地配置已刷新", {"capabilityVersion": self.catalog.version})
@@ -228,15 +272,53 @@ class CoffeeDeviceRuntime:
                 task = self.runtime.get("task")
                 if task and task.get("state") in ACTIVE_STATES:
                     return {"ok": False, "error": "制作任务执行期间不能修改配方"}
-            recipe = json.loads(raw_json)
-            safe_name = "".join(char for char in recipe["recipeId"] if char.isalnum() or char in "-_")
-            if not safe_name:
-                raise ValueError("无效 recipeId")
-            (self.instance_dir / "recipes" / f"{safe_name}.json").write_text(json.dumps(recipe, ensure_ascii=False, indent=2), encoding="utf-8")
-            return self.reload_config()
-        except (ValueError, KeyError, json.JSONDecodeError) as exc:
+                recipe = json.loads(raw_json)
+                if not isinstance(recipe, dict) or not isinstance(recipe.get("recipeId"), str):
+                    raise ValueError("无效配方对象或 recipeId")
+                safe_name = "".join(char for char in recipe["recipeId"] if char.isalnum() or char in "-_")
+                if not safe_name or safe_name != recipe["recipeId"]:
+                    raise ValueError("无效 recipeId")
+                directory = self.instance_dir / "recipes"
+                sources = [p for p in directory.glob("*.json")
+                           if json.loads(p.read_text(encoding="utf-8")).get("recipeId") == recipe["recipeId"]]
+                if len(sources) > 1:
+                    raise ValueError("存在重复 recipeId，请先处理重复文件")
+                target = sources[0] if sources else directory / f"{safe_name}.json"
+                previous = target.read_bytes() if target.exists() else None
+                old = json.loads(previous) if previous else None
+                if old and old != recipe and old.get("version") == recipe.get("version"):
+                    version = str(old["version"])
+                    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
+                    recipe["version"] = (f"{match[1]}.{match[2]}.{int(match[3])+1}" if match
+                                         else f"{version}-rev-{uuid.uuid4().hex[:8]}")
+                # Validate the entire candidate directory without touching live files/catalog.
+                with tempfile.TemporaryDirectory() as temporary:
+                    candidate = Path(temporary)
+                    for source in directory.glob("*.json"):
+                        (candidate / source.name).write_bytes(source.read_bytes())
+                    write_config(candidate / target.name, recipe)
+                    validation = RecipeCatalog(candidate, self.inventory)
+                    if validation.invalid:
+                        return {"ok": False, "error": "配方校验失败", "invalidRecipes": validation.invalid}
+                write_config(target, recipe)
+                try:
+                    self.catalog.reload()
+                    if self.catalog.invalid:
+                        raise ValueError("配方加载失败")
+                except Exception:
+                    if previous is None:
+                        target.unlink()
+                    else:
+                        write_config(target, json.loads(previous))
+                    self.catalog.reload()
+                    raise
+                self.last_synced_capability = None
+                self._emit("capability.changed", "配方已保存", {"capabilityVersion": self.catalog.version})
+                return {"ok": True, "recipeVersion": recipe["version"], "capabilities": self.capabilities()}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
             return {"ok": False, "error": str(exc)}
 
+    @atomic_runtime
     def adjust_inventory(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:
             change = self.inventory.adjust(payload["materialId"], payload.get("mode", "ADD"), float(payload["amount"]))
@@ -272,6 +354,7 @@ class CoffeeDeviceRuntime:
         demo_order_no = f"C{datetime.now().strftime('%m%d')}-{uuid.uuid4().hex[:6].upper()}"
         return self._accept_task({"messageId": f"local-{uuid.uuid4()}", "type": "MAKE_DRINK", "taskId": f"task-{uuid.uuid4().hex[:10]}", "orderId": f"order-{uuid.uuid4().hex[:6]}", "orderNo": demo_order_no, "recipeId": recipe_id})
 
+    @atomic_runtime
     def _accept_task(self, command: dict[str, Any]) -> dict[str, Any]:
         with self.lock:
             if not isinstance(command.get("taskId"), str) or not command["taskId"].strip() or not isinstance(command.get("recipeId"), str) or not command["recipeId"].strip():
@@ -294,6 +377,8 @@ class CoffeeDeviceRuntime:
                 self._ack(command, accepted, None if accepted else "TASK_ALREADY_CANCELLED", details)
                 return {"ok": accepted, "taskId": command["taskId"], **details}
             current = self.runtime.get("task")
+            if self.runtime['pickupSlot']['state'] != 'EMPTY':
+                return self._reject(command, 'PICKUP_OCCUPIED', {'pickupSlot': self.runtime['pickupSlot']})
             if current and current.get("state") in ACTIVE_STATES:
                 return self._reject(command, "DEVICE_BUSY", {"currentTaskId": current.get("taskId")})
             recipe = self.catalog.get(command.get("recipeId", ""))
@@ -363,6 +448,18 @@ class CoffeeDeviceRuntime:
         self.store.save_job(task)
 
     # Local task commands
+    def confirm_pickup(self, task_id: str) -> dict[str, Any]:
+        """Local simulated sensor confirmation, bound to the displayed task."""
+        return self._apply_command('collect', target_task_id=task_id)
+
+    def _set_pickup(self, state: str, task: dict[str, Any]) -> None:
+        previous = self.runtime['pickupSlot']
+        slot = {'state': state, 'revision': previous['revision'] + 1,
+                'taskId': task['taskId'], 'orderId': task.get('orderId'),
+                'occupiedAt': previous.get('occupiedAt') if state != 'OCCUPIED' else now()}
+        self.runtime['pickupSlot'] = slot
+        self.store.set_meta('pickup_slot', slot)
+
     def command(self, action: str) -> dict[str, Any]:
         if self.cloud and action not in {"toggle-offline"}:
             try:
@@ -372,6 +469,7 @@ class CoffeeDeviceRuntime:
             return {"ok": True, "message": "命令已发送后台，等待设备命令轮询返回"}
         return self._apply_command(action)
 
+    @atomic_runtime
     def _apply_command(self, action: str, target_task_id: str | None = None) -> dict[str, Any]:
         with self.lock:
             if action == "toggle-offline":
@@ -389,6 +487,20 @@ class CoffeeDeviceRuntime:
                 return {"ok": False, "reasonCode": "NO_ACTIVE_TASK", "error": "没有当前任务"}
             if target_task_id and target_task_id != task.get("taskId"):
                 return {"ok": False, "reasonCode": "TASK_MISMATCH", "error": "命令目标不是当前任务", "currentTaskId": task.get("taskId"), "targetTaskId": target_task_id}
+            if action == 'collect':
+                if (not target_task_id or task['state'] != 'SUCCEEDED' or self.runtime['pickupSlot']['state'] == 'EMPTY'
+                        or self.runtime['pickupSlot'].get('taskId') != target_task_id):
+                    return {'ok': False, 'reasonCode': 'PICKUP_NOT_PENDING', 'error': '当前没有待确认取走的杯子'}
+                task['collectedAt'] = now()
+                self._set_pickup('EMPTY', task)
+                self._persist_task(task)
+                self._emit('pickup.collected', '已确认顾客取杯，取杯位空闲', self._task_ref(task))
+                self.runtime['task'] = None
+                self.runtime['deviceStatus'] = 'IDLE'
+                self.store.clear_current_job()
+                return {'ok': True}
+            if action == 'clear' and self.runtime['pickupSlot']['state'] != 'EMPTY':
+                return {'ok': False, 'reasonCode': 'PICKUP_OCCUPIED', 'error': '请先确认杯子已取走，不能直接清空取杯位'}
             if task.get("recoveryHold") and action in {"resume", "retry", "skip"}:
                 return {"ok": False, "reasonCode": "RECOVERY_REQUIRES_RECONCILIATION", "error": "重启后的物理结果未知，需核对结果并受控取消旧任务，不能直接继续制作"}
             if action == "pause" and task["state"] == "RUNNING":
@@ -428,53 +540,90 @@ class CoffeeDeviceRuntime:
     def _execution_loop(self) -> None:
         tick = 0.25
         while not self.stop_event.wait(tick):
-            with self.lock:
-                task = self.runtime.get("task")
-                if not task or self.runtime["override"]["offline"]:
-                    continue
-                if task["state"] == "ACKNOWLEDGED":
-                    task["state"] = "RUNNING"; self.runtime["deviceStatus"] = "BUSY"
-                    self._persist_task(task)
-                    self._emit("task.started", "开始制作", {**self._task_ref(task), **self._progress_ref(task)})
-                if task["state"] != "RUNNING":
-                    continue
-                step = task["recipe"]["steps"][task["stepIndex"]]
-                if not task["stepPrechecked"]:
-                    failed, profile = self.failures.should_fail(step, "before")
-                    self.runtime["override"]["forceFailNext"] = self.failures.force_fail_next
-                    if failed:
-                        self._fail_task(task, step, profile, consume=False); continue
-                    task["stepPrechecked"] = True; task["message"] = step["name"]
-                    self._persist_task(task)
-                    self._emit("step.started", f"开始：{step['name']}", {**self._task_ref(task), **self._progress_ref(task)})
-                task["stepElapsed"] += tick
-                task["stepProgress"] = min(1.0, task["stepElapsed"] / float(step["durationSeconds"]))
-                task.update(self._task_progress_fields(task))
-                progress = self._progress_ref(task)
-                if self._should_report_progress(task["taskId"], float(progress["overallProgress"])):
-                    self._persist_task(task)
-                    self._emit("task.progress", step["name"], {**self._task_ref(task), **progress, "progress": task["stepProgress"]})
-                if task["stepProgress"] < 1:
-                    continue
-                failed, profile = self.failures.should_fail(step, "after")
-                self.runtime["override"]["forceFailNext"] = self.failures.force_fail_next
-                if failed:
-                    self._fail_task(task, step, profile, consume=bool(profile.get("consumeOnFailure"))); continue
-                self._consume_step(task, step)
-                self._persist_task(task)
-                self._emit("step.completed", f"完成：{step['name']}", {**self._task_ref(task), **self._progress_ref(task)})
-                self._advance_step(task)
+            try:
+                self._execution_tick(tick)
+            except Exception:
+                logging.exception("Execution transaction failed; holding production")
+                with self.lock:
+                    task = self.runtime.get("task")
+                    if not task:
+                        continue
+                    task.update(state="PAUSED", recoveryHold=True,
+                                message="本地状态保存失败，请检查后人工恢复",
+                                failure={"code": "LOCAL_STORAGE_ERROR", "retryable": False})
+                    self.runtime["deviceStatus"] = "BUSY"
+                    try:
+                        with self.store.transaction():
+                            self._persist_task(task)
+                            self._emit("task.recovered", task["message"],
+                                       {**self._task_ref(task), "failure": task["failure"]})
+                    except Exception:
+                        logging.exception("Could not persist storage failure hold")
 
-    def _consume_step(self, task: dict[str, Any], step: dict[str, Any]) -> None:
-        changes = self.inventory.consume_step(task["taskId"], step["id"], step.get("consumes", []), attempt=int(task.get("attempt", 1)))
+    @atomic_runtime
+    def _execution_tick(self, tick: float = 0.25) -> None:
+        task = self.runtime.get("task")
+        pickup = self.runtime['pickupSlot']
+        if task and pickup['state'] == 'OCCUPIED':
+            occupied_at = datetime.fromisoformat(pickup['occupiedAt'].replace('Z', '+00:00'))
+            if (datetime.now(timezone.utc) - occupied_at).total_seconds() >= 120:
+                self._set_pickup('NEEDS_CHECK', task)
+                self._emit('pickup.overdue', '取杯等待超过两分钟，请现场核查', self._task_ref(task))
+        if not task or self.runtime["override"]["offline"]:
+            return
+        if task["state"] == "ACKNOWLEDGED":
+            task["state"] = "RUNNING"; self.runtime["deviceStatus"] = "BUSY"
+            self._persist_task(task)
+            self._emit("task.started", "开始制作", {**self._task_ref(task), **self._progress_ref(task)})
+        if task["state"] != "RUNNING":
+            return
+        step = task["recipe"]["steps"][task["stepIndex"]]
+        if not task["stepPrechecked"]:
+            failed, profile = self.failures.should_fail(step, "before")
+            self.runtime["override"]["forceFailNext"] = self.failures.force_fail_next
+            if failed:
+                self._fail_task(task, step, profile, consume=False); return
+            task["stepPrechecked"] = True; task["message"] = step["name"]
+            self._persist_task(task)
+            self._emit("step.started", f"开始：{step['name']}", {**self._task_ref(task), **self._progress_ref(task)})
+        task["stepElapsed"] += tick
+        task["stepProgress"] = min(1.0, task["stepElapsed"] / float(step["durationSeconds"]))
+        task.update(self._task_progress_fields(task))
+        progress = self._progress_ref(task)
+        if self._should_report_progress(task["taskId"], float(progress["overallProgress"])):
+            self._persist_task(task)
+            self._emit("task.progress", step["name"], {**self._task_ref(task), **progress, "progress": task["stepProgress"]})
+        if task["stepProgress"] < 1:
+            return
+        failed, profile = self.failures.should_fail(step, "after")
+        self.runtime["override"]["forceFailNext"] = self.failures.force_fail_next
+        if failed:
+            self._fail_task(task, step, profile, consume=bool(profile.get("consumeOnFailure"))); return
+        if not self._consume_step(task, step):
+            return
+        self._persist_task(task)
+        self._emit("step.completed", f"完成：{step['name']}", {**self._task_ref(task), **self._progress_ref(task)})
+        self._advance_step(task)
+
+    def _consume_step(self, task: dict[str, Any], step: dict[str, Any]) -> bool:
+        try:
+            changes = self.inventory.consume_step(task["taskId"], step["id"], step.get("consumes", []), attempt=int(task.get("attempt", 1)))
+        except InventoryError as exc:
+            task.update(state="PAUSED", recoveryHold=True, message=str(exc),
+                        failure={"code": "INVENTORY_INCONSISTENT", "stepId": step["id"], "retryable": False})
+            self.runtime["deviceStatus"] = "BUSY"
+            self._persist_task(task)
+            self._emit("task.recovered", str(exc), {**self._task_ref(task), "failure": task["failure"]})
+            return False
         for change in changes:
             self._emit("inventory.consumed", f"已消耗 {change['materialId']} {change['amount']} {change['unit']}", {**self._task_ref(task), "stepId": step["id"], "inventoryVersion": self.inventory.state["version"], **change})
         if changes:
             self._inventory_changed()
+        return True
 
     def _fail_task(self, task: dict[str, Any], step: dict[str, Any], profile: dict[str, Any], consume: bool) -> None:
-        if consume:
-            self._consume_step(task, step)
+        if consume and not self._consume_step(task, step):
+            return
         self.inventory.release(task["taskId"])
         retries_used = int(task.get("stepRetries", {}).get(step["id"], 0))
         max_retries = int(profile.get("maxRetries", 0))
@@ -491,6 +640,7 @@ class CoffeeDeviceRuntime:
     def _advance_step(self, task: dict[str, Any]) -> None:
         task["stepIndex"] += 1
         if task["stepIndex"] >= len(task["recipe"]["steps"]):
+            self._set_pickup('OCCUPIED', task)
             task["stepIndex"] = len(task["recipe"]["steps"]) - 1; task["stepProgress"] = 1.0; task["state"] = "SUCCEEDED"; task["message"] = "咖啡制作完成，请取杯"; self.runtime["deviceStatus"] = "READY"
             task.update(self._task_progress_fields(task))
             self.inventory.release(task["taskId"])
@@ -735,6 +885,7 @@ class CoffeeDeviceRuntime:
         task = self.runtime.get("task") or {}
         fingerprint = (
             self.runtime["deviceStatus"], task.get("taskId"), task.get("state"),
+            self.runtime['pickupSlot']['revision'],
         )
         if fingerprint == self._last_mqtt_state_fingerprint:
             return
@@ -747,6 +898,7 @@ class CoffeeDeviceRuntime:
             "currentTaskId": task.get("taskId"),
             "currentTaskState": task.get("state"),
             "currentTaskRevision": task.get("revision"),
+            "pickupSlot": deepcopy(self.runtime['pickupSlot']),
             "sentAt": now(),
         })
         self._last_mqtt_state_fingerprint = fingerprint

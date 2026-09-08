@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 import json
+from copy import deepcopy
 
 from locales import normalize_locale
 
@@ -76,6 +77,13 @@ def load_config(path: Path) -> dict[str, Any]:
 
 def write_config(path: Path, config: dict[str, Any]) -> None:
     """Atomically persist non-secret device configuration."""
+    config = deepcopy(config)
+    config.pop("_configPath", None)
+    backend = config.get("backend", {})
+    backend.pop("authToken", None)
+    mqtt = backend.get("mqtt", {})
+    mqtt.pop("password", None)
+    mqtt.pop("proxyPassword", None)
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temporary = Path(temporary_name)

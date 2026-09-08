@@ -39,7 +39,11 @@ const mockApi = (() => {
   return {
     get_state: async () => ({ config: { deviceId: 'coffee-bot-001', deviceName: 'COFFEE BOT 001', ui: { locale: 'zh-CN' } }, recipes: [recipe], capabilities: { products: [{ recipeId: recipe.recipeId, available: true, maxServings: 13 }] }, runtime }),
     set_ui_locale: async (locale) => ({ ok: true, locale }),
-    start_demo_order: async () => { if (runtime.task && ['ACKNOWLEDGED', 'RUNNING', 'PAUSED', 'RETRY_WAIT'].includes(runtime.task.state)) return { ok: false, error: '设备已有执行中的任务' }; runtime.task = { taskId: `task-browser-preview-${Date.now()}`, revision: 1, stepPlan: previewPlan, orderId: 'order-1024', recipe, state: 'RUNNING', stepIndex: 0, stepProgress: 0, message: '开始制作', attempt: 1 }; runtime.deviceStatus = 'BUSY'; event('task.started', '开始模拟制作'); return { ok: true }; },
+    confirm_pickup: async (taskId) => {
+      if (runtime.task?.taskId !== taskId || runtime.task?.state !== 'SUCCEEDED') return { ok: false, error: '没有对应的待取杯任务' };
+      runtime.task = null; runtime.deviceStatus = 'IDLE'; event('pickup.collected', '顾客已取杯'); return { ok: true };
+    },
+    start_demo_order: async () => { if (runtime.task && ['ACKNOWLEDGED', 'RUNNING', 'PAUSED', 'RETRY_WAIT', 'SUCCEEDED'].includes(runtime.task.state)) return { ok: false, error: '设备已有执行中的任务' }; runtime.task = { taskId: `task-browser-preview-${Date.now()}`, revision: 1, stepPlan: previewPlan, orderId: 'order-1024', recipe, state: 'RUNNING', stepIndex: 0, stepProgress: 0, message: '开始制作', attempt: 1 }; runtime.deviceStatus = 'BUSY'; event('task.started', '开始模拟制作'); return { ok: true }; },
     command: async (action) => {
       if (action === 'toggle-offline') { runtime.override.offline = !runtime.override.offline; runtime.connection = runtime.override.offline ? 'OFFLINE' : 'ONLINE'; event('device.connection', runtime.override.offline ? '网络已断开' : '网络已恢复'); return { ok: true }; }
       if (action === 'force-fail') { runtime.override.forceFailNext = true; event('debug.failure-armed', '下一执行步骤将强制失败'); return { ok: true }; }
@@ -75,8 +79,6 @@ function renderInventory(snapshot) {
   if (html !== renderCache.inventory) { renderCache.inventory = html; $('#inventoryList').innerHTML = html; }
 }
 
-let readyTimer = null;
-let readyDeadline = 0;
 let cancelledTimer = null;
 let cancelledDeadline = 0;
 let lastQrUrl = '';
@@ -96,26 +98,6 @@ function formatPickupCode(orderNo, orderId, taskId) {
   return raw.slice(-4).toUpperCase();
 }
 
-function startReadyCountdown(durationSeconds = 10) {
-  if (readyTimer) return;
-  readyDeadline = Date.now() + durationSeconds * 1000;
-  const updateNote = () => {
-    const remaining = Math.max(0, Math.ceil((readyDeadline - Date.now()) / 1000));
-    const el = $('#readyCountdown');
-    if (el) el.textContent = t('terminal.returnCountdown', { seconds: remaining });
-    if (remaining <= 0) {
-      stopReadyCountdown();
-      invoke('command', 'clear');
-    }
-  };
-  updateNote();
-  readyTimer = setInterval(updateNote, 250);
-}
-
-function stopReadyCountdown() {
-  if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
-  readyDeadline = 0;
-}
 
 function startCancelledCountdown(durationSeconds = 10) {
   if (cancelledTimer) return;
@@ -180,9 +162,7 @@ function render(data) {
   setVisible('#errorView', isFailed || isHold);
 
   if (isReady) {
-    startReadyCountdown();
-  } else {
-    stopReadyCountdown();
+    $('#readyCountdown').textContent = t(runtime.pickupSlot?.state === 'NEEDS_CHECK' ? 'terminal.pickupOverdue' : 'terminal.pickupWaiting');
   }
 
   if (isCancelled) {
@@ -304,7 +284,7 @@ $('#toggleOffline').onclick = () => invoke('command', 'toggle-offline');
 $('#pauseResume').onclick = () => invoke('command', state?.runtime.task?.state === 'PAUSED' ? 'resume' : 'pause');
 $('#skipStep').onclick = () => invoke('command', 'skip');
 $('#retryTask').onclick = () => invoke('command', 'retry');
-$('#clearButton').onclick = () => { stopReadyCountdown(); invoke('command', 'clear'); };
+$('#clearButton').onclick = () => invoke('confirm_pickup', state?.runtime?.task?.taskId);
 $('#cancelledClearBtn').onclick = () => { stopCancelledCountdown(); invoke('command', 'clear'); };
 $('#errorClearBtn').onclick = () => invoke('command', 'clear');
 

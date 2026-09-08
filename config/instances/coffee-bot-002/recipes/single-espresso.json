@@ -1,15 +1,15 @@
 {
-  "recipeId": "espresso-v1",
-  "skuCode": "ESPRESSO",
-  "version": "1.1.0",
-  "name": "双份浓缩",
-  "priceMinor": 1000,
+  "recipeId": "single-espresso-v1",
+  "skuCode": "SINGLE_ESPRESSO",
+  "version": "1.0.0",
+  "name": "单份浓缩",
+  "priceMinor": 800,
   "enabled": true,
-  "display": {"description": "短杯双份浓缩", "sortOrder": 10},
+  "display": {"description": "短杯单份意式浓缩", "sortOrder": 5},
   "visual": {"profile": "espresso", "cup": "ceramic-espresso", "layers": ["espresso", "crema"]},
   "steps": [
     {"id": "prepare-cup", "name": "准备浓缩杯", "animationCue": "cup-arrive", "durationSeconds": 8, "durationRandomization": {"minSeconds": 7, "maxSeconds": 10}, "failureProfile": "cup-dispenser", "robotActions": ["cups"], "consumes": [{"materialId": "cup-4oz", "amount": 1, "unit": "count"}]},
-    {"id": "extract-coffee", "name": "萃取双份浓缩", "animationCue": "brew-stream", "durationSeconds": 32, "durationRandomization": {"minSeconds": 29, "maxSeconds": 36}, "failureProfile": "brewer", "robotActions": ["brew"], "consumes": [{"materialId": "coffee-beans", "amount": 18, "unit": "g"}, {"materialId": "water", "amount": 45, "unit": "ml"}]},
+    {"id": "extract-coffee", "name": "萃取单份浓缩", "animationCue": "brew-stream", "durationSeconds": 25, "durationRandomization": {"minSeconds": 23, "maxSeconds": 28}, "failureProfile": "brewer", "robotActions": ["brew"], "consumes": [{"materialId": "coffee-beans", "amount": 9, "unit": "g"}, {"materialId": "water", "amount": 30, "unit": "ml"}]},
     {"id": "serve", "name": "移动到取杯口", "animationCue": "serve", "durationSeconds": 10, "durationRandomization": {"minSeconds": 8, "maxSeconds": 12}, "failureProfile": "output-gate", "robotActions": ["pickup"], "consumes": []}
   ]
 }

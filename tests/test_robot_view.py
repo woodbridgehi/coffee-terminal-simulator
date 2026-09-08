@@ -35,3 +35,34 @@ def test_custom_actions_are_explicit_and_unknown_steps_wait():
     recipe={"steps":[{"id":"special","name":"Custom","durationSeconds":3,"robotActions":["syrup","milk"]},
                      {"id":"calibrate","name":"校准","durationSeconds":2}]}
     assert [s["visual"]["actions"] for s in step_plan(recipe,{})] == [["syrup","milk"],["wait"]]
+
+
+def test_primary_demo_catalogs_keep_readable_pacing_and_valid_materials():
+    expected_recipe_counts = {
+        "coffee-bot-001": 5,
+        "coffee-bot-002": 3,
+        "coffee-bot-003": 5,
+    }
+    for instance_id, expected_count in expected_recipe_counts.items():
+        instance_dir = ROOT / "config" / "instances" / instance_id
+        materials = {
+            item["materialId"]: item
+            for item in json.loads((instance_dir / "materials.json").read_text())["materials"]
+        }
+        recipes = [json.loads(path.read_text()) for path in (instance_dir / "recipes").glob("*.json")]
+        assert len(recipes) == expected_count
+        assert len({recipe["recipeId"] for recipe in recipes}) == expected_count
+
+        for recipe in recipes:
+            assert len(recipe["steps"]) >= 3
+            assert sum(float(step["durationSeconds"]) for step in recipe["steps"]) >= 43
+            plan = step_plan(recipe, materials)
+            assert plan[0]["visual"]["actions"] == ["cups"]
+            assert "pickup" in plan[-1]["visual"]["actions"]
+            for step in recipe["steps"]:
+                assert float(step["durationSeconds"]) >= 8
+                randomization = step.get("durationRandomization", {})
+                assert float(randomization.get("minSeconds", step["durationSeconds"])) >= 7
+                for consumption in step.get("consumes", []):
+                    definition = materials[consumption["materialId"]]
+                    assert consumption["unit"] == definition["unit"]

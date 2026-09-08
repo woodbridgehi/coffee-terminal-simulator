@@ -1,1 +1,65 @@
-{"recipeId":"bj-mocha-v1","skuCode":"BJ_MOCHA","version":"1.0.0","name":"朝阳摩卡","priceMinor":2200,"enabled":true,"display":{"description":"咖啡与奶香特调","sortOrder":40},"visual":{"profile":"generic"},"steps":[{"id":"brew","name":"萃取咖啡","durationSeconds":8,"consumes":[{"materialId":"coffee-beans","amount":18,"unit":"g"},{"materialId":"water","amount":45,"unit":"ml"}]},{"id":"milk","name":"添加牛奶","durationSeconds":6,"consumes":[{"materialId":"milk","amount":150,"unit":"ml"}]},{"id":"serve","name":"封杯出杯","durationSeconds":3,"consumes":[{"materialId":"cup-12oz","amount":1,"unit":"count"},{"materialId":"lid-12oz","amount":1,"unit":"count"}]}]}
+{
+  "recipeId": "bj-mocha-v1",
+  "skuCode": "BJ_MOCHA",
+  "version": "1.1.0",
+  "name": "朝阳摩卡",
+  "priceMinor": 2200,
+  "enabled": true,
+  "display": { "description": "双份浓缩、巧克力与鲜奶", "sortOrder": 40 },
+  "visual": { "profile": "hazelnut-special", "cup": "ceramic-mug", "layers": ["coffee", "chocolate", "milk"] },
+  "steps": [
+    {
+      "id": "prepare-cup",
+      "name": "准备杯子",
+      "animationCue": "cup-arrive",
+      "durationSeconds": 8,
+      "durationRandomization": { "minSeconds": 7, "maxSeconds": 10 },
+      "failureProfile": "cup-dispenser",
+      "robotActions": ["cups"],
+      "consumes": [{ "materialId": "cup-12oz", "amount": 1, "unit": "count" }]
+    },
+    {
+      "id": "extract-coffee",
+      "name": "萃取双份浓缩",
+      "animationCue": "brew-stream",
+      "durationSeconds": 28,
+      "durationRandomization": { "minSeconds": 25, "maxSeconds": 32 },
+      "failureProfile": "brewer",
+      "robotActions": ["brew"],
+      "consumes": [
+        { "materialId": "coffee-beans", "amount": 18, "unit": "g" },
+        { "materialId": "water", "amount": 45, "unit": "ml" }
+      ]
+    },
+    {
+      "id": "add-chocolate",
+      "name": "加入巧克力酱",
+      "animationCue": "syrup-swirl",
+      "durationSeconds": 10,
+      "durationRandomization": { "minSeconds": 8, "maxSeconds": 13 },
+      "failureProfile": "syrup-pump",
+      "robotActions": ["syrup"],
+      "consumes": [{ "materialId": "chocolate-syrup", "amount": 22, "unit": "ml" }]
+    },
+    {
+      "id": "add-milk",
+      "name": "加入鲜奶",
+      "animationCue": "milk-pour",
+      "durationSeconds": 16,
+      "durationRandomization": { "minSeconds": 14, "maxSeconds": 19 },
+      "failureProfile": "milk-pump",
+      "robotActions": ["milk"],
+      "consumes": [{ "materialId": "milk", "amount": 150, "unit": "ml" }]
+    },
+    {
+      "id": "seal-and-serve",
+      "name": "封杯并出杯",
+      "animationCue": "seal",
+      "durationSeconds": 10,
+      "durationRandomization": { "minSeconds": 9, "maxSeconds": 13 },
+      "failureProfile": "lid-dispenser",
+      "robotActions": ["lid", "pickup"],
+      "consumes": [{ "materialId": "lid-12oz", "amount": 1, "unit": "count" }]
+    }
+  ]
+}

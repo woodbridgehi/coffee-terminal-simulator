@@ -89,6 +89,8 @@ class DeviceApiServer:
                         result = runtime.adjust_inventory(self.body())
                     elif path == "/device/v1/config/reload":
                         result = runtime.reload_config()
+                    elif path == '/device/v1/pickup/confirm':
+                        result = runtime.confirm_pickup(self.body().get('taskId'))
                     else:
                         self.send_json(404, {"ok": False, "error": "NOT_FOUND"})
                         return

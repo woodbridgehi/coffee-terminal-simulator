@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,10 +17,11 @@ class InventoryError(ValueError):
 
 
 class InventoryManager:
-    def __init__(self, definitions_path: Path, state_path: Path, *, clear_reservations: bool = True) -> None:
+    def __init__(self, definitions_path: Path, state_path: Path, *, clear_reservations: bool = True, state_store=None) -> None:
         self.definitions_path = definitions_path
         self.state_path = state_path
-        self.lock = threading.RLock()
+        self.state_store = state_store
+        self.lock = state_store.lock if state_store else threading.RLock()
         self.definitions: dict[str, dict[str, Any]] = {}
         self.state: dict[str, Any] = {}
         self.reload(clear_reservations=clear_reservations)
@@ -58,11 +60,20 @@ class InventoryManager:
             self._save()
 
     def _load_state(self) -> dict[str, Any]:
+        if self.state_store:
+            stored = self.state_store.get_meta("inventory_state")
+            if stored is not None:
+                return stored
+        # Import a legacy JSON inventory exactly once; SQLite owns it afterwards.
         if not self.state_path.exists():
             return {}
         return json.loads(self.state_path.read_text(encoding="utf-8"))
 
     def _save(self) -> None:
+        if self.state_store:
+            self.state["updatedAt"] = now()
+            self.state_store.set_meta("inventory_state", self.state)
+            return
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.state["updatedAt"] = now()
         temporary = self.state_path.with_suffix(".tmp")
@@ -117,6 +128,23 @@ class InventoryManager:
         with self.lock:
             if key in self.state["consumedKeys"]:
                 return []
+            # Validate the complete step before changing any material or idempotency key.
+            totals: dict[str, float] = {}
+            reservation = self.state["reservations"].get(task_id, {})
+            for consumption in consumes:
+                material_id = consumption.get("materialId")
+                item = self.state["items"].get(material_id)
+                amount = float(consumption.get("amount", 0))
+                if not item or consumption.get("unit") != item["unit"] or not math.isfinite(amount) or amount <= 0:
+                    raise InventoryError(f"无效的扣料参数：{material_id}")
+                totals[material_id] = totals.get(material_id, 0) + amount
+            for material_id, amount in totals.items():
+                item = self.state["items"][material_id]
+                if (not math.isfinite(float(item["onHand"])) or
+                        float(item["onHand"]) + 1e-9 < amount or
+                        float(reservation.get(material_id, 0)) + 1e-9 < amount or
+                        float(item["onHand"]) + 1e-9 < float(item["reserved"])):
+                    raise InventoryError(f"库存或任务预占不足，停止扣料并核查：{material_id}")
             changes = []
             reservation = self.state["reservations"].setdefault(task_id, {})
             for consumption in consumes:
@@ -124,6 +152,7 @@ class InventoryManager:
                 amount = float(consumption["amount"])
                 item = self.state["items"][material_id]
                 before = float(item["onHand"])
+                # Only rounding residue can be negative after the preflight above.
                 item["onHand"] = max(0.0, before - amount)
                 released = min(float(reservation.get(material_id, 0)), amount)
                 reservation[material_id] = max(0.0, float(reservation.get(material_id, 0)) - released)
@@ -162,8 +191,10 @@ class InventoryManager:
             item = self.state["items"][material_id]
             before = float(item["onHand"])
             after = amount if normalized_mode == "SET" else before + amount
-            if after < 0 or after > float(definition["capacity"]):
+            if not math.isfinite(amount) or not math.isfinite(after) or after < 0 or after > float(definition["capacity"]):
                 raise InventoryError(f"调整后数量必须在 0 到 {definition['capacity']} 之间")
+            if after < float(item.get("reserved", 0)):
+                raise InventoryError("调整后库存不能低于已预占量，请先核查并处理受影响任务")
             item["onHand"] = after
             self._bump()
             return {"materialId": material_id, "mode": normalized_mode, "amount": amount, "before": before, "after": after, "unit": definition["unit"]}

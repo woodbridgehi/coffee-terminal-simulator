@@ -5,6 +5,8 @@ import sys
 import tempfile
 import time
 import unittest
+from copy import deepcopy
+from unittest.mock import patch
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -47,6 +49,34 @@ class RuntimeTest(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
+    def test_step_storage_failure_rolls_back_inventory_job_and_events(self) -> None:
+        with self.runtime.lock:
+            self.assertTrue(self.runtime.start_demo_order("coffee-v1")["ok"])
+            before_inventory = deepcopy(self.runtime.inventory.state)
+            before_job = self.runtime.store.current_job()
+            before_events = deepcopy(self.runtime.events)
+            original_emit = self.runtime._emit
+
+            def emit_then_fail(event_type, *args, **kwargs):
+                event = original_emit(event_type, *args, **kwargs)
+                self.runtime.store.enqueue_event(event)
+                if event_type == "step.completed":
+                    raise OSError("injected storage failure")
+                return event
+
+            with patch.object(self.runtime, "_emit", side_effect=emit_then_fail):
+                with self.assertRaises(OSError):
+                    self.runtime._execution_tick(1)
+            self.assertEqual(self.runtime.inventory.state, before_inventory)
+            self.assertEqual(self.runtime.store.get_meta("inventory_state"), before_inventory)
+            self.assertEqual(self.runtime.store.current_job(), before_job)
+            self.assertEqual(self.runtime.events, before_events)
+            self.assertEqual(self.runtime.store.pending_events(), [])
+            self.runtime._execution_tick(1)
+            self.assertEqual(self.runtime.inventory.state["items"]["cup"]["onHand"], 1)
+            self.assertEqual(self.runtime.store.current_job()["stepIndex"], 1)
+            self.assertEqual(self.runtime.store.get_meta("inventory_state"), self.runtime.inventory.state)
+
     def wait_for(self, expected: str, timeout: float = 3) -> None:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -79,7 +109,7 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(inventory["beans"]["onHand"], 30)
         self.assertEqual(inventory["cup"]["reserved"], 0)
 
-        self.runtime.command("clear")
+        self.runtime.confirm_pickup(self.runtime.runtime['task']['taskId'])
         self.assertTrue(self.runtime.adjust_inventory({"materialId": "cup", "mode": "SET", "amount": 0, "reason": "TEST"})["ok"])
         product = self.runtime.capabilities()["products"][0]
         self.assertFalse(product["available"])
@@ -87,6 +117,39 @@ class RuntimeTest(unittest.TestCase):
         rejected = self.runtime.start_demo_order("coffee-v1")
         self.assertFalse(rejected["ok"])
         self.assertEqual(rejected["error"], "MATERIAL_INSUFFICIENT")
+
+    def test_inventory_corruption_holds_task_without_killing_executor(self) -> None:
+        with self.runtime.lock:
+            self.assertTrue(self.runtime.start_demo_order("coffee-v1")["ok"])
+            self.runtime.inventory.state["items"]["cup"]["onHand"] = 0
+        self.wait_for("PAUSED")
+        task = self.runtime.runtime["task"]
+        self.assertTrue(task["recoveryHold"])
+        self.assertEqual(task["failure"]["code"], "INVENTORY_INCONSISTENT")
+        self.assertFalse(self.runtime.command("resume")["ok"])
+        self.assertTrue(self.runtime.background_threads[0].is_alive())
+
+    def test_recipe_edit_reuses_original_file_and_versions_changes(self) -> None:
+        recipe = json.loads((self.instance / "recipes/coffee.json").read_text())
+        recipe["name"] = "新名称"
+        result = self.runtime.save_recipe(json.dumps(recipe))
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["recipeVersion"], "1.0.1")
+        self.assertFalse((self.instance / "recipes/coffee-v1.json").exists())
+        self.assertEqual(self.runtime.catalog.get("coffee-v1")["name"], "新名称")
+        self.assertEqual(self.runtime.catalog.invalid, [])
+
+    def test_invalid_edit_and_reload_preserve_previous_catalog(self) -> None:
+        path = self.instance / "recipes/coffee.json"
+        before = path.read_bytes()
+        version = self.runtime.catalog.version
+        recipe = json.loads(before)
+        recipe["steps"][1]["id"] = recipe["steps"][0]["id"]
+        self.assertFalse(self.runtime.save_recipe(json.dumps(recipe))["ok"])
+        self.assertEqual(path.read_bytes(), before)
+        path.write_text(json.dumps(recipe))
+        self.assertFalse(self.runtime.reload_config()["ok"])
+        self.assertEqual(self.runtime.catalog.version, version)
 
     def test_forced_failure_releases_remaining_reservation(self) -> None:
         self.assertTrue(self.runtime.command("force-fail")["ok"])
@@ -109,7 +172,7 @@ class RuntimeTest(unittest.TestCase):
         self.assertLessEqual(randomized["durationSeconds"], 0.08)
         self.assertEqual(randomized["configuredDurationSeconds"], 0.05)
         self.wait_for("SUCCEEDED")
-        self.runtime.command("clear")
+        self.runtime.confirm_pickup(self.runtime.runtime['task']['taskId'])
 
         after_first = {item["materialId"]: item for item in self.runtime.inventory_snapshot()["materials"]}
         self.assertEqual(after_first["beans"]["onHand"], 30)
@@ -190,6 +253,32 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(len(brew_keys), 2)
         self.assertTrue(any(key.endswith(":1") for key in brew_keys))
         self.assertTrue(any(key.endswith(":2") for key in brew_keys))
+
+    def test_pickup_blocks_next_drink_survives_restart_and_requires_confirmation(self) -> None:
+        self.assertTrue(self.runtime.start_demo_order('coffee-v1')['ok'])
+        self.wait_for('SUCCEEDED')
+        task_id = self.runtime.runtime['task']['taskId']
+        self.assertEqual(self.runtime.runtime['pickupSlot']['state'], 'OCCUPIED')
+        self.assertEqual(self.runtime.start_demo_order('strong-v1')['error'], 'PICKUP_OCCUPIED')
+        self.assertFalse(self.runtime.command('clear')['ok'])
+        self.assertFalse(self.runtime.confirm_pickup('old-task')['ok'])
+        self.runtime.close()
+        self.runtime = CoffeeDeviceRuntime(self.config, self.instance)
+        self.assertEqual(self.runtime.runtime['pickupSlot']['state'], 'OCCUPIED')
+        with self.runtime.lock:
+            self.runtime.runtime['pickupSlot']['occupiedAt'] = '2020-01-01T00:00:00Z'
+            self.runtime._execution_tick()
+            self.assertEqual(self.runtime.runtime['pickupSlot']['state'], 'NEEDS_CHECK')
+        with patch.object(self.runtime, '_emit', side_effect=OSError('injected pickup event failure')):
+            with self.assertRaises(OSError):
+                self.runtime.confirm_pickup(task_id)
+        self.assertEqual(self.runtime.store.get_meta('pickup_slot')['state'], 'NEEDS_CHECK')
+        self.assertEqual(self.runtime.runtime['task']['taskId'], task_id)
+        self.assertTrue(self.runtime.confirm_pickup(task_id)['ok'])
+        self.assertEqual(self.runtime.store.get_meta('pickup_slot')['state'], 'EMPTY')
+        self.assertIsNone(self.runtime.store.current_job())
+        self.assertTrue(self.runtime.start_demo_order('strong-v1')['ok'])
+        self.assertFalse(self.runtime.confirm_pickup(task_id)['ok'])
 
     def test_restart_recovers_task_and_duplicate_task_is_not_executed_again(self) -> None:
         self.runtime.runtime["override"]["offline"] = True

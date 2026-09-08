@@ -20,7 +20,7 @@ export function orderSnapshot(order) {
     state, stepId: job?.currentStepId, stepProgress: job?.stepProgress || 0,
     overallProgress: job?.overallProgress || job?.progress || 0,
     steps: job?.robotView?.version === 1 ? job.robotView.steps : [],
-    name: order?.product?.name || '', source:'order',connected:true,inventory:[] };
+    name: order?.product?.name || '', collected: Boolean(order?.collectedAt), source:'order',connected:true,inventory:[] };
 }
 
 /** Reject stale progress for the same task; lifecycle states override equal revisions. */
@@ -29,6 +29,7 @@ export class SnapshotGate {
   accept(next) {
     const old = this.snapshot;
     if (old?.taskId && old.taskId === next.taskId) {
+      if (old.collected && !next.collected) return false;
       if (next.revision < old.revision) return false;
       if (['SUCCEEDED','FAILED','CANCELLED','REFUNDED','EXPIRED'].includes(old.state) && next.state === 'RUNNING') return false;
       if (next.revision === old.revision && ['HOLD','PAUSED','RETRY_WAIT'].includes(old.state) && next.state === 'RUNNING') return false;

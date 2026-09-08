@@ -1,15 +1,15 @@
 {
-  "recipeId": "espresso-v1",
-  "skuCode": "ESPRESSO",
-  "version": "1.1.0",
-  "name": "双份浓缩",
-  "priceMinor": 1000,
+  "recipeId": "lungo-v1",
+  "skuCode": "LUNGO",
+  "version": "1.0.0",
+  "name": "意式长萃",
+  "priceMinor": 1100,
   "enabled": true,
-  "display": {"description": "短杯双份浓缩", "sortOrder": 10},
+  "display": {"description": "延长萃取、口感醇厚", "sortOrder": 20},
   "visual": {"profile": "espresso", "cup": "ceramic-espresso", "layers": ["espresso", "crema"]},
   "steps": [
     {"id": "prepare-cup", "name": "准备浓缩杯", "animationCue": "cup-arrive", "durationSeconds": 8, "durationRandomization": {"minSeconds": 7, "maxSeconds": 10}, "failureProfile": "cup-dispenser", "robotActions": ["cups"], "consumes": [{"materialId": "cup-4oz", "amount": 1, "unit": "count"}]},
-    {"id": "extract-coffee", "name": "萃取双份浓缩", "animationCue": "brew-stream", "durationSeconds": 32, "durationRandomization": {"minSeconds": 29, "maxSeconds": 36}, "failureProfile": "brewer", "robotActions": ["brew"], "consumes": [{"materialId": "coffee-beans", "amount": 18, "unit": "g"}, {"materialId": "water", "amount": 45, "unit": "ml"}]},
+    {"id": "extract-lungo", "name": "延时萃取咖啡", "animationCue": "brew-stream", "durationSeconds": 35, "durationRandomization": {"minSeconds": 32, "maxSeconds": 39}, "failureProfile": "brewer", "robotActions": ["brew"], "consumes": [{"materialId": "coffee-beans", "amount": 16, "unit": "g"}, {"materialId": "water", "amount": 80, "unit": "ml"}]},
     {"id": "serve", "name": "移动到取杯口", "animationCue": "serve", "durationSeconds": 10, "durationRandomization": {"minSeconds": 8, "maxSeconds": 12}, "failureProfile": "output-gate", "robotActions": ["pickup"], "consumes": []}
   ]
 }

@@ -7,6 +7,13 @@ import * as THREE from 'three';
 
 const steps=[['cups',3.23],['ice',7.86],['brew',13.4],['milk',11.8],['lid',4.3]].map(([action,duration],i)=>({
   stepId:`step-${i}`,stepName:action,durationSeconds:duration,visual:{version:1,actions:[action],materials:[]}}));
+test('collected cup cannot reappear on a stale phone snapshot',()=>{
+  const order={status:'READY',production:{taskId:'cup-1',deviceRevision:5}};
+  const gate=new SnapshotGate();
+  assert.ok(gate.accept(orderSnapshot(order)));
+  assert.ok(gate.accept(orderSnapshot({...order,collectedAt:'2026-09-08T01:00:00Z'})));
+  assert.equal(gate.accept(orderSnapshot(order)),false);
+});
 test('live subactions preserve exact device durations and current step progress',()=>{
   const plan=createLivePlan(steps);
   assert.equal(plan.duration,steps.reduce((n,s)=>n+s.durationSeconds,0));

@@ -6,6 +6,8 @@ import json
 import sqlite3
 import threading
 import time
+import uuid
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -102,6 +104,19 @@ class LocalStateStore:
     def close(self) -> None:
         with self.lock:
             self.connection.close()
+
+    @contextmanager
+    def transaction(self):
+        with self.lock:
+            name = "state_" + uuid.uuid4().hex
+            self.connection.execute(f"SAVEPOINT {name}")
+            try:
+                yield
+                self.connection.execute(f"RELEASE SAVEPOINT {name}")
+            except BaseException:
+                self.connection.execute(f"ROLLBACK TO SAVEPOINT {name}")
+                self.connection.execute(f"RELEASE SAVEPOINT {name}")
+                raise
 
     def get_meta(self, key: str, default: Any = None) -> Any:
         with self.lock:
@@ -215,7 +230,7 @@ class LocalStateStore:
         task_id = str(task["taskId"])
         timestamp = now()
         with self.lock:
-            self.connection.execute("BEGIN IMMEDIATE")
+            self.connection.execute("SAVEPOINT save_job")
             try:
                 row = self.connection.execute(
                     "SELECT revision, created_at FROM production_job WHERE task_id = ?", (task_id,)
@@ -238,11 +253,12 @@ class LocalStateStore:
                            ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at""",
                         (canonical_json(task_id), timestamp),
                     )
-                self.connection.execute("COMMIT")
+                self.connection.execute("RELEASE SAVEPOINT save_job")
                 task["revision"] = revision
                 return revision
             except Exception:
-                self.connection.execute("ROLLBACK")
+                self.connection.execute("ROLLBACK TO SAVEPOINT save_job")
+                self.connection.execute("RELEASE SAVEPOINT save_job")
                 raise
 
     def job(self, task_id: str) -> dict[str, Any] | None:

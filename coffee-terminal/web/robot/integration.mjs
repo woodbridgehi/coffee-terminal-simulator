@@ -2,7 +2,9 @@ import {terminalSnapshot,orderSnapshot} from './live-snapshot.mjs';
 
 // This small bridge loads on both 2D pages. Three.js loads only when the user opens 3D.
 const scriptURL=document.currentScript?.src || location.href;
-const viewerURL=new URL('robot-live.bundle.js',scriptURL).href;
+const viewerResource=new URL('robot-live.bundle.js',scriptURL);
+viewerResource.search=new URL(scriptURL).search;
+const viewerURL=viewerResource.href;
 let latest=null,viewer=null,dialog=null,loading=null,opener=null,generation=0;
 function ensureDialog(){
   if(dialog)return;

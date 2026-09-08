@@ -1,4 +1,7 @@
 TerminalI18n.register('zh-CN', {
+  'terminal.confirmPickup': '确认杯子已取走（模拟传感器）',
+  'terminal.pickupWaiting': '等待取杯确认，下一杯暂不制作',
+  'terminal.pickupOverdue': '等待超过两分钟，请现场核查并确认杯子已取走',
   'language.label': '语言',
   'onboarding.title': 'Coffee Terminal · 设备配对',
   'onboarding.heading': '设备首次配对',
@@ -87,6 +90,9 @@ TerminalI18n.register('zh-CN', {
 });
 
 TerminalI18n.register('en-US', {
+  'terminal.confirmPickup': 'Confirm cup removed (simulated sensor)',
+  'terminal.pickupWaiting': 'Waiting for pickup confirmation; next drink is paused',
+  'terminal.pickupOverdue': 'Waiting over two minutes. Check the pickup slot and confirm removal.',
   'language.label': 'Language',
   'onboarding.title': 'Coffee Terminal · Device Pairing',
   'onboarding.heading': 'First-time Device Pairing',
