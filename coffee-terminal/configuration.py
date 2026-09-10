@@ -8,6 +8,7 @@ import json
 from copy import deepcopy
 
 from locales import normalize_locale
+from windows_security import protect_envelope, secure_storage_enabled, unprotect_envelope
 
 
 SUPPORTED_REMOTE_TRANSPORTS = {"http", "mqtt5"}
@@ -15,7 +16,13 @@ SUPPORTED_REMOTE_TRANSPORTS = {"http", "mqtt5"}
 
 def load_env_file(path: Path) -> None:
     """Load a simple KEY=VALUE secret file without logging its contents."""
-    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    for key, value in read_env_values(path).items():
+        os.environ[key] = value
+
+
+def _parse_env_text(path: Path, text: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line_number, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
@@ -25,7 +32,8 @@ def load_env_file(path: Path) -> None:
         key = key.strip()
         if not key or not key.replace("_", "").isalnum():
             raise ValueError(f"{path}:{line_number}: invalid environment variable name")
-        os.environ[key] = value.strip()
+        values[key] = value.strip()
+    return values
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -100,29 +108,24 @@ def write_config(path: Path, config: dict[str, Any]) -> None:
 
 
 def read_env_values(path: Path) -> dict[str, str]:
-    values: dict[str, str] = {}
     if not path.exists():
-        return values
-    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" not in line:
-            raise ValueError(f"{path}:{line_number}: expected KEY=VALUE")
-        key, value = line.split("=", 1)
-        values[key.strip()] = value.strip()
-    return values
+        return {}
+    raw = unprotect_envelope(path.read_bytes())
+    return _parse_env_text(path, raw.decode("utf-8"))
 
 
 def write_env_values(path: Path, values: dict[str, str]) -> None:
     """Atomically write a chmod-0600 env file without echoing secrets."""
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [f"{key}={value}" for key, value in sorted(values.items())]
+    payload = ("\n".join(lines) + "\n").encode("utf-8")
+    if secure_storage_enabled():
+        payload = protect_envelope(payload)
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temporary = Path(temporary_name)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-            stream.write("\n".join(lines) + "\n")
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
         os.chmod(temporary, 0o600)

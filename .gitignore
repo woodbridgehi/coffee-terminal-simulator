@@ -26,6 +26,10 @@ node_modules/
 npm-debug.log*
 yarn-error.log*
 
+# Windows PyInstaller output
+build/
+dist/
+
 # IDE / 编辑器
 .idea/
 .vscode/

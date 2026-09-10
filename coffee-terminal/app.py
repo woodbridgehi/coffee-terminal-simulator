@@ -9,17 +9,23 @@ import webview
 
 from backend import CoffeeDeviceRuntime
 from configuration import load_config, load_env_file
+from macos_app_icon import set_macos_app_icon
 from onboarding import OnboardingAdapter
+from platform_paths import package_root, user_data_root
 
-ROOT = Path(__file__).resolve().parent
+ROOT = package_root() / "coffee-terminal"
+APP_ICON = ROOT.parent / "assets" / "coffee-bean.png"
 
 def main() -> None:
+    set_macos_app_icon(APP_ICON)
+    icon_path = str(APP_ICON) if APP_ICON.is_file() else None
     parser = argparse.ArgumentParser(description="Coffee terminal instance")
     parser.add_argument("--config", required=True, type=Path, help="instance JSON config")
     parser.add_argument("--debug", action="store_true", help="enable pywebview debug tools")
     args = parser.parse_args()
     config_path = args.config.resolve()
-    default_secrets = ROOT.parent / ".secrets" / f"{config_path.parent.name}.env"
+    data_root = user_data_root()
+    default_secrets = data_root / ".secrets" / f"{config_path.parent.name}.env"
     if default_secrets.exists() and not os.environ.get("COFFEE_DEVICE_TOKEN"):
         load_env_file(default_secrets)
     config = load_config(config_path)
@@ -30,12 +36,12 @@ def main() -> None:
         and not config.get("backend", {}).get("authToken")
     )
     if needs_onboarding:
-        adapter = OnboardingAdapter(config, config_path, ROOT.parent)
+        adapter = OnboardingAdapter(config, config_path, data_root)
         window = webview.create_window(
             "Coffee Terminal · 首次安装", str(ROOT / "web" / "onboarding.html"),
             js_api=adapter, width=980, height=760, min_size=(840, 650),
         )
-        webview.start(debug=args.debug)
+        webview.start(debug=args.debug, icon=icon_path)
         return
     try:
         adapter = CoffeeDeviceRuntime(config, config_path.parent)
@@ -51,7 +57,7 @@ def main() -> None:
         raise
     window = webview.create_window(f"{config['deviceName']} · Coffee Terminal", str(ROOT / "web" / "index.html"), js_api=adapter, width=1440, height=900, min_size=(1100, 700))
     window.events.closed += adapter.close
-    webview.start(debug=args.debug)
+    webview.start(debug=args.debug, icon=icon_path)
 
 
 if __name__ == "__main__":

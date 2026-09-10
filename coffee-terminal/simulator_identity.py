@@ -16,6 +16,7 @@ from pathlib import Path
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+from windows_security import protect_envelope, secure_storage_enabled, unprotect_envelope
 
 
 class SimulatorIdentity:
@@ -24,12 +25,14 @@ class SimulatorIdentity:
         self.instance_name = instance_name
         self.key_path = self.root / f"{instance_name}.pem"
         self.meta_path = self.root / f"{instance_name}.json"
+        self.secure_storage = secure_storage_enabled()
         self.root.mkdir(parents=True, exist_ok=True)
         self._key, self.serial_number = self._load_or_create()
 
     def _load_or_create(self) -> tuple[ec.EllipticCurvePrivateKey, str]:
         if self.key_path.exists() and self.meta_path.exists():
-            key = serialization.load_pem_private_key(self.key_path.read_bytes(), password=None)
+            private_pem = unprotect_envelope(self.key_path.read_bytes())
+            key = serialization.load_pem_private_key(private_pem, password=None)
             if not isinstance(key, ec.EllipticCurvePrivateKey) or not isinstance(key.curve, ec.SECP256R1):
                 raise ValueError("模拟器软件身份密钥格式不受支持")
             meta = json.loads(self.meta_path.read_text(encoding="utf-8"))
@@ -44,7 +47,8 @@ class SimulatorIdentity:
             serialization.PrivateFormat.PKCS8,
             serialization.NoEncryption(),
         )
-        self._atomic_write(self.key_path, private_pem, mode=0o600)
+        private_payload = protect_envelope(private_pem) if self.secure_storage else private_pem
+        self._atomic_write(self.key_path, private_payload, mode=0o600)
         self._atomic_write(
             self.meta_path,
             json.dumps({"serialNumber": serial_number, "kind": "SIMULATOR_SOFTWARE"}, ensure_ascii=False, indent=2).encode("utf-8") + b"\n",

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>Coffee Terminal Bean</title>
+  <ellipse cx="27" cy="37" rx="13" ry="17" stroke="#17382D" stroke-width="4"/>
+  <path d="M27 20c-7.5 8 7.5 26 0 34" stroke="#17382D" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M27 20c2-6 6.5-9 12.5-10.5" stroke="#17382D" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="43" cy="8" r="3.5" fill="#B78A52"/>
+</svg>
