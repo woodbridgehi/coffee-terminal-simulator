@@ -1,10 +1,18 @@
 # PyInstaller spec for the portable Windows build.
 from pathlib import Path
+import sys
 
 from PyInstaller.utils.hooks import collect_submodules
 
 
 project = Path(SPECPATH).parent.parent
+# Conda's ``_ctypes.pyd`` links to ffi-*.dll under Library/bin.  PyInstaller
+# does not always discover that dependency, which makes the windowed release
+# exit during startup with ``ImportError: DLL load failed ... _ctypes``.
+ffi_binaries = [
+    (str(dll), ".")
+    for dll in (Path(sys.prefix) / "Library" / "bin").glob("ffi*.dll")
+]
 datas = [
     (str(project / "coffee-terminal" / "web"), "coffee-terminal/web"),
     (str(project / "config" / "device.bootstrap.template.json"), "config"),
@@ -34,7 +42,7 @@ hiddenimports = collect_submodules("clr_loader") + collect_submodules("pythonnet
 a = Analysis(
     [str(project / "windows_entry.py")],
     pathex=[str(project / "coffee-terminal")],
-    binaries=[],
+    binaries=ffi_binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
