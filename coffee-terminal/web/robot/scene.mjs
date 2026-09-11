@@ -3,46 +3,44 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createArm, createCup, createPitcher, createWorkcell, M } from './models.mjs';
+import { createShop } from './shop.mjs';
 import { STATIONS } from './sequence.mjs';
 
 export class CoffeeScene {
   constructor(host, labelHost) {
     this.host = host; this.labelHost = labelHost;
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#e5e8e5');
-    this.scene.fog = new THREE.Fog('#e5e8e5', 12, 28);
+    this.scene.background = new THREE.Color('#e8dece');
+    this.scene.fog = new THREE.Fog('#e8dece', 22, 45);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMappingExposure = 1.0;
     this.renderer.domElement.setAttribute('aria-label', '双 UR10e 机械臂三维场景，可拖动旋转、滚轮缩放');
     this.renderer.domElement.tabIndex = 0;
     host.append(this.renderer.domElement);
     this.camera = new THREE.PerspectiveCamera(37, 1, 0.05, 50);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true; this.controls.dampingFactor = 0.09;
-    this.controls.minDistance = 2.5; this.controls.maxDistance = 14;
+    this.controls.minDistance = 2.5; this.controls.maxDistance = 26;
     this.controls.maxPolarAngle = Math.PI / 2 - 0.03;
     this.controls.target.set(0, 0.98, 0);
     this.pmrem = new THREE.PMREMGenerator(this.renderer);
     const room = new RoomEnvironment();
     this.environment = this.pmrem.fromScene(room, 0.04);
-    this.scene.environment = this.environment.texture; this.scene.environmentIntensity = 0.65;
+    this.scene.environment = this.environment.texture; this.scene.environmentIntensity = 0.4;
     room.dispose();
-    this.scene.add(new THREE.HemisphereLight('#fffdf5', '#6e7f71', 2.0));
-    const sun = new THREE.DirectionalLight('#fff9ed', 3.0);
-    sun.position.set(-3, 7, 5); sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -4; sun.shadow.camera.right = 4;
-    sun.shadow.camera.top = 4; sun.shadow.camera.bottom = -4; sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 16;
+    this.scene.add(new THREE.HemisphereLight('#fffdf5', '#847660', 1.0));
+    const sun = new THREE.DirectionalLight('#ffe6bf', 2.4);
+    sun.position.set(7, 6, 3); sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -6; sun.shadow.camera.right = 6;
+    sun.shadow.camera.top = 6; sun.shadow.camera.bottom = -6; sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 24;
     sun.shadow.normalBias = 0.025; sun.shadow.bias = -0.0001;
     this.scene.add(sun);
-    const rim = new THREE.DirectionalLight('#eaf4ff', 1.3); rim.position.set(3, 4, -4); this.scene.add(rim);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshStandardMaterial({ color: '#dce1da', roughness: 0.9 }));
-    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; this.scene.add(floor);
-    const grid = new THREE.GridHelper(20, 50, '#b8c3b9', '#c9d1c8'); grid.position.y = 0.002;
-    grid.material.transparent = true; grid.material.opacity = 0.40; this.scene.add(grid);
+    const rim = new THREE.DirectionalLight('#edf4ff', 0.65); rim.position.set(3, 4, -4); this.scene.add(rim);
+    this.shop = createShop(); this.scene.add(this.shop.group); this.ready = this.shop.ready;
     this.cell = createWorkcell(); this.scene.add(this.cell.group);
     this.arms = { left: createArm('left'), right: createArm('right') };
     Object.values(this.arms).forEach((arm) => this.scene.add(arm.group));
@@ -62,7 +60,7 @@ export class CoffeeScene {
       if (['handoff', 'pickup'].includes(id)) p.z += 0.24;
       return { id, element, position: p };
     });
-    this.showLabels = true; this.view = 'perspective'; this.setView('perspective');
+    this.showLabels = true; this.view = 'shop'; this.setView('shop');
     this.resizeObserver = new ResizeObserver(() => this.resize()); this.resizeObserver.observe(host);
     this.resize();
   }
@@ -80,9 +78,9 @@ export class CoffeeScene {
     this.view = view;
     const ratio = this.host.clientWidth / Math.max(1, this.host.clientHeight);
     const scale = view==='art'?1:Math.max(1, 1.25 / Math.max(0.6, ratio));
-    const positions = { art:[.32,2.05,1.0], perspective: [3.5, 3.7, 5.8], top: [0, 7.5, 0.001], front: [0, 2.0, 7.5] };
+    const positions = { shop:[3.3,5.1,11.8], art:[.32,2.05,1.0], perspective: [3.5, 3.7, 5.8], top: [0, 7.5, 0.001], front: [0, 2.0, 7.5] };
     const p = positions[view] || positions.perspective;
-    this.controls.target.set(...(view==='art'?[-.04,1.27,.40]:[0,1.0,.02]));
+    this.controls.target.set(...(view==='art'?[-.04,1.27,.40]:view==='shop'?[0,1.45,.15]:[0,1.0,.02]));
     this.controls.minDistance=view==='art'?.5:2.5;
     this.camera.position.set(p[0] * scale, 1 + (p[1] - 1) * scale, p[2] * scale);
     this.camera.lookAt(this.controls.target); this.controls.update();
@@ -135,15 +133,17 @@ export class CoffeeScene {
     for (const label of this.labels) {
       const p = label.position.clone().project(this.camera);
       const x = (p.x * 0.5 + 0.5) * width, y = (-p.y * 0.5 + 0.5) * height;
-      label.element.hidden = !this.showLabels || p.z > 1 || p.z < -1 || x < 35 || x > width - 35 || y < 75 || y > height - 55;
+      label.element.hidden = !this.showLabels || (this.view === 'shop' && label.id !== this.state?.station) || p.z > 1 || p.z < -1 || x < 35 || x > width - 35 || y < 75 || y > height - 55;
       label.element.style.left = `${x}px`; label.element.style.top = `${y}px`;
     }
   }
 
   dispose() {
-    this.resizeObserver.disconnect(); this.controls.dispose();
+    this.resizeObserver.disconnect(); this.controls.dispose(); this.shop.dispose();
     const geometries = new Set(), materials = new Set(), textures = new Set();
     this.scene.traverse((object) => {
+      if (object.isLight && object.shadow) object.shadow.dispose();
+      if (object.isInstancedMesh) object.dispose();
       if (object.geometry) geometries.add(object.geometry);
       if (object.material) for (const mat of [object.material].flat()) materials.add(mat);
     });

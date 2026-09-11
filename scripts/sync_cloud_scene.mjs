@@ -3,7 +3,7 @@
 import {copyFile,mkdir} from 'node:fs/promises';
 const output=new URL('../../coffee-cloud-mvp/public/robot/',import.meta.url);
 await mkdir(output,{recursive:true});
-for(const name of ['robot-live.bundle.js','robot-integration.bundle.js','robot-live.css'])
+for(const name of ['process-audio.bundle.js','robot-live.bundle.js','robot-integration.bundle.js','robot-live.css'])
   await copyFile(new URL(`../coffee-terminal/web/${name}`,import.meta.url),new URL(name,output));
 await copyFile(new URL('../coffee-terminal/web/robot/THREE-LICENSE.txt',import.meta.url),new URL('THREE-LICENSE.txt',output));
 console.log('Cloud viewer assets synchronized.');

@@ -123,7 +123,7 @@ function stopCancelledCountdown() {
 function render(data) {
   window.CoffeeRobotIntegration?.terminal(data);
   const soundTask = data.runtime?.task;
-  window.CoffeeSound?.update({ id: soundTask?.taskId, status: soundTask?.recoveryHold ? 'HOLD' : soundTask?.state, revision: soundTask?.revision });
+  window.CoffeeSound?.update({ surface:'terminal', id: soundTask?.taskId, status: soundTask?.recoveryHold ? 'HOLD' : soundTask?.state, revision: soundTask?.revision });
   state = data; const { config, runtime, recipes, capabilities } = data; const task = runtime.task;
   if (!localeInitialized) {
     localeInitialized = true;

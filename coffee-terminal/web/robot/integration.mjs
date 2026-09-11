@@ -6,16 +6,43 @@ const viewerResource=new URL('robot-live.bundle.js',scriptURL);
 viewerResource.search=new URL(scriptURL).search;
 const viewerURL=viewerResource.href;
 let latest=null,viewer=null,dialog=null,loading=null,opener=null,generation=0;
+let processPlayer=null,audioLoading=null,audioFrame=null;
+async function ensureProcessAudio(){
+  if(!window.CoffeeSound?.enabled)return;
+  if(!window.CoffeeProcessAudio){
+    if(!audioLoading)audioLoading=new Promise((resolve,reject)=>{
+      const script=document.createElement('script'),url=new URL('process-audio.bundle.js',scriptURL);
+      url.search=new URL(scriptURL).search;script.src=url.href;
+      script.onload=()=>{audioLoading=null;resolve();};
+      script.onerror=()=>{audioLoading=null;script.remove();reject(new Error('工序声音加载失败'));};
+      document.head.append(script);
+    });
+    try{await audioLoading;}catch{window.CoffeeSound?.mute();return;}
+  }
+  if(processPlayer || !window.CoffeeSound?.enabled)return;
+  processPlayer=new window.CoffeeProcessAudio.ProcessAudio(window.CoffeeSound,{visualPosition:now=>viewer?.audioPosition(now)});
+  if(latest)try{processPlayer.update(latest);}catch{stopAudio();return;}
+  const frame=now=>{if(!processPlayer)return;try{processPlayer.frame(now);}catch{stopAudio();return;}audioFrame=requestAnimationFrame(frame);};
+  audioFrame=requestAnimationFrame(frame);
+}
+function stopAudio(){cancelAnimationFrame(audioFrame);processPlayer?.dispose();processPlayer=null;window.CoffeeSound?.mute();}
+window.addEventListener('coffee-sound-change',ensureProcessAudio);
+window.addEventListener('pagehide',()=>{cancelAnimationFrame(audioFrame);processPlayer?.dispose();processPlayer=null;});
 function ensureDialog(){
   if(dialog)return;
   dialog=document.createElement('dialog');dialog.className='rv-dialog';dialog.setAttribute('aria-label','三维制作视图');
-  dialog.innerHTML=`<div class="rv-shell"><header class="rv-header"><div><strong class="rv-title">咖啡机器人</strong><span class="rv-state" role="status">等待状态</span></div><button class="rv-close" aria-label="返回二维视图">返回二维 ×</button></header>
-    <div class="rv-stage"><div class="rv-canvas"></div><div class="rv-labels station-labels" aria-hidden="true"></div><div class="rv-views" role="group" aria-label="三维相机视角"><button data-rv-view="perspective" aria-pressed="true">透视</button><button data-rv-view="art" aria-pressed="false">拉花特写</button><button data-rv-view="top" aria-pressed="false">俯视</button><button data-rv-view="front" aria-pressed="false">正视</button></div><p class="rv-loading" role="status">正在加载三维视图…</p></div>
+  dialog.innerHTML=`<div class="rv-shell"><header class="rv-header"><div><strong class="rv-title">咖啡机器人</strong><span class="rv-state" role="status">等待状态</span></div><button class="rv-sound" type="button">开启声音</button><button class="rv-close" aria-label="返回二维视图">返回二维 ×</button></header>
+    <div class="rv-stage"><div class="rv-canvas"></div><div class="rv-labels station-labels" aria-hidden="true"></div><div class="rv-views" role="group" aria-label="三维相机视角"><button data-rv-view="shop" aria-pressed="true">门店</button><button data-rv-view="perspective" aria-pressed="false">工作站</button><button data-rv-view="art" aria-pressed="false">拉花特写</button><button data-rv-view="top" aria-pressed="false">俯视</button><button data-rv-view="front" aria-pressed="false">正视</button></div><p class="rv-loading" role="status">正在加载三维视图…</p></div>
     <footer class="rv-footer"><div><strong class="rv-step">等待设备步骤</strong><output class="rv-progress">0%</output></div><ul class="rv-materials"></ul><p>动作示意与设备步骤同步 · 拖动旋转 / 双指缩放</p></footer></div>`;
   document.body.append(dialog);
-  dialog.querySelector('.rv-close').onclick=()=>dialog.close();
+  const soundButton=dialog.querySelector('.rv-sound');
+  const soundLabel=()=>{const en=document.documentElement.lang.startsWith('en');soundButton.textContent=window.CoffeeSound?.enabled?(en?'Mute':'静音'):(en?'Enable sound':'开启声音');soundButton.setAttribute('aria-pressed',String(!!window.CoffeeSound?.enabled));};
+  soundButton.onclick=async()=>{if(window.CoffeeSound?.enabled)window.CoffeeSound.mute();else await window.CoffeeSound?.enable();soundLabel();};
+  window.addEventListener('coffee-sound-change',soundLabel);soundLabel();
+  dialog.querySelector('.rv-close').onclick=()=>{window.CoffeeSound?.mute();dialog.close();};
+  dialog.addEventListener('cancel',()=>window.CoffeeSound?.mute());
   dialog.addEventListener('close',()=>{
-    generation++;viewer?.dispose();viewer=null;
+    generation++;viewer?.dispose();viewer=null;window.CoffeeSound?.mute();
     dialog.querySelector('.rv-loading').hidden=false;
     opener?.focus?.();
   });
@@ -48,6 +75,7 @@ function fail(error){
 }
 function update(snapshot){
   latest=snapshot;
+  try{processPlayer?.update(snapshot);}catch{stopAudio();}
   // A rendering failure must never interrupt the existing 2D refresh loop.
   try{viewer?.update(snapshot);}catch(error){fail(error);}
 }

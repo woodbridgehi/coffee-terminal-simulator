@@ -17,7 +17,7 @@ export function normalizeSteps(steps) {
 }
 
 /** Compile visual subactions INTO each authoritative step, never add production time. */
-export function createLivePlan(steps) {
+export function createLivePlan(steps, {motion=true}={}) {
   if (!normalizeSteps(steps)) throw new Error('设备尚未提供三维步骤计划');
   const sequence = { segments: [], ranges: [], duration: 0 };
   let state = { left: [...HOMES.left], right: [...HOMES.right], gripLeft: 1, gripRight: 1,
@@ -33,7 +33,7 @@ export function createLivePlan(steps) {
   function add(station, description, changes = {}, weight = 1, stream = null) {
     const from = copy(state); state = transitionState(state,changes);
     sequence.segments.push({ start: cursor, end: cursor + weight, stage: steps[index].stepName,
-      station, description, dispenseChannel: steps[index].visual.dispenseChannel || null,
+      station, description, stepId: steps[index].stepId, dispenseChannel: steps[index].visual.dispenseChannel || null,
       from, to: copy(state), stream }); cursor += weight;
   }
   const move = (side,p,station,description) => {
@@ -138,7 +138,7 @@ export function createLivePlan(steps) {
     sequence.duration = start+duration;
     sequence.ranges.push({start,end:sequence.duration});
   }
-  return prepareMotion(sequence);
+  return motion?prepareMotion(sequence):sequence;
 }
 
 export function livePosition(snapshot, plan) {

@@ -1,4 +1,5 @@
-import { Quaternion, Vector3 } from 'three';
+import { Quaternion } from 'three/src/math/Quaternion.js';
+import { Vector3 } from 'three/src/math/Vector3.js';
 import { UPRIGHT } from './kinematics.mjs';
 
 export const PATTERN = Object.freeze({patternId:'spiral',patternVersion:'1.0.0'});

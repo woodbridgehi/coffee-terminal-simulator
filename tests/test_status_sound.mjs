@@ -48,3 +48,23 @@ test('cloud and terminal ship identical sound source and stylesheet', () => {
   assert.equal(source, fs.readFileSync(new URL('../../coffee-cloud-mvp/public/shared/status-sound.js', import.meta.url), 'utf8'));
   assert.equal(fs.readFileSync(new URL('../coffee-terminal/web/status-sound.css', import.meta.url), 'utf8'), fs.readFileSync(new URL('../../coffee-cloud-mvp/public/shared/status-sound.css', import.meta.url), 'utf8'));
 });
+
+test('process loops reuse nodes and release on mute, pause and zero volume', async () => {
+  const { sound } = setup(); await sound.enable();
+  sound.setProcessLoop('brew-1','brew'); const first=sound.loop;
+  assert.ok(first); sound.setProcessLoop('brew-1','brew'); assert.equal(sound.loop,first);
+  sound.playAction('grip'); assert.ok(sound.processNodes.size >= 2);
+  sound.mute(); assert.equal(sound.processNodes.size,0); assert.equal(sound.loop,null);
+  await sound.enable(); sound.setProcessLoop('milk-1','milk'); sound.setVolume(0);
+  assert.equal(sound.processNodes.size,0);
+});
+
+test('optional speech only follows live ready and never failed or reconnect snapshots', async () => {
+  const spoken=[];const root={speechSynthesis:{cancel(){},speak(value){spoken.push(value.text);}},SpeechSynthesisUtterance:class {constructor(text){this.text=text;}}};
+  vm.runInNewContext(source,root);
+  const {context}=setup();const sound=new root.CoffeeStatusSound({contextFactory:()=>context});
+  sound.voice=true;await sound.enable();update(sound,'MAKING');update(sound,'FAILED',2);
+  assert.equal(spoken.length,0);sound.disconnect();update(sound,'READY',3);assert.equal(spoken.length,0);
+  update(sound,'MAKING',1,'new');update(sound,'READY',2,'new');update(sound,'READY',2,'new');
+  assert.equal(spoken.length,1);
+});

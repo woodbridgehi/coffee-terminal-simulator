@@ -1,4 +1,6 @@
-import { Matrix4, Quaternion, Vector3 } from 'three';
+import { Matrix4 } from 'three/src/math/Matrix4.js';
+import { Quaternion } from 'three/src/math/Quaternion.js';
+import { Vector3 } from 'three/src/math/Vector3.js';
 
 // UR10e nominal standard DH, metres/radians. No factory calibration or hardware driver.
 // https://www.universal-robots.com/developer/hardware-and-motion/robot-motion-dh-parameters/

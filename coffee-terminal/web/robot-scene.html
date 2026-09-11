@@ -4,21 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Coffee Robotics · 双臂咖啡工作站</title>
+  <title>Coffee Terminal · 品牌门店 · 双臂咖啡工作站</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%23255846'/%3E%3Cpath d='M11 11h15v16H11zM26 14h5v8h-5' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="robot-scene.css">
+  <link rel="stylesheet" href="status-sound.css?v=20260911-process-sound">
 </head>
 <body>
+  <div id="sound-controls"></div>
   <header class="app-header">
-    <a class="wordmark" href="robot-scene.html" aria-label="Coffee Robotics 首页"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 7h15v18H6zM21 10h6v9h-6M10 3v1m5-1v1"/></svg>Coffee Robotics</a>
+    <a class="wordmark" href="robot-scene.html" aria-label="Coffee Terminal 首页"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 7h15v18H6zM21 10h6v9h-6M10 3v1m5-1v1"/></svg>Coffee Terminal</a>
     <h1>双臂咖啡工作站</h1>
     <div class="header-actions"><span class="local-mode"><i></i>本地演示</span><a href="index.html">返回终端 <span aria-hidden="true">↗</span></a></div>
   </header>
   <main class="studio">
     <section class="viewport" id="viewport" aria-label="可交互三维咖啡工作站">
       <div id="canvasHost"></div>
-      <div class="viewport-top"><div><h2>工作站总览</h2><p>UR10e × 2 · 六自由度姿态控制</p></div>
-        <div class="view-tabs" role="group" aria-label="相机视角"><button data-view="perspective" aria-pressed="true">透视</button><button data-view="art" aria-pressed="false">拉花特写</button><button data-view="top" aria-pressed="false">俯视</button><button data-view="front" aria-pressed="false">正视</button></div>
+      <div class="viewport-top"><div><h2>品牌门店</h2><p>Forest & Cream · UR 双臂咖啡</p></div>
+        <div class="view-tabs" role="group" aria-label="相机视角"><button data-view="shop" aria-pressed="true">门店</button><button data-view="perspective" aria-pressed="false">工作站</button><button data-view="art" aria-pressed="false">拉花特写</button><button data-view="top" aria-pressed="false">俯视</button><button data-view="front" aria-pressed="false">正视</button></div>
       </div>
       <div id="labels" class="station-labels" aria-hidden="true"></div>
       <div class="viewport-bottom"><div class="canvas-help">拖动旋转 · 滚轮缩放 · 右键平移</div><div class="view-options"><label><input id="showLabels" type="checkbox" checked>工位</label><label><input id="showAxes" type="checkbox">坐标轴</label><button id="fitView" title="恢复完整工作站视角" aria-label="视角复位">↺</button></div></div>
@@ -50,6 +52,7 @@
     </section>
   </main>
   <noscript><p>请启用 JavaScript 以运行三维仿真场景。</p></noscript>
-  <script src="robot-scene.bundle.js?v=20260911-dual-side-grip" defer></script>
+  <script src="status-sound.js?v=20260911-process-sound"></script>
+  <script src="robot-scene.bundle.js?v=20260911-process-sound" defer></script>
 </body>
 </html>

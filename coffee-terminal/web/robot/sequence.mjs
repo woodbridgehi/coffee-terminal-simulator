@@ -1,5 +1,6 @@
 import { cupApproach, cupTravel } from './cup-motion.mjs';
-import { Quaternion, Vector3 } from 'three';
+import { Quaternion } from 'three/src/math/Quaternion.js';
+import { Vector3 } from 'three/src/math/Vector3.js';
 import { UPRIGHT, leftSideGrip, sideGrip, solvePose, BASES, forward, rightHomeSeed } from './kinematics.mjs';
 import { pouringPose, PITCHER_HOME, PITCHER_GRASP } from './latte-art.mjs';
 import { lerp3, smooth } from './kinematics.mjs';

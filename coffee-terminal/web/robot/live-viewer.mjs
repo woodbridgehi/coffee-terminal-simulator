@@ -79,6 +79,7 @@ export function mount(root) {
   };
   raf=requestAnimationFrame(frame);
   const buttons=root.querySelectorAll('[data-rv-view]');
+  for(const button of buttons) button.setAttribute('aria-pressed',String(button.dataset.rvView===scene.view));
   for(const button of buttons) button.onclick=()=>{
     scene.setView(button.dataset.rvView);
     buttons.forEach((b)=>b.setAttribute('aria-pressed',String(b===button)));
@@ -87,6 +88,6 @@ export function mount(root) {
     event.preventDefault();alive=false;cancelAnimationFrame(raf);
     root.querySelector('.rv-step').textContent='图形显示已中断，请关闭三维后重新打开；二维进度仍可使用。';
   });
-  return {update,dispose(){alive=false;cancelAnimationFrame(raf);scene.dispose();canvasHost.replaceChildren();labelHost.replaceChildren();}};
+  return {update,audioPosition(now){return snapshot && {taskId:snapshot.taskId,attempt:snapshot.attempt,position:clock.sample(now)};},dispose(){alive=false;cancelAnimationFrame(raf);scene.dispose();canvasHost.replaceChildren();labelHost.replaceChildren();}};
 }
 window.CoffeeRobotLive={mount};

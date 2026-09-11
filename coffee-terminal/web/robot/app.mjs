@@ -1,3 +1,4 @@
+import {soundTrack,ActionSoundTrack} from './sound-track.mjs';
 import { createLatteArtDemo } from './latte-art-demo.mjs';
 import { CoffeeScene } from './scene.mjs';
 import { createSequence, sampleSequence } from './sequence.mjs';
@@ -15,6 +16,8 @@ const icons = { '取杯': cupIcon, '出杯': cupIcon, '萃取': '<rect x="4" y="
 
 let scene, sequence = createLatteArtDemo(), elapsed = 0, running = false, manual = false, selected = 'left', frameId, disposed = false;
 let state = sampleSequence(sequence, 0);
+const audio=new ActionSoundTrack(globalThis.CoffeeSound);
+let audioTrack=soundTrack(sequence), demoRun=0;
 const sliders = LIMITS.map(([min, max], i) => {
   const row = document.createElement('div'); row.className = 'joint';
   row.innerHTML = `<label for="joint${i}">J${i + 1}</label><input id="joint${i}" type="range" min="${min}" max="${max}" step="1" value="0" aria-label="J${i + 1} 关节角度" disabled><output for="joint${i}" id="angle${i}">0°</output>`;
@@ -72,19 +75,20 @@ function apply() {
 }
 function seek(time) {
   if (!scene) return;
-  running = false; manual = false;
+  running = false; manual = false; audio.reset();
   elapsed = Math.max(0, Math.min(time, sequence.duration)); apply();
 }
 function reset() {
-  running = false; manual = false; elapsed = 0; apply();
+  running = false; manual = false; elapsed = 0; audio.reset(); apply();
 }
 
 $('play').addEventListener('click', () => {
   if (manual || state.done) reset();
-  running = !running; updateControls();
+  if(!running && elapsed===0)demoRun++;
+  running = !running; if(!running)audio.reset(); updateControls();
 });
 $('reset').addEventListener('click', reset);
-$('recipe').addEventListener('change', () => { sequence = $('recipe').value==='spiral'?createLatteArtDemo():createSequence($('recipe').value); buildStages(); reset(); });
+$('recipe').addEventListener('change', () => { sequence = $('recipe').value==='spiral'?createLatteArtDemo():createSequence($('recipe').value); audioTrack=soundTrack(sequence); buildStages(); reset(); });
 $('seek').addEventListener('input', () => seek(Number($('seek').value) / 1000 * sequence.duration));
 $('next').addEventListener('click', () => {
   const next = sequence.segments.find((segment) => segment.start > elapsed + 0.01 && segment.stage !== state.stage);
@@ -116,6 +120,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function showError(error) {
+  audio?.reset();
   running = false; $('loading').hidden = true; $('sceneError').hidden = false;
   $('errorText').textContent = `请使用支持 WebGL 2 的浏览器并启用图形加速。${error.message || error}`;
   for (const id of ['play', 'reset', 'next', 'seek', 'recipe', 'manual']) $(id).disabled = true;
@@ -138,6 +143,7 @@ try {
         state = sampleSequence(sequence, elapsed); scene.apply(state);
         if (state.done) running = false;
       }
+      audio.update({id:`demo:${sequence.recipeId || 'spiral'}`,attempt:demoRun,position:elapsed,track:audioTrack,running:running&&!manual&&!document.hidden});
       if (now - lastUI > 100) { updateControls(); lastUI = now; }
       if (!document.hidden) scene.render();
       frameId = requestAnimationFrame(animate);
@@ -148,7 +154,7 @@ try {
     event.preventDefault(); cancelAnimationFrame(frameId); showError(new Error('图形上下文已丢失，请重新加载。'));
   });
   window.addEventListener('pagehide', (event) => {
-    running = false;
+    running = false; audio.reset();
     if (event.persisted) return;
     disposed = true; cancelAnimationFrame(frameId); scene.dispose();
   });

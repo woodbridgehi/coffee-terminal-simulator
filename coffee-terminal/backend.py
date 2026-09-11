@@ -389,14 +389,24 @@ class CoffeeDeviceRuntime:
                 return self._reject(command, "RECIPE_DISABLED", {"recipeId": command.get("recipeId")})
             if command.get("recipeVersion") and command["recipeVersion"] != recipe["version"]:
                 return self._reject(command, "RECIPE_VERSION_MISMATCH", {"requested": command["recipeVersion"], "installed": recipe["version"]})
+            legacy_default = False
             if recipe.get('optionSchema') or command.get('customization') or command.get('compiledRecipeDigest'):
+                base_recipe = recipe
                 try:
                     recipe = compile_recipe(recipe, command.get('customization'))
                 except (ValueError, TypeError, KeyError) as exc:
                     return self._reject(command, 'INVALID_CUSTOMIZATION', {'message': str(exc)})
                 local_demo = self.mode == 'local' and str(command.get('messageId', '')).startswith('local-')
-                if not local_demo and command.get('compiledRecipeDigest') != recipe['compiledRecipeDigest']:
-                    return self._reject(command, 'COMPILED_RECIPE_MISMATCH', {})
+                # Old cloud commands describe the unmodified, versioned base drink.
+                # Accept only when default compilation leaves its steps and price identical.
+                legacy_default = (not any(k in command for k in ('customization', 'compiledRecipeDigest', 'optionSchemaVersion'))
+                                  and command.get('recipeVersion') == base_recipe['version']
+                                  and recipe['steps'] == base_recipe['steps'] and recipe['priceDeltaMinor'] == 0)
+                if not local_demo and not legacy_default and command.get('compiledRecipeDigest') != recipe['compiledRecipeDigest']:
+                    return self._reject(command, 'COMPILED_RECIPE_MISMATCH', {
+                        'recipeId': base_recipe['recipeId'], 'installedVersion': base_recipe['version'],
+                        'requestedDigest': command.get('compiledRecipeDigest'), 'installedDigest': recipe['compiledRecipeDigest'],
+                        'message': '云端指令缺少配方指纹，或指纹与设备配方不一致；请同步云端版本和设备菜单后重新下单。'})
             requirements = self.inventory.requirements(recipe)
             ok, detail = self.inventory.reserve(command["taskId"], requirements)
             if not ok:
@@ -404,6 +414,7 @@ class CoffeeDeviceRuntime:
             execution_recipe = self.catalog.materialize_execution_recipe(recipe)
             planned_duration = sum(float(step["durationSeconds"]) for step in execution_recipe["steps"])
             task = {"taskId": command["taskId"], "orderId": command.get("orderId"), "orderNo": command.get("orderNo"), "messageId": command.get("messageId"), "recipe": execution_recipe, "state": "ACKNOWLEDGED", "stepIndex": 0, "stepProgress": 0.0, "overallProgress": 0.0, "stepElapsed": 0.0, "elapsedSeconds": 0.0, "remainingSeconds": planned_duration, "stepPrechecked": False, "attempt": 1, "stepRetries": {}, "plannedDurationSeconds": planned_duration, "message": "任务已接受，准备制作"}
+            task['executionContract'] = 'legacy-default' if legacy_default else 'versioned'
             task['requestedCustomization'] = command.get('customization', {})
             task['compiledRecipeDigest'] = command.get('compiledRecipeDigest')
             task["stepPlan"] = robot_step_plan(execution_recipe, self.inventory.definitions)
@@ -641,7 +652,7 @@ class CoffeeDeviceRuntime:
         retryable = bool(profile.get("retryable")) and retries_used < max_retries and "latte-art" not in step.get("robotActions", [])
         task["state"] = "RETRY_WAIT" if retryable else "FAILED"
         task["message"] = profile["message"]
-        task["failure"] = {"code": profile["errorCode"], "stepId": step["id"], "retryable": retryable, "retriesUsed": retries_used, "maxRetries": max_retries, "consumedOnFailure": consume}
+        task["failure"] = {"code": profile["errorCode"], "message": profile["message"], "stepId": step["id"], "stepName": step.get("name", step["id"]), "retryable": retryable, "retriesUsed": retries_used, "maxRetries": max_retries, "consumedOnFailure": consume}
         self.runtime["deviceStatus"] = "BUSY" if retryable else "FAILED"
         self._progress_reports.pop(task["taskId"], None)
         self._persist_task(task)
