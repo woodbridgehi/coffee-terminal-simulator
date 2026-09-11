@@ -5,6 +5,15 @@ let setupState = {};
 let pairing = null;
 let pollTimer = null;
 let completing = false;
+let completedResult = null;
+let currentStep = 1;
+function markCompleted() {
+  document.querySelectorAll('.step').forEach(el => { el.classList.remove('current'); el.classList.add('done'); el.querySelector('.step-dot').textContent = '✓'; });
+  $('stepTitle').textContent = t('onboarding.successTitle');
+  $('stepDesc').textContent = t('onboarding.completed');
+}
+let connectionCopy = null;
+function localizedConnection(key, params = {}, type = "") { connectionCopy = {key, params, type}; setConnection(t(key, params), type); }
 
 const previewApi = {
   get_setup_state: async () => ({ backendUrl: '浏览器预览服务', instanceName: 'coffee-bot-preview' }),
@@ -17,6 +26,7 @@ function api() { return window.pywebview?.api || previewApi; }
 async function ready() { if (window.pywebview?.api) return; if (location.protocol !== 'file:') return; await new Promise(resolve => window.addEventListener('pywebviewready', resolve, { once: true })); }
 function setConnection(message, type = '') { const el = $('connection'); el.lastChild.textContent = message; el.className = `connection ${type}`; }
 function setStep(next) {
+  currentStep = next;
   document.querySelectorAll('.step').forEach(el => {
     const number = Number(el.dataset.step); el.classList.toggle('current', number === next); el.classList.toggle('done', number < next);
     el.querySelector('.step-dot').textContent = number < next ? '✓' : number;
@@ -31,7 +41,7 @@ function renderPairing(result) {
   $('pairingCode').textContent = result.pairingCode || '—'; $('expiresAt').textContent = fmtExpiry(result.expiresAt);
   $('refreshBtn').disabled = false; $('retryBtn').hidden = false;
   $('footNote').textContent = t('onboarding.codeReady');
-  setStep(2); setConnection(t('onboarding.connected', { backend: setupState.backendUrl || 'Cloud' }), 'ok');
+  setStep(2); localizedConnection('onboarding.connected', { backend: setupState.backendUrl || 'Cloud' }, 'ok');
 }
 function statusCopy(status) {
   if (status === 'CLAIMED') return [t('onboarding.status.claimed'), t('onboarding.status.claimedDesc')];
@@ -43,28 +53,30 @@ function setStatus(status) { if (pairing) pairing.status = status; const [title,
 async function complete() {
   if (completing) return; completing = true; setStep(3); $('refreshBtn').disabled = true; $('retryBtn').hidden = true; $('error').textContent = '';
   try {
-    const result = await api().complete_pairing(); if (!result?.ok) throw new Error(result?.error || '正式凭证领取失败');
+    const result = await api().complete_pairing(); if (!result?.ok) throw new Error(result?.error || t('onboarding.error.credentials'));
     clearInterval(pollTimer); $('pairingPanel').hidden = true; $('successPanel').hidden = false;
     $('sumDeviceId').textContent = result.deviceId || pairing.deviceId || '—'; $('sumSerial').textContent = result.serialNumber || pairing.serialNumber || '—';
     $('sumDeviceName').textContent = result.deviceName || '—'; $('sumStoreName').textContent = result.storeName || '—';
     document.querySelectorAll('.step').forEach(el => { el.classList.remove('current'); el.classList.add('done'); el.querySelector('.step-dot').textContent = '✓'; });
     $('refreshBtn').hidden = true; $('retryBtn').hidden = true; $('footNote').textContent = t('onboarding.completed');
-    setConnection(t('onboarding.deviceCompleted', { deviceId: result.deviceId }), 'ok');
-  } catch (error) { completing = false; setStatus('CLAIMED'); $('refreshBtn').disabled = false; $('error').textContent = error.message || '正式凭证领取失败，请重试。'; }
+    completedResult = result;
+    markCompleted();
+    localizedConnection('onboarding.deviceCompleted', { deviceId: result.deviceId }, 'ok');
+  } catch (error) { completing = false; setStatus('CLAIMED'); $('refreshBtn').disabled = false; $('error').textContent = error.message || t('onboarding.error.credentials'); }
 }
 async function refreshStatus() {
   if (!pairing || completing) return;
   const result = await api().get_pairing_status();
-  if (!result?.ok) throw new Error(result?.error || '无法读取配对状态');
+  if (!result?.ok) throw new Error(result?.error || t('onboarding.error.status'));
   setStatus(result.status);
   if (result.status === 'CLAIMED' || result.status === 'PROVISIONED') await complete();
 }
 async function createPairing() {
   clearInterval(pollTimer); $('refreshBtn').disabled = true; $('retryBtn').hidden = true; $('pairingPanel').hidden = true; $('error').textContent = '';
-  setConnection(t('onboarding.connection.creating'));
-  const result = await api().get_pairing_state(); if (!result?.ok) throw new Error(result?.error || '无法创建配对会话');
+  localizedConnection('onboarding.connection.creating');
+  const result = await api().get_pairing_state(); if (!result?.ok) throw new Error(result?.error || t('onboarding.error.create'));
   renderPairing(result); setStatus(result.status || 'PENDING');
-  pollTimer = setInterval(() => refreshStatus().catch(error => { $('error').textContent = error.message || '配对状态刷新失败'; }), 2500);
+  pollTimer = setInterval(() => refreshStatus().catch(error => { $('error').textContent = error.message || t('onboarding.error.status'); }), 2500);
 }
 async function initialize() {
   await ready();
@@ -78,10 +90,13 @@ $('localeSelect').addEventListener('change', async event => {
   const locale = TerminalI18n.setLocale(event.target.value);
   event.target.value = locale;
   document.title = t('onboarding.title');
-  setStep(pairing ? 2 : 1);
+  setStep(currentStep);
+  if (completedResult) markCompleted();
+  if (connectionCopy) setConnection(t(connectionCopy.key, connectionCopy.params), connectionCopy.type);
+  $('footNote').textContent = t(completedResult ? 'onboarding.completed' : pairing ? 'onboarding.codeReady' : 'onboarding.connection.creating');
   if (pairing) { $('expiresAt').textContent = fmtExpiry(pairing.expiresAt); setStatus(pairing.status); }
   await api().set_ui_locale(locale);
 });
-$('refreshBtn').addEventListener('click', () => refreshStatus().catch(error => { $('error').textContent = error.message || '配对状态刷新失败'; }));
-$('retryBtn').addEventListener('click', () => createPairing().catch(error => { setConnection(`无法创建配对会话：${error.message}`, 'error'); $('error').textContent = error.message; }));
-initialize().catch(error => { setConnection(`配对界面初始化失败：${error.message}`, 'error'); $('error').textContent = error.message; });
+$('refreshBtn').addEventListener('click', () => refreshStatus().catch(error => { $('error').textContent = error.message || t('onboarding.error.status'); }));
+$('retryBtn').addEventListener('click', () => createPairing().catch(error => { localizedConnection('onboarding.error.retry', { message: error.message }, 'error'); $('error').textContent = error.message; }));
+initialize().catch(error => { localizedConnection('onboarding.error.init', { message: error.message }, 'error'); $('error').textContent = error.message; });

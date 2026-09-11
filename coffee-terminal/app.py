@@ -39,7 +39,7 @@ def main() -> None:
         adapter = OnboardingAdapter(config, config_path, data_root)
         window = webview.create_window(
             "Coffee Terminal · 首次安装", str(ROOT / "web" / "onboarding.html"),
-            js_api=adapter, width=980, height=760, min_size=(840, 650),
+            js_api=adapter, width=980, height=760, min_size=(640, 480),
         )
         webview.start(debug=args.debug, icon=icon_path)
         return
@@ -55,7 +55,7 @@ def main() -> None:
                 f"\n如果是旧的 {config['deviceId']} 进程，请停止后再启动。"
             ) from exc
         raise
-    window = webview.create_window(f"{config['deviceName']} · Coffee Terminal", str(ROOT / "web" / "index.html"), js_api=adapter, width=1440, height=900, min_size=(1100, 700))
+    window = webview.create_window(f"{config['deviceName']} · Coffee Terminal", str(ROOT / "web" / "index.html"), js_api=adapter, width=1440, height=900, min_size=(640, 480))
     window.events.closed += adapter.close
     webview.start(debug=args.debug, icon=icon_path)
 

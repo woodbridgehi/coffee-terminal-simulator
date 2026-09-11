@@ -16,3 +16,8 @@
 :root{--bg:#F6F0E5;--surface:#FFF9F0;--ink:#342F2A;--muted:#746D64;--line:#DDD3C4;--green:#17382D;--amber:#B78A52}
 .viewport,.loading{background:#e8dece}.inspector,.timeline{background:#fff9f0}.viewport-top{flex-wrap:wrap}.view-tabs{background:#fff9f0ed}.viewport-top p{color:#746D64}
 @media(max-width:600px){.viewport-top{gap:12px}.view-tabs{width:100%;justify-content:space-between}.view-tabs button{flex:1}.viewport-top p{margin-top:4px}}
+/* Let smaller/scaled desktop windows scroll naturally instead of clipping tools. */
+body{min-width:0}.app-header{height:auto;min-height:76px;flex-wrap:wrap;padding-top:14px;padding-bottom:14px}.header-actions{flex-wrap:wrap}.studio{height:calc(100vh - 90px);height:calc(100dvh - 90px)}
+.inspector,.control-section,.timeline{min-width:0}.description,.joint-note,.inspector-footer{overflow-wrap:anywhere}.view-tabs{flex-wrap:wrap}.viewport-bottom{flex-wrap:wrap}.view-options{flex-wrap:wrap}.stages{overflow-x:auto;gap:10px;padding-bottom:4px}.stage{flex-shrink:0;min-width:64px}.timeline-header{flex-wrap:wrap}.timeline-header output{white-space:nowrap}
+@media(max-width:850px){.studio{height:auto;grid-template-rows:clamp(320px,65vh,480px) auto auto}.app-header{min-height:65px}.header-actions{gap:12px}.timeline{min-height:150px}.view-tabs button{padding:8px;flex:1}.view-tabs{max-width:100%}}
+@media(max-width:480px){.app-header{gap:12px}.header-actions{width:100%;justify-content:space-between}.viewport-bottom{gap:6px}.canvas-help{display:none}.view-options{margin-left:auto}.viewport-top h2{font-size:15px}}

@@ -67,7 +67,7 @@ function toast(message) { const element = $('#toast'); element.textContent = mes
 function renderRecipes(recipes, capabilities) {
   const products = new Map((capabilities?.products || []).map((item) => [item.recipeId, item]));
   const select = $('#recipeSelect'); const current = selectedRecipeId || select.value || recipes[0]?.recipeId;
-  const html = recipes.map((recipe) => { const capability = products.get(recipe.recipeId); const suffix = capability && !capability.available ? ' · 缺料' : capability ? ` · 可做 ${capability.maxServings} 杯` : ''; return `<option value="${escapeHtml(recipe.recipeId)}">${escapeHtml(recipe.name)} · ${escapeHtml(recipe.version)}${suffix}</option>`; }).join('');
+  const html = recipes.map((recipe) => { const capability = products.get(recipe.recipeId); const suffix = capability && !capability.available ? ` · ${t('terminal.ui.unavailable')}` : capability ? ` · ${t('terminal.ui.servings', {count:capability.maxServings})}` : ''; return `<option value="${escapeHtml(recipe.recipeId)}">${escapeHtml(recipe.name)} · ${escapeHtml(recipe.version)}${suffix}</option>`; }).join('');
   if (html !== renderCache.recipes) { renderCache.recipes = html; select.innerHTML = html; }
   selectedRecipeId = recipes.some((item) => item.recipeId === current) ? current : recipes[0]?.recipeId;
   if (selectedRecipeId) select.value = selectedRecipeId;
@@ -75,7 +75,7 @@ function renderRecipes(recipes, capabilities) {
 
 function renderInventory(snapshot) {
   const materials = snapshot?.materials || [];
-  const html = materials.length ? materials.map((item) => { const ratio = item.capacity ? Math.min(100, Math.max(0, item.onHand / item.capacity * 100)) : 0; const status = String(item.status || 'OK').toLowerCase(); return `<div class="inventory-item ${status}"><div><div class="inventory-name">${escapeHtml(item.name)}</div><div class="inventory-amount">${item.onHand} / ${item.capacity} ${escapeHtml(item.unit)} · 预占 ${item.reserved || 0}</div></div><span class="inventory-status ${status}">${escapeHtml(item.status)}</span><div class="inventory-bar"><span style="width:${ratio}%"></span></div><div class="inventory-actions"><button data-refill="${escapeHtml(item.materialId)}" data-capacity="${item.capacity}">补满</button></div></div>`; }).join('') : '<p class="empty-note">当前实例没有物料配置</p>';
+  const html = materials.length ? materials.map((item) => { const ratio = item.capacity ? Math.min(100, Math.max(0, item.onHand / item.capacity * 100)) : 0; const status = String(item.status || 'OK').toLowerCase(); return `<div class="inventory-item ${status}"><div><div class="inventory-name">${escapeHtml(item.name)}</div><div class="inventory-amount">${item.onHand} / ${item.capacity} ${escapeHtml(item.unit)} · ${t('terminal.ui.reserved')} ${item.reserved || 0}</div></div><span class="inventory-status ${status}">${escapeHtml(item.status)}</span><div class="inventory-bar"><span style="width:${ratio}%"></span></div><div class="inventory-actions"><button data-refill="${escapeHtml(item.materialId)}" data-capacity="${item.capacity}">${t('terminal.ui.refill')}</button></div></div>`; }).join('') : `<p class="empty-note">${t('terminal.ui.emptyStock')}</p>`;
   if (html !== renderCache.inventory) { renderCache.inventory = html; $('#inventoryList').innerHTML = html; }
 }
 
@@ -160,6 +160,7 @@ function render(data) {
   setVisible('#idleView', isIdle);
   window.TerminalShowcase?.update(data,{active:isIdle,locale:terminalI18n.getLocale()});
   setVisible('#makingView', isMaking);
+  setVisible('.terminal-robot-launch', !!isMaking);
   setVisible('#readyView', isReady);
   setVisible('#cancelledView', isCancelled);
   setVisible('#errorView', isFailed || isHold);

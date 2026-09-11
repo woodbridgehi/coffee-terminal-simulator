@@ -1,3 +1,4 @@
+import {ui} from './ui-locale.mjs';
 import {DirectorCamera} from './director-camera.mjs';
 import { CoffeeScene } from './scene.mjs';
 import { createLivePlan, livePosition, sampleSequence, normalizeSteps } from './live-plan.mjs';
@@ -13,6 +14,7 @@ const names = { IDLE:'等待订单',CREATED:'等待支付',AWAITING_PAYMENT:'等
 export function mount(root) {
   const canvasHost = root.querySelector('.rv-canvas'), labelHost = root.querySelector('.rv-labels');
   const scene = new CoffeeScene(canvasHost,labelHost);
+  for(const label of scene.labels){const span=label.element.querySelector('span');span.textContent=ui(span.textContent);}
   scene.renderer.setPixelRatio(Math.min(devicePixelRatio || 1,1.25));
   scene.renderer.shadowMap.enabled = canvasHost.clientWidth > 600;
   const idle = sampleSequence(createSequence(),0);
@@ -30,12 +32,12 @@ export function mount(root) {
   function renderInfo() {
     if (!snapshot) return;
     const stale = snapshot.state === 'RUNNING' && performance.now()-updatedAt > (snapshot.source === 'terminal' ? 4000 : 12000);
-    const status = snapshot.collected ? '顾客已取杯' : !snapshot.connected || stale ? '等待状态同步 · 动作已停留' : names[snapshot.state] || snapshot.state;
+    const status = snapshot.collected ? ui('顾客已取杯') : !snapshot.connected || stale ? ui('等待状态同步 · 动作已停留') : ui(names[snapshot.state]) || snapshot.state;
     root.querySelector('.rv-state').textContent = status;
-    root.querySelector('.rv-title').textContent = snapshot.spectator ? '当前机器 · 三维制作现场' : snapshot.name || '咖啡机器人';
+    root.querySelector('.rv-title').textContent = snapshot.spectator ? ui('当前机器 · 三维制作现场') : snapshot.name || ui('咖啡机器人');
     root.querySelector('.rv-progress').textContent = `${Math.round(Math.max(0,Math.min(1,snapshot.overallProgress))*100)}%`;
     let step = snapshot.steps.find((s)=>s.stepId===snapshot.stepId) || snapshot.steps[snapshot.stepIndex || 0];
-    root.querySelector('.rv-step').textContent = !plan && snapshot.taskId ? '设备尚未提供三维步骤计划，请查看二维进度。' : step?.stepName || '接单后自动同步制作动作';
+    root.querySelector('.rv-step').textContent = !plan && snapshot.taskId ? ui('设备尚未提供三维步骤计划，请查看二维进度。') : step?.stepName || ui('接单后自动同步制作动作');
   }
   function update(next) {
     if (!alive || !gate.accept(next)) return;
@@ -61,8 +63,8 @@ export function mount(root) {
     for (const item of step?.visual?.materials || []) {
       const row=document.createElement('li');
       const stock=next.inventory.find((s)=>s.materialId===item.materialId);
-      row.textContent=`${item.name || item.materialId} · 本步配方 ${item.amount} ${item.unit}`+
-        (stock ? ` · 库存 ${stock.onHand} ${stock.unit} · 预占 ${stock.reserved} ${stock.unit}` : '');
+      row.textContent=`${item.name || item.materialId} · ${ui('本步配方')} ${item.amount} ${item.unit}`+
+        (stock ? ` · ${ui('库存')} ${stock.onHand} ${stock.unit} · ${ui('预占')} ${stock.reserved} ${stock.unit}` : '');
       list.append(row);
     }
     renderInfo();
@@ -82,7 +84,7 @@ export function mount(root) {
     }
     } catch {
       alive=false;
-      root.querySelector('.rv-step').textContent='当前动作无法显示，请返回二维查看制作进度。';
+      root.querySelector('.rv-step').textContent=ui('当前动作无法显示，请返回二维查看制作进度。');
       return;
     }
     raf=requestAnimationFrame(frame);
@@ -96,7 +98,7 @@ export function mount(root) {
   };
   scene.renderer.domElement.addEventListener('webglcontextlost',(event)=>{
     event.preventDefault();alive=false;cancelAnimationFrame(raf);
-    root.querySelector('.rv-step').textContent='图形显示已中断，请关闭三维后重新打开；二维进度仍可使用。';
+    root.querySelector('.rv-step').textContent=ui('图形显示已中断，请关闭三维后重新打开；二维进度仍可使用。');
   });
   return {update,audioPosition(now){return snapshot && {taskId:snapshot.taskId,attempt:snapshot.attempt,position:clock.sample(now)};},dispose(){alive=false;cancelAnimationFrame(raf);director.dispose();directorButton.remove();scene.dispose();canvasHost.replaceChildren();labelHost.replaceChildren();}};
 }

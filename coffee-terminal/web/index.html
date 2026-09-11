@@ -9,10 +9,9 @@
   <link rel="stylesheet" href="drink-visual.css?v=20260911-dual-side-grip" />
   <link rel="stylesheet" href="robot-live.css?v=20260911-director" />
   <link rel="stylesheet" href="status-sound.css?v=20260911-process-sound">
+  <link rel="stylesheet" href="responsive.css?v=20260911-scene-finish">
 </head>
 <body>
-  <div id="sound-controls"></div>
-  <label class="terminal-locale" for="localeSelect"><span data-i18n="language.label">语言</span><select id="localeSelect"><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label>
   <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
     <defs>
       <symbol id="mk-symbol" viewBox="0 0 64 64" fill="none"><rect x="17" y="15" width="25" height="35" rx="7" stroke="currentColor" stroke-width="4"/><path d="M42 27a7 7 0 0 1 0 12" stroke="currentColor" stroke-width="4"/><path d="M24.5 27h11" stroke="var(--bm-brass,#B78A52)" stroke-width="4" stroke-linecap="round"/></symbol>
@@ -25,6 +24,7 @@
       <header class="display-header">
         <div class="brand-connection" id="brandSecretArea" role="button" tabindex="0" title="双击或连击 5 次切换控制台"><svg class="brand-symbol" aria-hidden="true"><use href="#mk-symbol"/></svg><span class="brand-divider"></span><div class="connection"><span class="status-dot"></span><span id="connectionText" data-i18n="terminal.connection.online">设备在线</span></div></div>
         <div class="device-lockup"><div class="device-name" id="deviceName">COFFEE BOT 001</div><span class="device-tag" id="deviceTag">coffee-bot-001</span></div>
+          <label class="terminal-locale" for="localeSelect"><span data-i18n="language.label">语言</span><select id="localeSelect"><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label>
         <button class="console-trigger kiosk-hidden" id="consoleTrigger" title="打开开发控制台" data-i18n-title="terminal.console.open" aria-label="打开开发控制台" data-i18n-aria-label="terminal.console.open"><svg aria-hidden="true"><use href="#mk-terminal"/></svg><span data-i18n="terminal.console.title">开发控制台</span><kbd>⌘K</kbd></button>
       </header>
 
@@ -132,31 +132,33 @@
         <button class="clear-button is-hidden" id="errorClearBtn" data-i18n="terminal.returnIdle">返回待机</button>
       </div>
 
-      <footer class="display-footer"><span class="footer-brand"><svg aria-hidden="true"><use href="#mk-symbol"/></svg>COFFEE TERMINAL</span><button class="rv-launch terminal-robot-launch" data-open-robot data-i18n="terminal.robot.open">查看三维制作</button><span id="footerMessage">精品咖啡 · 新鲜现制</span></footer>
+      <footer class="display-footer"><span class="footer-brand"><svg aria-hidden="true"><use href="#mk-symbol"/></svg>COFFEE TERMINAL</span><button class="rv-launch terminal-robot-launch is-hidden" data-open-robot><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 9 8-4.5M12 12 4 7.5M12 12v9"/></svg><span data-i18n="terminal.robot.open">查看三维制作</span><span class="robot-live-dot" aria-hidden="true"></span></button><span id="footerMessage" data-i18n="terminal.ui.footer">精品咖啡 · 新鲜现制</span></footer>
     </section>
 
     <aside class="console" id="console" aria-label="开发控制台">
       <header class="console-header"><div class="console-title"><svg class="console-mark" aria-hidden="true"><use href="#mk-monogram"/></svg><div><span class="console-kicker">DEVELOPER CONSOLE</span><h2 data-i18n="terminal.console.title">开发控制台</h2><span class="console-connection"><span>●</span><span id="consoleConnectionText">DEVICE ONLINE</span></span></div></div><button class="close-console" id="closeConsole" aria-label="关闭控制台" data-i18n-aria-label="terminal.console.close">×</button></header>
       <div class="console-scroll">
-        <section class="console-section"><div class="section-heading"><span>三维工作站</span></div><button class="action" data-open-robot data-i18n="terminal.robot.open">查看三维制作</button><p class="help">与当前任务、配方和本地库存同步</p></section>
-        <section class="console-section task-section"><div class="section-heading"><span>当前任务</span><span class="state" id="taskState">IDLE</span></div><div class="task-title" id="taskTitle">暂无制作任务</div><div class="task-meta" id="taskMeta">等待销售服务下发订单</div><button class="action primary-action" id="demoOrder">模拟后台下单</button></section>
-        <section class="console-section"><div class="section-heading"><span>制作配方</span><button class="text-button" id="saveRecipe">保存</button></div><select id="recipeSelect" aria-label="选择配方"></select><div class="section-heading"><label for="lattePattern">拉花花型</label><select id="lattePattern"><option value="spiral">螺旋</option></select><button class="text-button" id="addLatteArt">添加拉花步骤</button></div><textarea id="recipeEditor" spellcheck="false" aria-label="配方 JSON"></textarea><p class="help">配方变更保存到本地，仅用于调试。</p></section>
-        <section class="console-section"><div class="section-heading"><span>物料库存</span><button class="text-button" id="reloadConfig">刷新配置</button></div><div id="inventoryList" class="inventory-list"></div><p class="help">补满会写入当前实例的库存状态，并同步给后台。</p></section>
-        <section class="console-section"><div class="section-heading"><span>故障注入</span><span id="failureValue">0%</span></div><input id="failureRate" type="range" min="0" max="100" value="0" /><div class="range-labels"><span>稳定</span><span>高风险</span></div><div class="action-grid"><button class="action" id="forceFail">下一步失败</button><button class="action" id="toggleOffline">模拟断网</button></div></section>
-        <section class="console-section"><div class="section-heading"><span>任务操作</span></div><div class="action-grid three"><button class="action" id="pauseResume">暂停</button><button class="action" id="skipStep">跳过</button><button class="action" id="retryTask">重试</button></div></section>
-        <section class="console-section event-section"><div class="section-heading"><span>事件日志</span><span class="live-dot-label">● LIVE</span></div><div id="eventLog" class="event-log"></div></section>
+        <section class="console-section"><div id="terminal-sound-controls"></div></section>
+        <section class="console-section"><div class="section-heading"><span data-i18n="terminal.ui.scene">三维工作站</span></div><button class="action" data-open-robot data-i18n="terminal.robot.open">查看三维制作</button><p class="help" data-i18n="terminal.ui.sceneHelp">与当前任务、配方和本地库存同步</p></section>
+        <section class="console-section task-section"><div class="section-heading"><span data-i18n="terminal.ui.task">当前任务</span><span class="state" id="taskState">IDLE</span></div><div class="task-title" id="taskTitle">暂无制作任务</div><div class="task-meta" id="taskMeta">等待销售服务下发订单</div><button class="action primary-action" id="demoOrder" data-i18n="terminal.ui.demo">模拟后台下单</button></section>
+        <section class="console-section"><div class="section-heading"><span data-i18n="terminal.ui.recipe">制作配方</span><button class="text-button" id="saveRecipe" data-i18n="terminal.ui.save">保存</button></div><select id="recipeSelect" aria-label="选择配方"></select><div class="section-heading"><label for="lattePattern" data-i18n="terminal.ui.pattern">拉花花型</label><select id="lattePattern"><option value="spiral" data-i18n="terminal.ui.spiral">螺旋</option></select><button class="text-button" id="addLatteArt" data-i18n="terminal.ui.addArt">添加拉花步骤</button></div><textarea id="recipeEditor" spellcheck="false" aria-label="配方 JSON"></textarea><p class="help" data-i18n="terminal.ui.recipeHelp">配方变更保存到本地，仅用于调试。</p></section>
+        <section class="console-section"><div class="section-heading"><span data-i18n="terminal.ui.inventory">物料库存</span><button class="text-button" id="reloadConfig" data-i18n="terminal.ui.reload">刷新配置</button></div><div id="inventoryList" class="inventory-list"></div><p class="help" data-i18n="terminal.ui.stockHelp">补满会写入当前实例的库存状态，并同步给后台。</p></section>
+        <section class="console-section"><div class="section-heading"><span data-i18n="terminal.ui.fault">故障注入</span><span id="failureValue">0%</span></div><input id="failureRate" type="range" min="0" max="100" value="0" /><div class="range-labels"><span data-i18n="terminal.ui.stable">稳定</span><span data-i18n="terminal.ui.risk">高风险</span></div><div class="action-grid"><button class="action" id="forceFail" data-i18n="terminal.ui.fail">下一步失败</button><button class="action" id="toggleOffline">模拟断网</button></div></section>
+        <section class="console-section"><div class="section-heading"><span data-i18n="terminal.ui.operations">任务操作</span></div><div class="action-grid three"><button class="action" id="pauseResume">暂停</button><button class="action" id="skipStep" data-i18n="terminal.ui.skip">跳过</button><button class="action" id="retryTask" data-i18n="terminal.ui.retry">重试</button></div></section>
+        <section class="console-section event-section"><div class="section-heading"><span data-i18n="terminal.ui.events">事件日志</span><span class="live-dot-label">● LIVE</span></div><div id="eventLog" class="event-log"></div></section>
       </div>
     </aside>
   </main>
   <div class="toast is-hidden" id="toast"></div>
   <script src="i18n.js?v=20260904-i18n1"></script>
-  <script src="locales.js?v=20260911-showcase"></script>
+  <script src="locales.js?v=20260911-bilingual"></script>
   <script src="vendor/animejs/anime.umd.min.js"></script>
   <script src="drink-visual.js?v=20260911-dual-side-grip"></script>
-  <script src="robot-integration.bundle.js?v=20260911-director"></script>
+  <script src="robot-integration.bundle.js?v=20260911-scene-finish"></script>
   <script src="status-sound.js?v=20260911-process-sound"></script>
+  <script src="terminal-sound.js?v=20260911"></script>
   <script src="recipe-latte-art.js"></script>
 <script src="showcase.js?v=20260911-showcase"></script>
-<script src="app.js?v=20260911-showcase"></script>
+<script src="app.js?v=20260911-scene-finish"></script>
 </body>
 </html>

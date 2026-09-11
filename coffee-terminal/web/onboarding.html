@@ -5,39 +5,39 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title data-i18n="onboarding.title">Coffee Terminal · 设备配对</title>
   <link rel="icon" href="assets/brand/monogram-ct.svg" />
-  <link rel="stylesheet" href="onboarding.css?v=pairing-20260901" />
+  <link rel="stylesheet" href="onboarding.css?v=20260911-responsive" />
 </head>
 <body>
-  <label class="locale-control" for="localeSelect"><span data-i18n="language.label">语言</span><select id="localeSelect"><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label>
   <main class="shell">
     <aside class="brand">
       <div class="brand-lockup"><img src="assets/brand/logo-symbol.svg" alt="" /><span>COFFEE TERMINAL</span></div>
       <h1 data-i18n="onboarding.heading">设备首次配对</h1>
       <p class="brand-copy" data-i18n="onboarding.intro">本机已生成独立的软件身份。商户确认门店和设备名称后，终端会自动领取运行凭证，不需要人工激活码。</p>
       <ol class="steps" id="steps">
-        <li class="step current" data-step="1"><span class="step-dot">1</span><span><b>软件身份</b><small>本机密钥 · 出厂模拟 SN</small></span></li>
-        <li class="step" data-step="2"><span class="step-dot">2</span><span><b>商户配对</b><small>配对码 · 门店 · 设备名称</small></span></li>
-        <li class="step" data-step="3"><span class="step-dot">3</span><span><b>自动接入</b><small>正式凭证 · MQTT · 上线</small></span></li>
+        <li class="step current" data-step="1"><span class="step-dot">1</span><span><b data-i18n="onboarding.identity">软件身份</b><small data-i18n="onboarding.identityDetail">本机密钥 · 出厂模拟 SN</small></span></li>
+        <li class="step" data-step="2"><span class="step-dot">2</span><span><b data-i18n="onboarding.merchant">商户配对</b><small data-i18n="onboarding.merchantDetail">配对码 · 门店 · 设备名称</small></span></li>
+        <li class="step" data-step="3"><span class="step-dot">3</span><span><b data-i18n="onboarding.provision">自动接入</b><small data-i18n="onboarding.provisionDetail">正式凭证 · MQTT · 上线</small></span></li>
       </ol>
       <img class="brand-art" src="assets/brand/badges/precision-brew.svg" alt="" />
     </aside>
     <section class="content">
       <header class="content-head">
-        <div class="connection" id="connection"><span></span><span data-i18n="onboarding.connection.creating">正在创建安全配对会话…</span></div>
+  <label class="locale-control" for="localeSelect"><span data-i18n="language.label">语言</span><select id="localeSelect"><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label>
+        <div class="connection" id="connection"><span></span><span>正在创建安全配对会话…</span></div>
         <p class="eyebrow" id="stepEyebrow">STEP 1 / 3 · 软件身份</p>
         <h2 id="stepTitle">正在准备这台终端</h2>
         <p class="desc" id="stepDesc">设备编号由云端分配；设备名称和门店归属由商户后台确认。</p>
       </header>
       <div class="form-scroll">
         <section class="success-panel" id="successPanel" hidden>
-          <div class="success-icon">✓</div><h2>设备已完成配对</h2>
-          <p>正式 HTTP 与 MQTT 凭证已安全写入本地。关闭此窗口后重新启动，即可进入咖啡终端。</p>
-          <div class="success-meta"><div><small>DEVICE ID</small><b id="sumDeviceId">—</b></div><div><small>模拟器 SN</small><b id="sumSerial">—</b></div><div><small>设备名称</small><b id="sumDeviceName">—</b></div><div><small>所属门店</small><b id="sumStoreName">—</b></div></div>
+          <div class="success-icon">✓</div><h2 data-i18n="onboarding.successTitle">设备已完成配对</h2>
+          <p data-i18n="onboarding.successDesc">正式 HTTP 与 MQTT 凭证已安全写入本地。关闭此窗口后重新启动，即可进入咖啡终端。</p>
+          <div class="success-meta"><div><small>DEVICE ID</small><b id="sumDeviceId">—</b></div><div><small data-i18n="onboarding.serial">模拟器 SN</small><b id="sumSerial">—</b></div><div><small data-i18n="onboarding.deviceName">设备名称</small><b id="sumDeviceName">—</b></div><div><small data-i18n="onboarding.store">所属门店</small><b id="sumStoreName">—</b></div></div>
         </section>
         <section class="card pairing-card" id="pairingPanel" hidden>
           <div class="identity-grid">
-            <div><small>模拟器出厂序列号</small><b id="serialNumber">—</b></div>
-            <div><small>云端设备 ID</small><b id="deviceId">—</b></div>
+            <div><small data-i18n="onboarding.factorySerial">模拟器出厂序列号</small><b id="serialNumber">—</b></div>
+            <div><small data-i18n="onboarding.cloudId">云端设备 ID</small><b id="deviceId">—</b></div>
           </div>
           <div class="pairing-code-wrap">
             <small data-i18n="onboarding.pairingCode.help">请在商户后台「我的设备 → 配对新设备」输入以下配对码</small>
@@ -45,7 +45,7 @@
             <span id="expiresAt">—</span>
           </div>
           <div class="pairing-status" id="pairingStatus"><i></i><div><b data-i18n="onboarding.status.waiting">等待商户确认</b><p data-i18n="onboarding.status.waitingDesc">商户确认门店和设备名称后，本机将自动领取正式凭证。</p></div></div>
-          <p class="security-note">这是软件模拟身份，用于验证完整配对流程。真实硬件将由安全芯片完成同样的签名证明；配对码短时有效且只能使用一次。</p>
+          <p class="security-note" data-i18n="onboarding.security">这是软件模拟身份，用于验证完整配对流程。真实硬件将由安全芯片完成同样的签名证明；配对码短时有效且只能使用一次。</p>
         </section>
       </div>
       <footer class="wizard-foot">
@@ -55,7 +55,7 @@
     </section>
   </main>
   <script src="i18n.js?v=20260904-i18n1"></script>
-  <script src="locales.js?v=20260904-i18n1"></script>
-  <script src="onboarding.js?v=20260904-i18n1"></script>
+  <script src="locales.js?v=20260911-bilingual"></script>
+  <script src="onboarding.js?v=20260911-bilingual"></script>
 </body>
 </html>

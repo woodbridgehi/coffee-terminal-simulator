@@ -17,7 +17,16 @@ test('terminal locale normalizes variants and interpolates translated messages',
 
 test('terminal Chinese and English catalogs have the same semantic keys', () => {
   const source = readFileSync(new URL('../coffee-terminal/web/locales.js', import.meta.url), 'utf8');
-  const halves = source.split("TerminalI18n.register('en-US'");
-  const keys = part => [...part.matchAll(/'([^']+)'\s*:/g)].map(match => match[1]).sort();
-  assert.deepEqual(keys(halves[0]), keys(halves[1]));
+  const catalogs = {};
+  vm.runInNewContext(source, { TerminalI18n: { register(locale, messages) {
+    catalogs[locale] = { ...catalogs[locale], ...messages };
+  } } });
+  assert.deepEqual(Object.keys(catalogs['zh-CN']).sort(), Object.keys(catalogs['en-US']).sort());
+  for (const file of ['onboarding.html', 'index.html']) {
+    const html = readFileSync(new URL('../coffee-terminal/web/' + file, import.meta.url), 'utf8');
+    for (const [, key] of html.matchAll(/data-i18n(?:-[a-z-]+)?="([^"]+)"/g)) {
+      assert.ok(catalogs['en-US'][key], `${file}: missing English message ${key}`);
+      assert.ok(catalogs['zh-CN'][key], `${file}: missing Chinese message ${key}`);
+    }
+  }
 });
