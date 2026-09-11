@@ -1,7 +1,8 @@
+import { spiralPoint } from './latte-art.mjs';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createArm, createCup, createWorkcell, M } from './models.mjs';
+import { createArm, createCup, createPitcher, createWorkcell, M } from './models.mjs';
 import { STATIONS } from './sequence.mjs';
 
 export class CoffeeScene {
@@ -16,7 +17,7 @@ export class CoffeeScene {
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
-    this.renderer.domElement.setAttribute('aria-label', '双六轴机械臂三维场景，可拖动旋转、滚轮缩放');
+    this.renderer.domElement.setAttribute('aria-label', '双 UR10e 机械臂三维场景，可拖动旋转、滚轮缩放');
     this.renderer.domElement.tabIndex = 0;
     host.append(this.renderer.domElement);
     this.camera = new THREE.PerspectiveCamera(37, 1, 0.05, 50);
@@ -46,6 +47,10 @@ export class CoffeeScene {
     this.arms = { left: createArm('left'), right: createArm('right') };
     Object.values(this.arms).forEach((arm) => this.scene.add(arm.group));
     this.cup = createCup(); this.scene.add(this.cup.group);
+    this.pitcher=createPitcher(); this.scene.add(this.pitcher.group);
+    const points=Array.from({length:241},(_,i)=>new THREE.Vector3(...spiralPoint(i/240)));
+    this.foam=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),240,.0016,6,false),M.white);
+    this.cup.group.add(this.foam); this.foam.visible=false;
     this.stream = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.007, 1, 10), M.coffee.clone());
     this.stream.visible = false; this.scene.add(this.stream);
     this.labels = Object.entries(STATIONS).map(([id, station]) => {
@@ -74,27 +79,46 @@ export class CoffeeScene {
   setView(view) {
     this.view = view;
     const ratio = this.host.clientWidth / Math.max(1, this.host.clientHeight);
-    const scale = Math.max(1, 1.25 / Math.max(0.6, ratio));
-    const positions = { perspective: [3.5, 3.7, 5.8], top: [0, 7.5, 0.001], front: [0, 2.0, 7.5] };
+    const scale = view==='art'?1:Math.max(1, 1.25 / Math.max(0.6, ratio));
+    const positions = { art:[.32,2.05,1.0], perspective: [3.5, 3.7, 5.8], top: [0, 7.5, 0.001], front: [0, 2.0, 7.5] };
     const p = positions[view] || positions.perspective;
-    this.controls.target.set(0, 1.0, 0.02);
+    this.controls.target.set(...(view==='art'?[-.04,1.27,.40]:[0,1.0,.02]));
+    this.controls.minDistance=view==='art'?.5:2.5;
     this.camera.position.set(p[0] * scale, 1 + (p[1] - 1) * scale, p[2] * scale);
     this.camera.lookAt(this.controls.target); this.controls.update();
   }
 
   apply(state) {
     this.state = state;
-    this.arms.left.move(state.left, state.gripLeft); this.arms.right.move(state.right, state.gripRight);
-    this.cup.group.position.set(...state.cup); this.cup.group.quaternion.identity();
+    if(state.leftJoints && state.rightJoints) {
+      this.arms.left.pose(state.leftJoints,state.gripLeft);
+      this.arms.right.pose(state.rightJoints,state.gripRight,state.pitcherOwner==='right');
+    } else {
+      this.arms.left.move(state.left,state.gripLeft,state.leftOrientation);
+      this.arms.right.move(state.right,state.gripRight,state.rightOrientation,state.pitcherOwner==='right');
+    }
+    this.cup.group.position.set(...state.cup); this.cup.group.quaternion.fromArray(state.cupOrientation);
     this.cup.lid.visible = state.lid; this.cup.setFill(state.fill, state.milk);
+    this.pitcher.group.position.set(...state.pitcher);
+    this.pitcher.group.quaternion.fromArray(state.pitcherOrientation);
+    this.foam.visible=(state.artProgress || 0)>0 && !state.lid;
+    this.foam.position.y=-.074+state.fill*.15+.005;
+    this.foam.geometry.setDrawRange(0,Math.floor((state.artProgress || 0)*240)*6*6);
     this.cup.ice.visible = (state.ice || 0) > 0.1;
     this.stream.visible = !!state.stream;
-    if (state.stream) {
+    if (state.stream && state.stream !== 'latte-art') {
+      this.stream.quaternion.identity();
       const bottom = state.cup[1] - 0.074 + state.fill * 0.15, top = 1.455;
       this.stream.position.set(state.cup[0], (top + bottom) / 2, state.cup[2]);
       this.stream.scale.y = top - bottom;
       this.stream.material.color.set({ coffee: '#634023', milk: '#fff4d8', water: '#b6d9d3', syrup: '#c68c36' }[state.stream]);
     }
+    if(state.stream==='latte-art') {
+      const from=new THREE.Vector3(...state.spout),to=new THREE.Vector3(...state.landing),d=to.clone().sub(from);
+      this.stream.position.copy(from.add(to).multiplyScalar(.5)); this.stream.scale.set(.35,d.length(),.35);
+      this.stream.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());
+      this.stream.material.color.set('#fff4d8');
+    } else { this.stream.scale.x=1;this.stream.scale.z=1; }
     const pressing = state.description === '压合杯盖';
     this.cell.press.position.y = 1.42 - (pressing ? Math.sin(Math.PI * state.segmentProgress) * 0.15 : 0);
     for (const [id, pad] of Object.entries(this.cell.pads)) {

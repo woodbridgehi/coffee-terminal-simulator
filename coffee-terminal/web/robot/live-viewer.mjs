@@ -37,7 +37,8 @@ export function mount(root) {
     const changed=signature !== nextSignature;
     if (changed || newTask) {
       signature=nextSignature;
-      plan=normalizeSteps(next.steps) ? createLivePlan(next.steps) : null;
+      try { plan=normalizeSteps(next.steps) ? createLivePlan(next.steps) : null; }
+      catch(error) { plan=null; console.warn('三维计划未通过运动校验:',error.message); }
     }
     if (plan && snapshot.taskId) {
       const target=livePosition(snapshot,plan);

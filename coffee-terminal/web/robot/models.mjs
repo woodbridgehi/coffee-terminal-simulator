@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { ARM, BASES, solveUpright } from './kinematics.mjs';
+import { BASES, forward, solvePose, sideGrip } from './kinematics.mjs';
 import { STATIONS } from './sequence.mjs';
 
 const material = (color, metalness = 0, roughness = 0.45) => new THREE.MeshStandardMaterial({ color, metalness, roughness });
@@ -37,61 +37,61 @@ export function textPlate(parent, text, p, width = 0.45, height = 0.11, color = 
 }
 
 export function createArm(side) {
-  const group = new THREE.Group(); group.name = `${side}-6R`;
+  const group = new THREE.Group(); group.name = `${side}-UR10e`;
   group.position.set(...BASES[side]);
-  box(group, [0.38, 0.04, 0.36], [0, 0.02, 0], M.dark, 0.03);
-  for (const x of [-0.145, 0.145]) for (const z of [-0.13, 0.13]) bolt(group, [x, 0.046, z]);
-  cylinder(group, 0.145, 0.15, [0, 0.11, 0], M.shell, 0.125);
-  ring(group, 0.126, 0.009, [0, 0.17, 0], side === 'left' ? M.green : M.brass);
-  const joints = Array.from({ length: 6 }, () => new THREE.Group());
-  const [j1, j2, j3, j4, j5, j6] = joints;
-  group.add(j1); j1.position.y = ARM.shoulder;
-  j1.add(j2); j2.add(j3); j3.position.y = ARM.upper;
-  j3.add(j4); j4.position.y = ARM.forearm;
-  j4.add(j5); j5.add(j6);
-  function jointHousing(parent, r, depth, axis = 'z') {
-    const housing = cylinder(parent, r, depth, [0, 0, 0], M.dark);
-    if (axis === 'z') housing.rotation.x = Math.PI / 2;
-    for (const sign of [-1, 1]) {
-      const cap = cylinder(parent, r * 0.78, 0.016, axis === 'z' ? [0, 0, sign * depth / 2] : [0, sign * depth / 2, 0], M.steel);
-      if (axis === 'z') cap.rotation.x = Math.PI / 2;
-      const center = cylinder(parent, r * 0.42, 0.020, axis === 'z' ? [0, 0, sign * (depth / 2 + 0.008)] : [0, sign * (depth / 2 + 0.008), 0], M.shell);
-      if (axis === 'z') center.rotation.x = Math.PI / 2;
-    }
-  }
-  jointHousing(j2, 0.132, 0.26);
-  box(j2, [0.18, ARM.upper - 0.06, 0.17], [0, ARM.upper / 2, 0], M.shell, 0.065);
-  box(j2, [0.11, 0.32, 0.013], [0, ARM.upper / 2, 0.091], side === 'left' ? M.green : M.brass, 0.012);
-  jointHousing(j3, 0.108, 0.23);
-  box(j3, [0.14, ARM.forearm - 0.05, 0.145], [0, ARM.forearm / 2, 0], M.shell, 0.053);
-  // Cable is local to each rigid link, so it never stretches between unrelated joints.
-  for (const [parent, length, offset] of [[j2, ARM.upper, -0.106], [j3, ARM.forearm, -0.09]]) {
-    const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0, 0.06, offset), new THREE.Vector3(-0.09, length * 0.3, offset - 0.055),
-      new THREE.Vector3(-0.07, length * 0.75, offset - 0.04), new THREE.Vector3(0, length - 0.06, offset),
-    ]);
-    mesh(parent, new THREE.TubeGeometry(curve, 20, 0.018, 8, false), M.black);
-  }
-  jointHousing(j4, 0.085, 0.12, 'y');
-  jointHousing(j5, 0.067, 0.15);
-  cylinder(j6, 0.053, 0.07, [0, 0.07, 0], M.steel);
-  box(j6, [0.16, 0.057, 0.08], [0, 0.123, 0], M.dark, 0.012);
-  const fingers = [-1, 1].map((sign) => {
-    const finger = new THREE.Group(); j6.add(finger);
-    box(finger, [0.023, 0.11, 0.046], [0, 0.20, 0], M.steel, 0.008);
-    box(finger, [0.012, 0.058, 0.055], [-sign * 0.012, 0.229, 0], M.black, 0.004);
+  box(group, [.32,.025,.32], [0,.012,0], M.dark);
+  const blue = material('#73aaca', .38, .32);
+  const joints = Array.from({length:6}, (_,i) => {
+    const node = new THREE.Group(); group.add(node); node.matrixAutoUpdate=false;
+    const housing=cylinder(node,i<2?.075:.058,i<2?.15:.10,[0,0,0],M.lightSteel);
+    housing.rotation.x=Math.PI/2;
+    const cap=cylinder(node,i<2?.065:.05,.012,[0,0,i<2?.081:.056],blue);
+    cap.rotation.x=Math.PI/2;
+    return node;
+  });
+  const rods=Array.from({length:6},(_,i)=>cylinder(group,i<3?.054:.042,1,[0,0,0],M.lightSteel));
+  const flange=new THREE.Group(); group.add(flange); flange.matrixAutoUpdate=false;
+  const tcp=new THREE.Object3D(); flange.add(tcp);
+  box(tcp,[.15,.045,.065],[0,-.13,0],M.dark,.01);
+  const fingers=[-1,1].map(sign=>{
+    const finger=new THREE.Group(); tcp.add(finger);
+    box(finger,[.018,.12,.035],[0,-.06,0],M.steel,.005);
+    box(finger,[.014,.04,.045],[-sign*.006,0,0],M.black,.003);
     return finger;
   });
-  const tcp = new THREE.Object3D(); tcp.position.y = ARM.tool; j6.add(tcp);
-  const axes = new THREE.AxesHelper(0.18); tcp.add(axes); axes.visible = false;
-  const angles = Array(6).fill(0);
-  function pose(values, opening = 1) {
-    values.forEach((value, i) => { angles[i] = value; joints[i].rotation[['y', 'z', 'z', 'y', 'z', 'y'][i]] = value; });
-    fingers.forEach((finger, i) => { finger.position.x = (i ? 1 : -1) * (0.061 + opening * 0.039); });
-    group.updateMatrixWorld(true);
+  const axes=new THREE.AxesHelper(.16); tcp.add(axes); axes.visible=false;
+  const angles=Array(6).fill(0); let seeded=false;
+  function pose(values,opening=1,narrow=false) {
+    values.forEach((v,i)=>angles[i]=v);
+    const fk=forward(values,[0,0,0]);
+    joints.forEach((node,i)=>node.matrix.copy(fk.frames[i]));
+    rods.forEach((rod,i)=>{
+      const a=new THREE.Vector3().setFromMatrixPosition(fk.frames[i]);
+      const b=new THREE.Vector3().setFromMatrixPosition(fk.frames[i+1]);
+      const d=b.clone().sub(a); rod.position.copy(a.add(b).multiplyScalar(.5));
+      rod.scale.y=d.length(); rod.visible=d.length()>1e-6;
+      rod.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());
+    });
+    flange.matrix.copy(fk.matrix);
+    fingers.forEach((f,i)=>f.position.x=(i?1:-1)*((narrow?.014:.060)+opening*(narrow?.078:.032)));
+    group.updateMatrixWorld(true); seeded=true;
   }
-  return { group, joints, tcp, axes, angles, pose,
-    move(target, opening = 1) { pose(solveUpright(target, BASES[side]), opening); } };
+  return {group,joints,tcp,axes,angles,pose,
+    move(target,opening=1,orientation=sideGrip(side,target),narrow=false) {
+      pose(solvePose(target,orientation,BASES[side],seeded?angles:null),opening,narrow);
+    }};
+}
+
+export function createPitcher() {
+  const group=new THREE.Group();
+  const profile=[[.044,-.065],[.061,.065],[.058,.065],[.041,-.060],[0,-.060]];
+  mesh(group,new THREE.LatheGeometry(profile.map(p=>new THREE.Vector2(...p)),40),M.steel);
+  const spout=mesh(group,new THREE.ConeGeometry(.023,.055,4),M.steel,[-.07,.063,0]);
+  spout.rotation.z=Math.PI/2;
+  const handle=mesh(group,new THREE.TorusGeometry(.065,.009,8,24),M.steel,[.13,0,0]);
+  handle.scale.x=.7;
+  cylinder(group,.052,.004,[0,.039,0],M.white);
+  return {group};
 }
 
 export function createCup({ miniature = false } = {}) {

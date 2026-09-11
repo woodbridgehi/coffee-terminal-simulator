@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-ACTIONS = {"cups", "brew", "water", "milk", "ice", "syrup", "lid", "pickup", "wait"}
+ACTIONS = {"cups", "brew", "water", "milk", "ice", "syrup", "lid", "pickup", "wait", "latte-art"}
 
 
 def step_plan(recipe: dict[str, Any], definitions: dict[str, Any]) -> list[dict[str, Any]]:
@@ -37,6 +37,6 @@ def step_plan(recipe: dict[str, Any], definitions: dict[str, Any]) -> list[dict[
             if not actions:
                 actions.append("wait")
         result.append({"stepId": step["id"], "stepName": step["name"], "stepIndex": index,
-                       "durationSeconds": step["durationSeconds"],
-                       "visual": {"version": 1, "actions": actions, "materials": materials}})
+                       "durationSeconds": step["durationSeconds"], "dispenseChannel": step.get("dispenseChannel"),
+                       "visual": {"version": 1, "actions": actions, "materials": materials, **({"latteArt": {key: step["latteArt"][key] for key in ("patternId", "patternVersion")}} if step.get("latteArt") else {}), **({"liquidReferenceMl": recipe["liquidReferenceMl"]} if recipe.get("liquidReferenceMl") else {})}})
     return result

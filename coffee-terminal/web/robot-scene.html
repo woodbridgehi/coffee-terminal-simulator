@@ -17,8 +17,8 @@
   <main class="studio">
     <section class="viewport" id="viewport" aria-label="可交互三维咖啡工作站">
       <div id="canvasHost"></div>
-      <div class="viewport-top"><div><h2>工作站总览</h2><p>通用六轴机械臂 · 双臂协作</p></div>
-        <div class="view-tabs" role="group" aria-label="相机视角"><button data-view="perspective" aria-pressed="true">透视</button><button data-view="top" aria-pressed="false">俯视</button><button data-view="front" aria-pressed="false">正视</button></div>
+      <div class="viewport-top"><div><h2>工作站总览</h2><p>UR10e × 2 · 六自由度姿态控制</p></div>
+        <div class="view-tabs" role="group" aria-label="相机视角"><button data-view="perspective" aria-pressed="true">透视</button><button data-view="art" aria-pressed="false">拉花特写</button><button data-view="top" aria-pressed="false">俯视</button><button data-view="front" aria-pressed="false">正视</button></div>
       </div>
       <div id="labels" class="station-labels" aria-hidden="true"></div>
       <div class="viewport-bottom"><div class="canvas-help">拖动旋转 · 滚轮缩放 · 右键平移</div><div class="view-options"><label><input id="showLabels" type="checkbox" checked>工位</label><label><input id="showAxes" type="checkbox">坐标轴</label><button id="fitView" title="恢复完整工作站视角" aria-label="视角复位">↺</button></div></div>
@@ -28,7 +28,7 @@
     <aside class="inspector" aria-label="仿真控制面板">
       <section class="control-section">
         <h2>流程控制</h2>
-        <label class="field" for="recipe"><span>配方</span><select id="recipe"><option value="latte">热拿铁</option><option value="americano">美式咖啡</option><option value="vanilla">香草拿铁</option></select></label>
+        <label class="field" for="recipe"><span>配方</span><select id="recipe"><option value="spiral">UR 双臂拉花拿铁</option><option value="latte">热拿铁</option><option value="americano">美式咖啡</option><option value="vanilla">香草拿铁</option></select></label>
         <button class="primary" id="play" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 3 11 7-11 7z"/></svg><span>开始演示</span></button>
         <div class="secondary-row"><button id="reset" disabled>↺ <span>复位</span></button><button id="next" disabled>下一步 <span aria-hidden="true">→</span></button></div>
         <label class="field speed" for="speed"><span>速度</span><select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
@@ -50,6 +50,6 @@
     </section>
   </main>
   <noscript><p>请启用 JavaScript 以运行三维仿真场景。</p></noscript>
-  <script src="robot-scene.bundle.js" defer></script>
+  <script src="robot-scene.bundle.js?v=20260911-dual-side-grip" defer></script>
 </body>
 </html>

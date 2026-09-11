@@ -7,3 +7,7 @@ for(const name of ['robot-live.bundle.js','robot-integration.bundle.js','robot-l
   await copyFile(new URL(`../coffee-terminal/web/${name}`,import.meta.url),new URL(name,output));
 await copyFile(new URL('../coffee-terminal/web/robot/THREE-LICENSE.txt',import.meta.url),new URL('THREE-LICENSE.txt',output));
 console.log('Cloud viewer assets synchronized.');
+
+// Keep the shared status sound controller and controls identical on both surfaces.
+for (const name of ['status-sound.js', 'status-sound.css'])
+  await copyFile(new URL(`../coffee-terminal/web/${name}`, import.meta.url), new URL(`../shared/${name}`, output));

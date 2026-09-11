@@ -1,3 +1,4 @@
+import { createLatteArtDemo } from './latte-art-demo.mjs';
 import { CoffeeScene } from './scene.mjs';
 import { createSequence, sampleSequence } from './sequence.mjs';
 import { LIMITS, deg, rad } from './kinematics.mjs';
@@ -12,7 +13,7 @@ const icons = { '取杯': cupIcon, '出杯': cupIcon, '萃取': '<rect x="4" y="
   '糖浆': '<path d="M9 3h6v6l3 3v9H6v-9l3-3zM9 5h9M6 15h12"/>',
   '封盖': '<path d="M3 14h18l-2 5H5zM5 14c0-5 3-7 7-7s7 2 7 7M10 7V4h4v3"/>' };
 
-let scene, sequence = createSequence(), elapsed = 0, running = false, manual = false, selected = 'left', frameId, disposed = false;
+let scene, sequence = createLatteArtDemo(), elapsed = 0, running = false, manual = false, selected = 'left', frameId, disposed = false;
 let state = sampleSequence(sequence, 0);
 const sliders = LIMITS.map(([min, max], i) => {
   const row = document.createElement('div'); row.className = 'joint';
@@ -32,7 +33,7 @@ function buildStages() {
   sequence.recipe.stages.forEach((name, index) => {
     const button = document.createElement('button'); button.className = 'stage';
     button.setAttribute('aria-label', `跳转到${name}`);
-    button.innerHTML = `<b>${String(index + 1).padStart(2, '0')}</b><svg viewBox="0 0 24 24" aria-hidden="true">${icons[name]}</svg><span>${name}</span>`;
+    button.innerHTML = `<b>${String(index + 1).padStart(2, '0')}</b><svg viewBox="0 0 24 24" aria-hidden="true">${icons[name] || cupIcon}</svg><span>${name}</span>`;
     button.addEventListener('click', () => seek(sequence.segments.find((segment) => segment.stage === name).start));
     $('stages').append(button);
   });
@@ -83,7 +84,7 @@ $('play').addEventListener('click', () => {
   running = !running; updateControls();
 });
 $('reset').addEventListener('click', reset);
-$('recipe').addEventListener('change', () => { sequence = createSequence($('recipe').value); buildStages(); reset(); });
+$('recipe').addEventListener('change', () => { sequence = $('recipe').value==='spiral'?createLatteArtDemo():createSequence($('recipe').value); buildStages(); reset(); });
 $('seek').addEventListener('input', () => seek(Number($('seek').value) / 1000 * sequence.duration));
 $('next').addEventListener('click', () => {
   const next = sequence.segments.find((segment) => segment.start > elapsed + 0.01 && segment.stage !== state.stage);

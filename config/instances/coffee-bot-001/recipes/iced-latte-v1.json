@@ -1,7 +1,7 @@
 {
   "recipeId": "iced-latte-v1",
   "skuCode": "ICED_LATTE",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "name": "冰拿铁",
   "priceMinor": 1800,
   "enabled": true,
@@ -9,16 +9,29 @@
     "description": "双份浓缩、鲜奶与冰块",
     "sortOrder": 20
   },
-  "visual": {"profile": "iced-latte", "cup": "transparent-tall", "layers": ["milk", "coffee", "ice"]},
+  "visual": {
+    "profile": "iced-latte",
+    "cup": "transparent-tall",
+    "layers": [
+      "milk",
+      "coffee",
+      "ice"
+    ]
+  },
   "steps": [
     {
       "id": "prepare-cup",
       "name": "准备杯子",
       "animationCue": "cup-arrive",
       "durationSeconds": 8,
-      "durationRandomization": {"minSeconds": 7, "maxSeconds": 10},
+      "durationRandomization": {
+        "minSeconds": 7,
+        "maxSeconds": 10
+      },
       "failureProfile": "cup-dispenser",
-      "robotActions": ["cups"],
+      "robotActions": [
+        "cups"
+      ],
       "consumes": [
         {
           "materialId": "cup-12oz",
@@ -32,25 +45,37 @@
       "name": "加入冰块",
       "animationCue": "ice-drop",
       "durationSeconds": 12,
-      "durationRandomization": {"minSeconds": 10, "maxSeconds": 15},
+      "durationRandomization": {
+        "minSeconds": 10,
+        "maxSeconds": 15
+      },
       "failureProfile": "ice-dispenser",
-      "robotActions": ["ice"],
+      "robotActions": [
+        "ice"
+      ],
       "consumes": [
         {
           "materialId": "ice",
           "amount": 180,
           "unit": "g"
         }
-      ]
+      ],
+      "dispenseChannel": "ice-dispenser",
+      "customizationRole": "ice"
     },
     {
       "id": "extract-coffee",
       "name": "萃取咖啡",
       "animationCue": "brew-stream",
       "durationSeconds": 28,
-      "durationRandomization": {"minSeconds": 25, "maxSeconds": 32},
+      "durationRandomization": {
+        "minSeconds": 25,
+        "maxSeconds": 32
+      },
       "failureProfile": "brewer",
-      "robotActions": ["brew"],
+      "robotActions": [
+        "brew"
+      ],
       "consumes": [
         {
           "materialId": "coffee-beans",
@@ -69,25 +94,38 @@
       "name": "添加牛奶",
       "animationCue": "milk-pour",
       "durationSeconds": 16,
-      "durationRandomization": {"minSeconds": 14, "maxSeconds": 19},
+      "durationRandomization": {
+        "minSeconds": 14,
+        "maxSeconds": 19
+      },
       "failureProfile": "milk-pump",
-      "robotActions": ["milk"],
+      "robotActions": [
+        "milk"
+      ],
       "consumes": [
         {
           "materialId": "milk",
           "amount": 180,
           "unit": "ml"
         }
-      ]
+      ],
+      "dispenseChannel": "milk-pump",
+      "customizationRole": "milk"
     },
     {
       "id": "seal-and-serve",
       "name": "封杯并出杯",
       "animationCue": "seal",
       "durationSeconds": 10,
-      "durationRandomization": {"minSeconds": 9, "maxSeconds": 13},
+      "durationRandomization": {
+        "minSeconds": 9,
+        "maxSeconds": 13
+      },
       "failureProfile": "lid-dispenser",
-      "robotActions": ["lid", "pickup"],
+      "robotActions": [
+        "lid",
+        "pickup"
+      ],
       "consumes": [
         {
           "materialId": "lid-12oz",
@@ -96,5 +134,29 @@
         }
       ]
     }
-  ]
+  ],
+  "optionSchema": {
+    "version": "1.0.0",
+    "options": {
+      "ice": {
+        "default": "STANDARD",
+        "values": [
+          "NONE",
+          "STANDARD"
+        ],
+        "priceDeltaMinor": {}
+      },
+      "milk": {
+        "default": "STANDARD",
+        "values": [
+          "NONE",
+          "STANDARD"
+        ],
+        "priceDeltaMinor": {}
+      }
+    },
+    "temperature": "ICED",
+    "fillPolicy": "NO_TOP_UP",
+    "notice": "不加冰不等于热饮；去冰/去奶不补液、杯量会减少。不加奶会改变饮品口感；无添加糖仅指可调糖浆，牛奶和巧克力等原料仍可能含糖。"
+  }
 }

@@ -10,7 +10,7 @@ function ensureDialog(){
   if(dialog)return;
   dialog=document.createElement('dialog');dialog.className='rv-dialog';dialog.setAttribute('aria-label','三维制作视图');
   dialog.innerHTML=`<div class="rv-shell"><header class="rv-header"><div><strong class="rv-title">咖啡机器人</strong><span class="rv-state" role="status">等待状态</span></div><button class="rv-close" aria-label="返回二维视图">返回二维 ×</button></header>
-    <div class="rv-stage"><div class="rv-canvas"></div><div class="rv-labels station-labels" aria-hidden="true"></div><div class="rv-views" role="group" aria-label="三维相机视角"><button data-rv-view="perspective" aria-pressed="true">透视</button><button data-rv-view="top" aria-pressed="false">俯视</button><button data-rv-view="front" aria-pressed="false">正视</button></div><p class="rv-loading" role="status">正在加载三维视图…</p></div>
+    <div class="rv-stage"><div class="rv-canvas"></div><div class="rv-labels station-labels" aria-hidden="true"></div><div class="rv-views" role="group" aria-label="三维相机视角"><button data-rv-view="perspective" aria-pressed="true">透视</button><button data-rv-view="art" aria-pressed="false">拉花特写</button><button data-rv-view="top" aria-pressed="false">俯视</button><button data-rv-view="front" aria-pressed="false">正视</button></div><p class="rv-loading" role="status">正在加载三维视图…</p></div>
     <footer class="rv-footer"><div><strong class="rv-step">等待设备步骤</strong><output class="rv-progress">0%</output></div><ul class="rv-materials"></ul><p>动作示意与设备步骤同步 · 拖动旋转 / 双指缩放</p></footer></div>`;
   document.body.append(dialog);
   dialog.querySelector('.rv-close').onclick=()=>dialog.close();

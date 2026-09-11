@@ -26,6 +26,7 @@ function buildHarness() {
         _classes: new Set(),
         add(...names) { names.forEach((n) => this._classes.add(n)); },
         remove(...names) { names.forEach((n) => this._classes.delete(n)); },
+        toggle(name, force) { if (force) this._classes.add(name); else this._classes.delete(name); },
         contains(name) { return this._classes.has(name); },
       },
       style: {
@@ -59,7 +60,7 @@ function buildHarness() {
   const context = { window, document };
   vm.createContext(context);
   vm.runInContext(source, context);
-  return { visual: context.window.DrinkVisual, anime, body };
+  return { visual: context.window.DrinkVisual, anime, body, stage };
 }
 
 const baseTask = () => ({
@@ -135,4 +136,16 @@ test('updateProgress with no task empties the cup', () => {
   const { visual, body } = buildHarness();
   visual.updateProgress(null);
   assert.equal(body.style.transform, 'scaleY(0)');
+});
+
+test('customized 2D view hides removed ingredients and keeps reduced liquid volume', () => {
+  const { visual, body, stage } = buildHarness(), task = baseTask();
+  task.recipe.customization = {milk:'NONE',ice:'NONE',sugar:'NONE'};
+  task.recipe.optionSchema = {temperature:'ICED'};
+  task.recipe.liquidReferenceMl = 225;
+  task.recipe.steps = [{id:'brew',animationCue:'brew-stream',consumes:[{unit:'ml',amount:45}]}];
+  task.stepProgress = 1;
+  visual.render(task); visual.updateProgress(task);
+  assert.equal(body.style.transform,'scaleY(0.2)');
+  for (const name of ['custom-no-milk','custom-no-ice','custom-no-syrup','custom-no-steam']) assert.ok(stage.classList.contains(name));
 });

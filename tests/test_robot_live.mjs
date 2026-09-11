@@ -58,3 +58,15 @@ test('terminal and phone use the same plan and progress; private fields are neve
   assert.equal(local.inventory[0].onHand,800);assert.deepEqual(phone.inventory,[]);
   assert.ok(!JSON.stringify(phone).includes('private'));
 });
+
+test('custom no-milk/no-ice plan retains base liquid reference and omits those effects', () => {
+  const custom = [
+    {stepId:'cup',stepName:'Cup',durationSeconds:8,visual:{version:1,actions:['cups'],materials:[],liquidReferenceMl:235}},
+    {stepId:'brew',stepName:'Coffee',durationSeconds:28,visual:{version:1,actions:['brew'],materials:[{materialId:'water',name:'Water',amount:45,unit:'ml'}],liquidReferenceMl:235}},
+    {stepId:'serve',stepName:'Serve',durationSeconds:10,visual:{version:1,actions:['lid','pickup'],materials:[],liquidReferenceMl:235}},
+  ];
+  const plan = createLivePlan(custom), state = sampleSequence(plan,plan.duration);
+  assert.equal(state.milk,0); assert.equal(state.ice,0);
+  assert.ok(state.fill < 0.2);
+  assert.equal(plan.duration,46);
+});

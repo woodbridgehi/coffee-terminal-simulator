@@ -8,7 +8,7 @@ import { createSequence, sampleSequence, RECIPES, STATIONS } from '../coffee-ter
 const close = (actual, expected, tolerance = 1e-8) => assert.ok(Math.abs(actual - expected) < tolerance, `${actual} != ${expected}`);
 
 for (const recipe of Object.keys(RECIPES)) {
-  test(`${recipe}: every rendered TCP reaches its path, stays upright and respects joint limits`, () => {
+  test(`${recipe}: every rendered TCP reaches its path with the expected grasp orientation and joint limits`, () => {
     const sequence = createSequence(recipe);
     const arms = { left: createArm('left'), right: createArm('right') };
     const position = new THREE.Vector3(), direction = new THREE.Vector3(), rotation = new THREE.Quaternion();
@@ -20,7 +20,10 @@ for (const recipe of Object.keys(RECIPES)) {
         position.toArray().forEach((value, i) => close(value, state[side][i]));
         arm.tcp.getWorldQuaternion(rotation);
         direction.set(0, 1, 0).applyQuaternion(rotation);
-        close(direction.y, -1);
+        {
+          close(direction.y,0);
+          direction.set(0,0,1).applyQuaternion(rotation);close(direction.y,1);
+        }
         arm.angles.forEach((q, i) => assert.ok(deg(q) >= LIMITS[i][0] && deg(q) <= LIMITS[i][1]));
       }
     }

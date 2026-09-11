@@ -103,3 +103,8 @@
 @media (prefers-reduced-motion: reduce) {
   .drink-visual * { animation: none !important; transition: none !important; }
 }
+
+.custom-no-milk .foam-layer, .custom-no-ice .ice-drop, .custom-no-syrup .syrup-ribbon, .custom-no-steam .aroma { visibility:hidden !important; }
+
+.custom-no-milk .liquid-base, .custom-no-milk .liquid-top { fill:#4b2b1d; }
+.custom-no-ice .ice-group { visibility:hidden !important; }

@@ -122,6 +122,8 @@ function stopCancelledCountdown() {
 
 function render(data) {
   window.CoffeeRobotIntegration?.terminal(data);
+  const soundTask = data.runtime?.task;
+  window.CoffeeSound?.update({ id: soundTask?.taskId, status: soundTask?.recoveryHold ? 'HOLD' : soundTask?.state, revision: soundTask?.revision });
   state = data; const { config, runtime, recipes, capabilities } = data; const task = runtime.task;
   if (!localeInitialized) {
     localeInitialized = true;
@@ -183,7 +185,11 @@ function render(data) {
     $('#taskState').textContent = task.state;
     $('#taskTitle').textContent = task.recipe?.name || t('terminal.task.coffee');
     $('#taskMeta').textContent = `${displayOrderNo} · ${task.message || ''}`;
-    $('#recipeName').textContent = task.recipe?.name || t('terminal.task.specialty');
+    const choices = task.recipe?.customization;
+    const en = terminalI18n.getLocale().startsWith('en');
+    const labels = en ? {sugar:'Sugar',ice:'Ice',milk:'Milk',NONE:'None',LIGHT:'Light',LESS:'Less',STANDARD:'Standard',EXTRA:'Extra'} : {sugar:'糖度',ice:'冰量',milk:'奶量',NONE:'不添加',LIGHT:'微糖',LESS:'少糖',STANDARD:'正常',EXTRA:'多糖'};
+    const summary = Object.entries(choices || {}).map(([key,value]) => `${labels[key]}：${labels[value]}`).join(' · ');
+    $('#recipeName').textContent = (task.recipe?.name || t('terminal.task.specialty')) + (summary ? ` · ${summary}` : '');
 function enrichStepName(name) {
   if (!name) return t('terminal.step.default');
   if (name.includes('准备') || name.includes('落杯') || name.includes('cup')) return t('terminal.step.cup');
@@ -232,7 +238,7 @@ function enrichStepName(name) {
   }
 }
 
-async function refresh() { try { render(await api().get_state()); } catch (error) { window.CoffeeRobotIntegration?.disconnected(); toast(t('terminal.error.connect', { message: error.message })); } }
+async function refresh() { try { render(await api().get_state()); } catch (error) { window.CoffeeRobotIntegration?.disconnected(); window.CoffeeSound?.disconnect(); toast(t('terminal.error.connect', { message: error.message })); } }
 async function invoke(method, ...args) { try { const result = await api()[method](...args); if (!result?.ok) toast(result?.error || t('terminal.error.operationGeneric')); await refresh(); return result; } catch (error) { toast(t('terminal.error.operation', { message: error.message })); return null; } }
 
 const setConsole = (open) => $('.app-shell').classList.toggle('console-open', open);
@@ -312,3 +318,11 @@ setInterval(() => {
 }, 7500);
 
 refresh(); setInterval(refresh, 700);
+
+$('#addLatteArt').onclick = () => {
+  try {
+    const recipe=window.CoffeeRecipeActions.addSpiral(JSON.parse($('#recipeEditor').value));
+    $('#recipeEditor').value=JSON.stringify(recipe,null,2);
+    toast('已添加螺旋拉花并拆分 20 ml 奶量，请检查后保存配方');
+  } catch(error) { toast(error.message); }
+};

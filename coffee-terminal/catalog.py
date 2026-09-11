@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from inventory import InventoryManager
+from latte_art import validate as validate_latte_art
+from customization import validate as validate_options, variants
 
 VISUAL_PROFILES = {"americano", "espresso", "iced-latte", "hazelnut-special", "generic"}
 ANIMATION_CUES = {"cup-arrive", "ice-drop", "brew-stream", "water-pour", "milk-pour", "syrup-swirl", "seal", "serve", "idle"}
@@ -100,6 +102,8 @@ class RecipeCatalog:
                         errors.append(f"步骤 {step.get('id')} 的 durationSeconds 必须位于随机范围内")
                 except (TypeError, ValueError):
                     errors.append(f"步骤 {step.get('id')} 的随机时长必须是数字")
+        errors.extend(validate_options(recipe))
+        errors.extend(validate_latte_art(recipe))
         return errors
 
     @staticmethod
@@ -135,6 +139,8 @@ class RecipeCatalog:
                 reasons.append("MATERIAL_INSUFFICIENT")
             duration_bounds = [self.duration_bounds(step) for step in recipe["steps"]]
             products.append({
+                "optionSchema": recipe.get("optionSchema"),
+                "customizationVariants": variants(recipe),
                 "recipeId": recipe["recipeId"],
                 "skuCode": recipe["skuCode"],
                 "version": recipe["version"],

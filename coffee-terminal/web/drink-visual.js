@@ -132,6 +132,14 @@
   // Fraction (0..1) of the cup that is filled, counting only liquid-adding steps.
   function liquidFill(task) {
     const steps = task?.recipe?.steps || [];
+    if (task.recipe?.liquidReferenceMl > 0) {
+      let volume = 0;
+      for (let i = 0; i < steps.length; i++) {
+        const dose = (steps[i].consumes || []).filter(item => item.unit === 'ml').reduce((n, item) => n + item.amount, 0);
+        volume += dose * (i < task.stepIndex ? 1 : i === task.stepIndex ? Math.max(0, Math.min(1, task.stepProgress || 0)) : 0);
+      }
+      return Math.min(1, volume / task.recipe.liquidReferenceMl);
+    }
     let total = 0;
     for (const step of steps) if (POUR_CUES.has(inferCue(step))) total += 1;
     if (!total) return 0;
@@ -166,6 +174,10 @@
     stopAnimations(stage);
     stage.classList.remove(...PROFILE_CLASSES, ...CUE_CLASSES);
     stage.classList.add(`profile-${profile}`, `cue-${cue}`);
+    stage.classList.toggle('custom-no-milk', task.recipe.customization?.milk === 'NONE');
+    stage.classList.toggle('custom-no-ice', task.recipe.customization?.ice === 'NONE');
+    stage.classList.toggle('custom-no-syrup', !!task.recipe.customization && !task.recipe.steps.some(s => s.animationCue === 'syrup-swirl'));
+    stage.classList.toggle('custom-no-steam', task.recipe.optionSchema?.temperature === 'ICED');
     stage.dataset.profile = profile;
     stage.dataset.cue = cue;
     applyShape(stage, profile);

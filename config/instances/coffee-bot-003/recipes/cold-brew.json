@@ -1,34 +1,68 @@
 {
   "recipeId": "bj-cold-brew-v1",
   "skuCode": "BJ_COLD_BREW",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "name": "北城冷萃",
   "priceMinor": 2000,
   "enabled": true,
-  "display": { "description": "冷萃咖啡与冰块", "sortOrder": 30 },
-  "visual": { "profile": "americano", "cup": "transparent-tall", "layers": ["coffee", "ice"] },
+  "display": {
+    "description": "冷萃咖啡与冰块",
+    "sortOrder": 30
+  },
+  "visual": {
+    "profile": "americano",
+    "cup": "transparent-tall",
+    "layers": [
+      "coffee",
+      "ice"
+    ]
+  },
   "steps": [
     {
       "id": "prepare-cup",
       "name": "准备冰饮杯",
       "animationCue": "cup-arrive",
       "durationSeconds": 8,
-      "durationRandomization": { "minSeconds": 7, "maxSeconds": 10 },
+      "durationRandomization": {
+        "minSeconds": 7,
+        "maxSeconds": 10
+      },
       "failureProfile": "cup-dispenser",
-      "robotActions": ["cups"],
-      "consumes": [{ "materialId": "cup-12oz", "amount": 1, "unit": "count" }]
+      "robotActions": [
+        "cups"
+      ],
+      "consumes": [
+        {
+          "materialId": "cup-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
     },
     {
       "id": "dispense-cold-brew",
       "name": "注入冷萃咖啡",
       "animationCue": "brew-stream",
       "durationSeconds": 20,
-      "durationRandomization": { "minSeconds": 18, "maxSeconds": 23 },
+      "durationRandomization": {
+        "minSeconds": 18,
+        "maxSeconds": 23
+      },
       "failureProfile": "brewer",
-      "robotActions": ["brew"],
+      "robotActions": [
+        "brew"
+      ],
       "consumes": [
-        { "materialId": "coffee-beans", "amount": 20, "unit": "g" },
-        { "materialId": "water", "amount": 120, "unit": "ml" }
+        {
+          "materialId": "coffee-beans",
+          "amount": 20,
+          "unit": "g"
+        },
+        {
+          "materialId": "water",
+          "amount": 120,
+          "unit": "ml"
+        }
       ]
     },
     {
@@ -36,20 +70,61 @@
       "name": "加入冰块",
       "animationCue": "ice-drop",
       "durationSeconds": 12,
-      "durationRandomization": { "minSeconds": 10, "maxSeconds": 15 },
+      "durationRandomization": {
+        "minSeconds": 10,
+        "maxSeconds": 15
+      },
       "failureProfile": "ice-dispenser",
-      "robotActions": ["ice"],
-      "consumes": [{ "materialId": "ice", "amount": 180, "unit": "g" }]
+      "robotActions": [
+        "ice"
+      ],
+      "consumes": [
+        {
+          "materialId": "ice",
+          "amount": 180,
+          "unit": "g"
+        }
+      ],
+      "dispenseChannel": "ice-dispenser",
+      "customizationRole": "ice"
     },
     {
       "id": "seal-and-serve",
       "name": "封杯并出杯",
       "animationCue": "seal",
       "durationSeconds": 10,
-      "durationRandomization": { "minSeconds": 9, "maxSeconds": 13 },
+      "durationRandomization": {
+        "minSeconds": 9,
+        "maxSeconds": 13
+      },
       "failureProfile": "lid-dispenser",
-      "robotActions": ["lid", "pickup"],
-      "consumes": [{ "materialId": "lid-12oz", "amount": 1, "unit": "count" }]
+      "robotActions": [
+        "lid",
+        "pickup"
+      ],
+      "consumes": [
+        {
+          "materialId": "lid-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
     }
-  ]
+  ],
+  "optionSchema": {
+    "version": "1.0.0",
+    "options": {
+      "ice": {
+        "default": "STANDARD",
+        "values": [
+          "NONE",
+          "STANDARD"
+        ],
+        "priceDeltaMinor": {}
+      }
+    },
+    "temperature": "ICED",
+    "fillPolicy": "NO_TOP_UP",
+    "notice": "不加冰不等于热饮；去冰/去奶不补液、杯量会减少。不加奶会改变饮品口感；无添加糖仅指可调糖浆，牛奶和巧克力等原料仍可能含糖。"
+  }
 }
