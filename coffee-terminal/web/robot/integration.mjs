@@ -6,6 +6,7 @@ const viewerResource=new URL('robot-live.bundle.js',scriptURL);
 viewerResource.search=new URL(scriptURL).search;
 const viewerURL=viewerResource.href;
 let latest=null,viewer=null,dialog=null,loading=null,opener=null,generation=0;
+let inlineRoot=null,inlineViewer=null,inlineGeneration=0,watching=null;
 let processPlayer=null,audioLoading=null,audioFrame=null;
 async function ensureProcessAudio(){
   if(!window.CoffeeSound?.enabled)return;
@@ -20,7 +21,7 @@ async function ensureProcessAudio(){
     try{await audioLoading;}catch{window.CoffeeSound?.mute();return;}
   }
   if(processPlayer || !window.CoffeeSound?.enabled)return;
-  processPlayer=new window.CoffeeProcessAudio.ProcessAudio(window.CoffeeSound,{visualPosition:now=>viewer?.audioPosition(now)});
+  processPlayer=new window.CoffeeProcessAudio.ProcessAudio(window.CoffeeSound,{visualPosition:now=>inlineViewer?.audioPosition(now) || (!watching && viewer?.audioPosition(now))});
   if(latest)try{processPlayer.update(latest);}catch{stopAudio();return;}
   const frame=now=>{if(!processPlayer)return;try{processPlayer.frame(now);}catch{stopAudio();return;}audioFrame=requestAnimationFrame(frame);};
   audioFrame=requestAnimationFrame(frame);
@@ -42,7 +43,7 @@ function ensureDialog(){
   dialog.querySelector('.rv-close').onclick=()=>{window.CoffeeSound?.mute();dialog.close();};
   dialog.addEventListener('cancel',()=>window.CoffeeSound?.mute());
   dialog.addEventListener('close',()=>{
-    generation++;viewer?.dispose();viewer=null;window.CoffeeSound?.mute();
+    generation++;viewer?.dispose();viewer=null;watching=null;dialog.classList.remove("rv-spectator");dialog.querySelector('.rv-close').textContent='返回二维 ×';window.dispatchEvent(new Event("coffee-watch-closed"));window.CoffeeSound?.mute();
     dialog.querySelector('.rv-loading').hidden=false;
     opener?.focus?.();
   });
@@ -65,7 +66,7 @@ async function open(){
   try{
     await load();if(token!==generation || !dialog.open)return;
     viewer=window.CoffeeRobotLive.mount(dialog);message.hidden=true;
-    if(latest)viewer.update(latest);
+    if(watching || latest)viewer.update(watching || latest);
   }catch(error){message.hidden=false;message.textContent=error.message;}
 }
 function fail(error){
@@ -77,12 +78,30 @@ function update(snapshot){
   latest=snapshot;
   try{processPlayer?.update(snapshot);}catch{stopAudio();}
   // A rendering failure must never interrupt the existing 2D refresh loop.
-  try{viewer?.update(snapshot);}catch(error){fail(error);}
+  try{if(!watching)viewer?.update(snapshot);inlineViewer?.update(snapshot);}catch(error){fail(error);}
 }
+async function inline(host,enabled=true){
+  if(!host || !enabled){inlineGeneration++;inlineViewer?.dispose();inlineViewer=null;inlineRoot?.remove();inlineRoot=null;return;}
+  if(inlineRoot){host.append(inlineRoot);return;}
+  ensureDialog();
+  const root=document.createElement('section');root.className='rv-inline';root.innerHTML=dialog.innerHTML;
+  root.querySelector('.rv-close').remove();root.querySelector('.rv-sound').remove();root.querySelector('.rv-footer p')?.remove();
+  inlineRoot=root;host.append(root);const token=++inlineGeneration;
+  try{await load();if(token!==inlineGeneration)return;
+    inlineViewer=window.CoffeeRobotLive.mount(root);root.querySelector('.rv-loading').hidden=true;
+    if(latest)inlineViewer.update(latest);
+  }catch{root.querySelector('.rv-loading').textContent='三维暂不可用，可切换二维查看进度。';}
+}
+async function watch(snapshot){
+  if(!snapshot){if(watching)dialog?.close();return;}
+  watching=snapshot;ensureDialog();dialog.classList.add('rv-spectator');dialog.querySelector('.rv-close').textContent=document.documentElement.lang.startsWith('en')?'Back to queue ×':'返回排队 ×';
+  await open();if(watching)viewer?.update(watching);
+}
+window.addEventListener('pagehide',()=>{inlineGeneration++;inlineViewer?.dispose();inlineViewer=null;});
 document.addEventListener('click',(event)=>{if(event.target.closest('[data-open-robot]'))open();});
 window.CoffeeRobotIntegration={
   terminal(data){update(terminalSnapshot(data));},
   order(order){update(orderSnapshot(order));},
   disconnected(){if(latest)update({...latest,connected:false});},
-  open,
+  open, inline, watch,
 };

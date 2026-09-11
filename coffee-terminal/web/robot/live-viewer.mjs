@@ -24,7 +24,7 @@ export function mount(root) {
     const stale = snapshot.state === 'RUNNING' && performance.now()-updatedAt > (snapshot.source === 'terminal' ? 4000 : 12000);
     const status = snapshot.collected ? '顾客已取杯' : !snapshot.connected || stale ? '等待状态同步 · 动作已停留' : names[snapshot.state] || snapshot.state;
     root.querySelector('.rv-state').textContent = status;
-    root.querySelector('.rv-title').textContent = snapshot.name || '咖啡机器人';
+    root.querySelector('.rv-title').textContent = snapshot.spectator ? '当前机器 · 三维制作现场' : snapshot.name || '咖啡机器人';
     root.querySelector('.rv-progress').textContent = `${Math.round(Math.max(0,Math.min(1,snapshot.overallProgress))*100)}%`;
     let step = snapshot.steps.find((s)=>s.stepId===snapshot.stepId) || snapshot.steps[snapshot.stepIndex || 0];
     root.querySelector('.rv-step').textContent = !plan && snapshot.taskId ? '设备尚未提供三维步骤计划，请查看二维进度。' : step?.stepName || '接单后自动同步制作动作';
