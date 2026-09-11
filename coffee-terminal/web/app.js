@@ -130,7 +130,7 @@ function render(data) {
     const locale = terminalI18n.setLocale(config.ui?.locale || 'zh-CN');
     $('#localeSelect').value = locale;
   }
-  $('#idleQuote').textContent = t(`terminal.quote.${BARISTA_QUOTES[quoteIndex]}`);
+
   $('#deviceName').textContent = config.deviceName; $('#deviceTag').textContent = config.deviceId;
   $('#connectionText').textContent = runtime.connection === 'ONLINE' ? t('terminal.connection.online') : runtime.connection === 'CONNECTING' ? t('terminal.connection.connecting') : t('terminal.connection.offline');
   $('#consoleConnectionText').textContent = runtime.connection === 'ONLINE' ? 'DEVICE ONLINE' : runtime.connection === 'CONNECTING' ? 'CONNECTING' : 'DEVICE OFFLINE';
@@ -158,6 +158,7 @@ function render(data) {
   $('#errorClearBtn').disabled = !['FAILED', 'CANCELLED'].includes(task?.state) && !isHold;
 
   setVisible('#idleView', isIdle);
+  window.TerminalShowcase?.update(data,{active:isIdle,locale:terminalI18n.getLocale()});
   setVisible('#makingView', isMaking);
   setVisible('#readyView', isReady);
   setVisible('#cancelledView', isCancelled);
@@ -304,19 +305,6 @@ $('#failureRate').onchange = (event) => invoke('update_override', { globalFailur
 $('#recipeSelect').onchange = (event) => { selectedRecipeId = event.target.value; const recipe = state.recipes.find((item) => item.recipeId === selectedRecipeId); $('#recipeEditor').value = JSON.stringify(recipe, null, 2); $('#recipeEditor').dataset.recipeId = selectedRecipeId; };
 $('#saveRecipe').onclick = async () => { const result = await invoke('save_recipe', $('#recipeEditor').value); if (result?.ok) toast('配方已保存并刷新能力'); };
 $('#inventoryList').onclick = (event) => { const button = event.target.closest('[data-refill]'); if (button) invoke('adjust_inventory', { materialId: button.dataset.refill, mode: 'SET', amount: Number(button.dataset.capacity), reason: 'OPERATOR_REFILL' }); };
-const BARISTA_QUOTES = [0, 1, 2, 3, 4];
-let quoteIndex = 0;
-setInterval(() => {
-  const quoteEl = $('#idleQuote');
-  if (!quoteEl || $('#idleView')?.classList.contains('is-hidden')) return;
-  quoteEl.classList.add('fade-out');
-  setTimeout(() => {
-    quoteIndex = (quoteIndex + 1) % BARISTA_QUOTES.length;
-    quoteEl.textContent = t(`terminal.quote.${BARISTA_QUOTES[quoteIndex]}`);
-    quoteEl.classList.remove('fade-out');
-  }, 600);
-}, 7500);
-
 refresh(); setInterval(refresh, 700);
 
 $('#addLatteArt').onclick = () => {

@@ -1,0 +1,8 @@
+{
+  "slides": [
+    {"id":"space","type":"image","image":"assets/showcase/shop.png","title":{"zh-CN":"一杯咖啡，一处停留。","en-US":"A coffee. A moment."},"eyebrow":{"zh-CN":"空间图册 / 01","en-US":"THE SPACE / 01"}},
+    {"id":"craft","type":"image","image":"assets/showcase/perspective.png","title":{"zh-CN":"看见每一步制作。","en-US":"Craft, in full view."},"eyebrow":{"zh-CN":"空间图册 / 02","en-US":"THE SPACE / 02"}},
+    {"id":"detail","type":"image","image":"assets/showcase/art.png","title":{"zh-CN":"细节，落在这一杯。","en-US":"The finishing touch."},"eyebrow":{"zh-CN":"空间图册 / 03","en-US":"THE SPACE / 03"}},
+    {"id":"philosophy","type":"text","title":{"zh-CN":"让日常，慢下来一杯。","en-US":"Make room for a moment."},"body":{"zh-CN":"我们希望，一杯咖啡不只是匆忙的补给。清晰的选择、看得见的制作，以及一个愿意停留片刻的空间——让日常的一杯，也值得认真对待。","en-US":"A coffee can be more than a hurried stop. A clear choice, preparation you can watch, and a space to pause: a little room for the everyday."},"eyebrow":{"zh-CN":"我们的理念","en-US":"OUR PHILOSOPHY"}}
+  ]
+}

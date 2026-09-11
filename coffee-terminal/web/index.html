@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Coffee Terminal Simulator</title>
-  <link rel="stylesheet" href="styles.css?v=20260911-dual-side-grip" />
+  <link rel="stylesheet" href="styles.css?v=20260911-showcase" />
   <link rel="stylesheet" href="inventory.css?v=20260911-dual-side-grip" />
   <link rel="stylesheet" href="drink-visual.css?v=20260911-dual-side-grip" />
   <link rel="stylesheet" href="robot-live.css?v=20260911-director" />
@@ -12,7 +12,6 @@
 </head>
 <body>
   <div id="sound-controls"></div>
-  <button class="rv-launch terminal-robot-launch" data-open-robot data-i18n="terminal.robot.open">查看三维制作</button>
   <label class="terminal-locale" for="localeSelect"><span data-i18n="language.label">语言</span><select id="localeSelect"><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label>
   <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
     <defs>
@@ -29,18 +28,20 @@
         <button class="console-trigger kiosk-hidden" id="consoleTrigger" title="打开开发控制台" data-i18n-title="terminal.console.open" aria-label="打开开发控制台" data-i18n-aria-label="terminal.console.open"><svg aria-hidden="true"><use href="#mk-terminal"/></svg><span data-i18n="terminal.console.title">开发控制台</span><kbd>⌘K</kbd></button>
       </header>
 
-      <div class="display-content" id="idleView">
-        <div class="idle-quote-wrap" id="idleQuoteWrap">
-          <p class="idle-quote" id="idleQuote">“ 每一颗咖啡豆，都跨越了北回归线的阳光与海拔 ”</p>
-        </div>
-        <p class="quiet-label">WOODBRIDGE RESERVE · 精品现磨</p>
-        <h1 data-i18n="terminal.idle.title">扫码即刻制作</h1>
-        <p class="subhead" data-i18n="terminal.idle.sub">用手机扫描下方二维码，即可下单并观看制作过程</p>
-        <div class="qr-frame" id="qrFrame">
-          <div class="qr-ambient-glow"></div>
-          <img id="qrImage" alt="咖啡下单二维码" data-i18n-alt="terminal.qr.alt" />
-        </div>
-        <p class="qr-note" id="qrNote">扫码后 <b>在手机完成点单与支付</b>，咖啡即刻开始制作</p>
+      <div class="display-content terminal-welcome" id="idleView">
+        <section class="terminal-showcase" id="terminalShowcase" aria-label="品牌与饮品图册">
+          <div class="showcase-masthead"><img src="assets/brand/logo-symbol.svg" alt=""/><span>COFFEE TERMINAL</span><span class="showcase-edition">THE DAILY CUP</span></div>
+          <div class="showcase-card"><img class="showcase-photo" src="assets/showcase/shop.png" alt="咖啡门店"/></div>
+          <div class="showcase-bottom"><span class="showcase-count">01 / 01</span><div class="showcase-track"><i class="showcase-progress"></i></div><div class="showcase-controls"><button type="button" data-showcase="prev" aria-label="上一张">←</button><button type="button" data-showcase="pause" aria-label="暂停轮播">Ⅱ</button><button type="button" data-showcase="next" aria-label="下一张">→</button></div></div>
+        </section>
+        <aside class="welcome-order">
+          <span class="order-step">SCAN · ORDER · ENJOY</span>
+          <h1 data-i18n="terminal.idle.title">扫码点一杯</h1>
+          <p class="subhead" data-i18n="terminal.idle.sub">手机点单，静候咖啡</p>
+          <div class="qr-frame" id="qrFrame"><img id="qrImage" alt="咖啡下单二维码" data-i18n-alt="terminal.qr.alt" /></div>
+          <p class="qr-note" id="qrNote"></p>
+          <div class="welcome-signoff"><img src="assets/brand/marks/bean.svg" alt=""/><span>YOUR DAILY COFFEE RITUAL</span></div>
+        </aside>
       </div>
 
       <div class="making-view is-hidden" id="makingView">
@@ -131,7 +132,7 @@
         <button class="clear-button is-hidden" id="errorClearBtn" data-i18n="terminal.returnIdle">返回待机</button>
       </div>
 
-      <footer class="display-footer"><span class="footer-brand"><svg aria-hidden="true"><use href="#mk-symbol"/></svg>COFFEE TERMINAL</span><i></i><span id="footerMessage">精品咖啡 · 新鲜现制</span></footer>
+      <footer class="display-footer"><span class="footer-brand"><svg aria-hidden="true"><use href="#mk-symbol"/></svg>COFFEE TERMINAL</span><button class="rv-launch terminal-robot-launch" data-open-robot data-i18n="terminal.robot.open">查看三维制作</button><span id="footerMessage">精品咖啡 · 新鲜现制</span></footer>
     </section>
 
     <aside class="console" id="console" aria-label="开发控制台">
@@ -149,12 +150,13 @@
   </main>
   <div class="toast is-hidden" id="toast"></div>
   <script src="i18n.js?v=20260904-i18n1"></script>
-  <script src="locales.js?v=20260911-dual-side-grip"></script>
+  <script src="locales.js?v=20260911-showcase"></script>
   <script src="vendor/animejs/anime.umd.min.js"></script>
   <script src="drink-visual.js?v=20260911-dual-side-grip"></script>
   <script src="robot-integration.bundle.js?v=20260911-director"></script>
   <script src="status-sound.js?v=20260911-process-sound"></script>
   <script src="recipe-latte-art.js"></script>
-<script src="app.js?v=20260911-dual-side-grip"></script>
+<script src="showcase.js?v=20260911-showcase"></script>
+<script src="app.js?v=20260911-showcase"></script>
 </body>
 </html>
