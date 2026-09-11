@@ -7,6 +7,7 @@ const scriptURL=document.currentScript?.src || location.href;
 const viewerResource=new URL('robot-live.bundle.js',scriptURL);
 viewerResource.search=new URL(scriptURL).search;
 const viewerURL=viewerResource.href;
+let reviewTask=null;
 let latest=null,viewer=null,dialog=null,loading=null,opener=null,generation=0;
 const completionClose=new CompletionClose(()=>{if(dialog?.open && !watching)dialog.close();});
 let inlineRoot=null,inlineViewer=null,inlineGeneration=0,watching=null;
@@ -47,7 +48,7 @@ function ensureDialog(){
   dialog.querySelector('.rv-close').onclick=()=>{window.CoffeeSound?.mute();dialog.close();};
   dialog.addEventListener('cancel',()=>window.CoffeeSound?.mute());
   dialog.addEventListener('close',()=>{
-    completionClose.clear();
+    completionClose.clear();reviewTask=null;
     generation++;viewer?.dispose();viewer=null;watching=null;dialog.classList.remove("rv-spectator");dialog.querySelector('.rv-close').textContent=ui('返回二维 ×');window.dispatchEvent(new Event("coffee-watch-closed"));window.CoffeeSound?.mute();
     dialog.querySelector('.rv-loading').hidden=false;
     opener?.focus?.();
@@ -63,10 +64,11 @@ function load(){
     document.head.append(script);
   });return loading;
 }
-async function open(){
+async function open(review=false){
   ensureDialog();if(dialog.open)return;
+  reviewTask=review && latest?.source==='terminal' && latest.state==='SUCCEEDED' ? latest.taskId : null;
   opener=document.activeElement;dialog.showModal();
-  completionClose.update(latest,!watching);
+  completionClose.update(latest,!watching && !reviewTask);
   const token=++generation;
   const message=dialog.querySelector('.rv-loading');message.hidden=false;message.textContent=ui('正在加载三维视图…');
   try{
@@ -81,8 +83,9 @@ function fail(error){
   if(message){message.hidden=false;message.textContent=document.documentElement.lang.startsWith('en')?`3D unavailable: ${error.message}. Continue in 2D.`:`三维显示暂不可用：${error.message}。可返回二维继续查看。`;}
 }
 function update(snapshot){
+  if(reviewTask && (snapshot.taskId!==reviewTask || snapshot.state!=='SUCCEEDED')){dialog?.close();reviewTask=null;}
   latest=snapshot;
-  completionClose.update(snapshot,!!dialog?.open && !watching);
+  completionClose.update(snapshot,!!dialog?.open && !watching && !reviewTask);
   try{processPlayer?.update(snapshot);}catch{stopAudio();}
   // A rendering failure must never interrupt the existing 2D refresh loop.
   try{if(!watching)viewer?.update(snapshot);inlineViewer?.update(snapshot);}catch(error){fail(error);}
@@ -105,7 +108,7 @@ async function watch(snapshot){
   await open();if(watching)viewer?.update(watching);
 }
 window.addEventListener('pagehide',()=>{completionClose.clear();inlineGeneration++;inlineViewer?.dispose();inlineViewer=null;});
-document.addEventListener('click',(event)=>{if(event.target.closest('[data-open-robot]'))open();});
+document.addEventListener('click',(event)=>{const trigger=event.target.closest('[data-open-robot]');if(trigger)open(trigger.hasAttribute('data-robot-review'));});
 window.CoffeeRobotIntegration={
   terminal(data){update(terminalSnapshot(data));},
   order(order){update(orderSnapshot(order));},

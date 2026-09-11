@@ -3,8 +3,23 @@ import seal from '../assets/brand/badges/ai-brew-system.svg';
 import * as THREE from 'three';
 import { box, cylinder } from './models.mjs';
 import logo from '../assets/brand/logo-horizontal.svg';
-import motion from '../assets/brand/patterns/motion-path.svg';
 import beans from '../assets/brand/patterns/bean-grid.svg';
+
+// Reuse the brand bean geometry with deterministic jitter: even coverage, no tiled rows.
+function scatteredBeans(){
+  const bean=beans.match(/<ellipse[^>]*\/>/)[0]+beans.match(/<path[^>]*\/>/)[0];
+  let seed=7129;
+  const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+  const marks=[];
+  for(let row=0;row<6;row++)for(let col=0;col<12;col++){
+    const x=(col+.5+(random()-.5)*.64)*71,y=(row+.5+(random()-.5)*.64)*72;
+    const angle=random()*360,scale=1.1+random()*.45;
+    // Leave breathing room around the centered seal.
+    if(Math.hypot((x-426)/1.05,y-216)<94)continue;
+    marks.push(`<g transform="translate(${x} ${y}) rotate(${angle}) scale(${scale}) translate(-16 -18)">${bean}</g>`);
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 852 432"><g fill="none" stroke="#17382D" stroke-width="1.1">${marks.join('')}</g></svg>`;
+}
 
 // Spatial dressing only. All furniture stays outside the robot worktop envelope.
 // SVGs are embedded by esbuild so both the offline terminal and cloud viewer share branding.
@@ -65,9 +80,10 @@ export function createShop() {
   box(group,[6.27,.025,.12],[.5,1.94,-2.38],oak,.004);
 
   function graphic(svg, width, height, p, rotation=0, background=SHOP.cream, repeatY=1, unlit=false, inkOpacity=1) {
-    const t=texture(1536,Math.round(1536*height/width/repeatY),(c,w,h)=>{c.fillStyle=background;c.fillRect(0,0,w,h);});
+    const t=texture(1536,Math.round(1536*height/width/repeatY),(c,w,h)=>{if(background!==null){c.fillStyle=background;c.fillRect(0,0,w,h);}});
     t.wrapT=THREE.RepeatWrapping;t.repeat.y=repeatY;
     const m=unlit?new THREE.MeshBasicMaterial({map:t}):mat('#ffffff',.8);m.map=t;
+    if(background===null){m.transparent=true;m.depthWrite=false;}
     const plane=new THREE.Mesh(new THREE.PlaneGeometry(width,height),m);
     plane.position.set(...p);plane.rotation.y=rotation;group.add(plane);
     const img=new Image();
@@ -82,13 +98,14 @@ export function createShop() {
   box(group,[4.9,.83,.055],[.45,2.70,-2.415],glow,.065);
   box(group,[4.84,.77,.10],[.45,2.70,-2.375],cream,.055);
   graphic(logo,4.40,4.40*80/508,[.45,2.70,-2.318],0,SHOP.cream,1,true);
-  graphic(endorsement,2.1,2.1*28/300,[.45,2.20,-2.318],0,SHOP.cream);
-  graphic(seal,.70,.70,[-3.563,2.13,1.62],Math.PI/2,SHOP.cream);
+  graphic(endorsement,3.30,3.30*28/300,[.45,2.12,-2.318],0,null);
+  const sidePanelCream=SHOP.cream;
+  graphic(seal,.70,.70,[-3.563,2.13,.30],Math.PI/2,sidePanelCream);
   graphic(beans,.75,3.22,[-3.11,1.76,-2.447],0,SHOP.cream,6.13,false,.13);
   box(group,[.018,3.3,.025],[-2.68,1.78,-2.44],glow,.002);
-  // SVG repeat is magnified on this panel to turn the motion motif into architecture.
-  box(group,[.07,2.28,4.38],[-3.61,2.13,.30],cream,.05);
-  graphic(motion,4.26,2.16,[-3.57,2.13,.30],Math.PI/2,SHOP.cream,1,false,.13);
+  // Scattered brand beans surround the centered badge on the cream panel.
+  box(group,[.07,2.28,4.38],[-3.61,2.13,.30],mat(sidePanelCream),.05);
+  graphic(scatteredBeans(),4.26,2.16,[-3.57,2.13,.30],Math.PI/2,sidePanelCream,1,false,.26);
   box(group,[.43,.075,4.50],[-3.40,1.02,.30],oak,.014);
   for(const z of [-1.45,2.05]) box(group,[.30,.035,.035],[-3.45,.88,z],brass,.003);
   // Two compact seats on the side ledge, with a clear aisle to the workcell.
