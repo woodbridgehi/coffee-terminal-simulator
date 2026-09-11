@@ -1,3 +1,4 @@
+import {brandCup} from './cup-brand.mjs';
 import { spiralPoint } from './latte-art.mjs';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -45,6 +46,7 @@ export class CoffeeScene {
     this.arms = { left: createArm('left'), right: createArm('right') };
     Object.values(this.arms).forEach((arm) => this.scene.add(arm.group));
     this.cup = createCup(); this.scene.add(this.cup.group);
+    this.ready=Promise.all([this.shop.ready,brandCup(this.cup)]);
     this.pitcher=createPitcher(); this.scene.add(this.pitcher.group);
     const points=Array.from({length:241},(_,i)=>new THREE.Vector3(...spiralPoint(i/240)));
     this.foam=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),240,.0016,6,false),M.white);

@@ -1,0 +1,10 @@
+/* Canonical artwork and restrained secondary Qarm attribution. */
+.brand-credit{display:flex;align-items:center;gap:7px;flex-wrap:wrap;color:#746D64;font:11px/16px var(--font-ui,var(--ui,sans-serif));letter-spacing:.025em}.brand-credit img{width:16px;height:16px;flex:none;opacity:.8}.brand-en{display:none}html[lang^="en"] .brand-en{display:inline}html[lang^="en"] .brand-zh{display:none}html[lang^="en"] .brand-credit{letter-spacing:.045em}
+.display-footer .footer-brand img{width:203px;height:32px;object-fit:contain}.display-footer #footerMessage{justify-self:end}.display-footer .terminal-credit{justify-content:flex-end}.display-footer{min-height:64px;gap:16px}.display::before{opacity:.13}.console::before{display:none}.console-mark{width:28px;height:28px}.brand-connection .brand-symbol{width:24px;height:24px}
+.showcase-masthead img{width:40px;height:40px}.showcase-masthead{letter-spacing:.16em}.showcase-text,.showcase-review{background:#123D31}.showcase-card::before{opacity:.13}.welcome-order{background:#FFF9F0}.welcome-signoff{color:#746D64}.showcase-cup{filter:none}.showcase-orbit{transform:none}.showcase-copy h2{color:#17382D}.showcase-text .showcase-copy h2,.showcase-image .showcase-copy h2{color:#FFF9F0}
+.brand .brand-lockup img{width:64px;height:64px;filter:none;opacity:1}.brand .brand-art{filter:none;opacity:1;width:152px;height:auto}.brand::after{opacity:.13}.onboarding-credit{position:relative;z-index:1;margin-top:28px;padding-top:16px;color:#D7CBB9}.onboarding-credit img{content:url('assets/brand/qarm/qarm-symbol-cream.svg');opacity:1}.brand-lockup{letter-spacing:.18em}
+@media(max-width:1240px){.display-footer .terminal-credit{display:none}}
+@media(max-width:600px){.display-footer .footer-brand img{width:152px;height:24px}.display-footer{gap:8px}.brand .brand-lockup img{width:52px;height:52px}.onboarding-credit{margin-top:16px;padding-top:0}}
+html[lang^="en"] .showcase-copy h2,html[lang^="en"] .display h1{letter-spacing:0;line-height:1.2}
+@media(prefers-reduced-motion:reduce){.brand-credit{animation:none}}
+.showcase-card::before{display:none}

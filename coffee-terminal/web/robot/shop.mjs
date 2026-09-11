@@ -1,3 +1,5 @@
+import endorsement from '../assets/brand/qarm/qarm-endorsement.svg';
+import seal from '../assets/brand/badges/ai-brew-system.svg';
 import * as THREE from 'three';
 import { box, cylinder } from './models.mjs';
 import logo from '../assets/brand/logo-horizontal.svg';
@@ -62,7 +64,7 @@ export function createShop() {
   flutes.castShadow=true;flutes.receiveShadow=true;group.add(flutes);
   box(group,[6.27,.025,.12],[.5,1.94,-2.38],oak,.004);
 
-  function graphic(svg, width, height, p, rotation=0, background=SHOP.cream, repeatY=1, unlit=false) {
+  function graphic(svg, width, height, p, rotation=0, background=SHOP.cream, repeatY=1, unlit=false, inkOpacity=1) {
     const t=texture(1536,Math.round(1536*height/width/repeatY),(c,w,h)=>{c.fillStyle=background;c.fillRect(0,0,w,h);});
     t.wrapT=THREE.RepeatWrapping;t.repeat.y=repeatY;
     const m=unlit?new THREE.MeshBasicMaterial({map:t}):mat('#ffffff',.8);m.map=t;
@@ -70,7 +72,7 @@ export function createShop() {
     plane.position.set(...p);plane.rotation.y=rotation;group.add(plane);
     const img=new Image();
     pending.push(new Promise((resolve,reject)=>{
-      img.onload=()=>{if(!disposed){t.image.getContext('2d').drawImage(img,0,0,t.image.width,t.image.height);t.needsUpdate=true;}resolve();};
+      img.onload=()=>{if(!disposed){const ctx=t.image.getContext('2d');ctx.globalAlpha=inkOpacity;ctx.drawImage(img,0,0,t.image.width,t.image.height);ctx.globalAlpha=1;t.needsUpdate=true;}resolve();};
       img.onerror=()=>reject(new Error('门店品牌纹理加载失败'));
       img.src=`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.replace('<svg ', `<svg width="${t.image.width}" height="${t.image.height}" preserveAspectRatio="none" `))}`;
     }));
@@ -80,11 +82,13 @@ export function createShop() {
   box(group,[4.9,.83,.055],[.45,2.70,-2.415],glow,.065);
   box(group,[4.84,.77,.10],[.45,2.70,-2.375],cream,.055);
   graphic(logo,4.40,4.40*80/508,[.45,2.70,-2.318],0,SHOP.cream,1,true);
-  graphic(beans.replace('opacity=".38"','opacity=".8"'),.75,3.22,[-3.11,1.76,-2.447],0,SHOP.cream,6.13);
+  graphic(endorsement,2.1,2.1*28/300,[.45,2.20,-2.318],0,SHOP.cream);
+  graphic(seal,.70,.70,[-3.563,2.13,1.62],Math.PI/2,SHOP.cream);
+  graphic(beans,.75,3.22,[-3.11,1.76,-2.447],0,SHOP.cream,6.13,false,.13);
   box(group,[.018,3.3,.025],[-2.68,1.78,-2.44],glow,.002);
   // SVG repeat is magnified on this panel to turn the motion motif into architecture.
   box(group,[.07,2.28,4.38],[-3.61,2.13,.30],cream,.05);
-  graphic(motion.replace('opacity=".38"','opacity=".9"'),4.26,2.16,[-3.57,2.13,.30],Math.PI/2);
+  graphic(motion,4.26,2.16,[-3.57,2.13,.30],Math.PI/2,SHOP.cream,1,false,.13);
   box(group,[.43,.075,4.50],[-3.40,1.02,.30],oak,.014);
   for(const z of [-1.45,2.05]) box(group,[.30,.035,.035],[-3.45,.88,z],brass,.003);
   // Two compact seats on the side ledge, with a clear aisle to the workcell.

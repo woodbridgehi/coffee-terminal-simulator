@@ -102,6 +102,7 @@ export function createCup({ miniature = false } = {}) {
   ring(group, 0.056, 0.003, [0, 0.084, 0], M.white);
   cylinder(group, 0.049, 0.068, [0, -0.01, 0], M.green, 0.054);
   const logo = textPlate(group, 'C', [0, -0.005, 0.055], 0.035, 0.035, '#f5eddf', '#255846');
+  logo.name='cup-brand-label';
   const liquidMat = M.coffee.clone();
   const liquid = cylinder(group, 0.052, 0.008, [0, -0.075, 0], liquidMat);
   const lid = new THREE.Group();
