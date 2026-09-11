@@ -70,7 +70,7 @@ export class CoffeeScene {
     if (!width || !height) return;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix(); this.renderer.setSize(width, height);
-    if (this.lastAspect && Math.abs(this.lastAspect - width / height) > 0.15) this.setView(this.view);
+    if (!this.preserveCameraOnResize && this.lastAspect && Math.abs(this.lastAspect - width / height) > 0.15) this.setView(this.view);
     this.lastAspect = width / height;
   }
 

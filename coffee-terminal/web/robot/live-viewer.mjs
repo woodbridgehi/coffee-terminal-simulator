@@ -1,3 +1,4 @@
+import {DirectorCamera} from './director-camera.mjs';
 import { CoffeeScene } from './scene.mjs';
 import { createLivePlan, livePosition, sampleSequence, normalizeSteps } from './live-plan.mjs';
 import { createSequence } from './sequence.mjs';
@@ -19,6 +20,13 @@ export function mount(root) {
   let plan=null, signature='', snapshot=null, updatedAt=0, alive=true, raf;
   const clock=new PlaybackClock();
   const gate=new SnapshotGate();
+  const directorButton=document.createElement('button');directorButton.className='rv-director';directorButton.type='button';
+  directorButton.textContent=document.documentElement.lang.startsWith('en')?'Director view':'大师视角';
+  root.querySelector('.rv-stage').append(directorButton);
+  const director=new DirectorCamera(scene,{reducedMotion:globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+    onChange:enabled=>{directorButton.setAttribute('aria-pressed',String(enabled));root.querySelectorAll('[data-rv-view]').forEach(b=>b.setAttribute('aria-pressed','false'));}});
+  directorButton.setAttribute('aria-pressed',String(director.enabled));
+  directorButton.onclick=()=>director.resume();
   function renderInfo() {
     if (!snapshot) return;
     const stale = snapshot.state === 'RUNNING' && performance.now()-updatedAt > (snapshot.source === 'terminal' ? 4000 : 12000);
@@ -68,6 +76,8 @@ export function mount(root) {
         // A held/failed order never presents a success-only pickup signal.
         if(snapshot.state!=='SUCCEEDED') scene.cell.pads.pickup.material.emissive.set('#000000');
       }
+      const fresh=performance.now()-updatedAt<(snapshot?.source==='terminal'?4000:12000);
+      director.update(now,scene.state,{taskId:snapshot?.taskId,running:snapshot?.state==='RUNNING',finished:snapshot?.state==='SUCCEEDED',connected:!!snapshot?.connected && fresh});
       scene.render(); renderInfo();
     }
     } catch {
@@ -79,15 +89,15 @@ export function mount(root) {
   };
   raf=requestAnimationFrame(frame);
   const buttons=root.querySelectorAll('[data-rv-view]');
-  for(const button of buttons) button.setAttribute('aria-pressed',String(button.dataset.rvView===scene.view));
+  for(const button of buttons) button.setAttribute('aria-pressed',String(!director.enabled && button.dataset.rvView===scene.view));
   for(const button of buttons) button.onclick=()=>{
-    scene.setView(button.dataset.rvView);
+    director.manual();scene.setView(button.dataset.rvView);
     buttons.forEach((b)=>b.setAttribute('aria-pressed',String(b===button)));
   };
   scene.renderer.domElement.addEventListener('webglcontextlost',(event)=>{
     event.preventDefault();alive=false;cancelAnimationFrame(raf);
     root.querySelector('.rv-step').textContent='图形显示已中断，请关闭三维后重新打开；二维进度仍可使用。';
   });
-  return {update,audioPosition(now){return snapshot && {taskId:snapshot.taskId,attempt:snapshot.attempt,position:clock.sample(now)};},dispose(){alive=false;cancelAnimationFrame(raf);scene.dispose();canvasHost.replaceChildren();labelHost.replaceChildren();}};
+  return {update,audioPosition(now){return snapshot && {taskId:snapshot.taskId,attempt:snapshot.attempt,position:clock.sample(now)};},dispose(){alive=false;cancelAnimationFrame(raf);director.dispose();directorButton.remove();scene.dispose();canvasHost.replaceChildren();labelHost.replaceChildren();}};
 }
 window.CoffeeRobotLive={mount};
