@@ -343,8 +343,35 @@ class RuntimeTest(unittest.TestCase):
             result = self.runtime._apply_command(action, command["taskId"])
             self.assertFalse(result["ok"])
             self.assertEqual(result["reasonCode"], "RECOVERY_REQUIRES_RECONCILIATION")
-        self.assertTrue(self.runtime._apply_command("cancel", command["taskId"])["ok"])
+        self.assertFalse(self.runtime._apply_command("cancel", command["taskId"])["ok"])
+        review = {"cupRemoved": True, "workspaceClear": True, "cancelConfirmed": True}
+        self.assertFalse(self.runtime.confirm_recovery(command["taskId"], recovered['revision'], {})['ok'])
+        self.assertFalse(self.runtime.confirm_recovery('wrong-task', recovered['revision'], review)['ok'])
+        self.assertFalse(self.runtime.confirm_recovery(command["taskId"], recovered['revision'] - 1, review)['ok'])
+        self.assertTrue(self.runtime._heartbeat_payload()['recovery']['detectedAt'])
+        self.assertTrue(self.runtime.confirm_recovery(command["taskId"], recovered['revision'], review)['ok'])
         self.assertEqual(self.runtime.runtime["deviceStatus"], "IDLE")
+        self.assertIsNone(self.runtime.runtime['task'])
+        self.assertIsNone(self.runtime.store.current_job())
+        self.assertIsNone(self.runtime._heartbeat_payload()['recovery'])
+        self.assertFalse(self.runtime.confirm_recovery(command["taskId"], recovered['revision'], review)['ok'])
+        events = [e for e in self.runtime.events if e['type'] == 'task.cancelled']
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]['payload']['recoveryReview']['outcome'], 'CANCELLED_AFTER_INSPECTION')
+
+    def test_recovery_review_storage_failure_keeps_hold_and_inventory(self):
+        with self.runtime.lock:
+            self.runtime.start_demo_order('coffee-v1')
+            task = self.runtime.runtime['task']
+            task.update(state='PAUSED', recoveryHold=True)
+            self.runtime._persist_task(task)
+            before = deepcopy(self.runtime.inventory.state)
+            with patch.object(self.runtime.store, 'clear_current_job', side_effect=OSError('disk full')):
+                with self.assertRaises(OSError):
+                    self.runtime.confirm_recovery(task['taskId'], task['revision'], dict(cupRemoved=True, workspaceClear=True, cancelConfirmed=True))
+            self.assertTrue(self.runtime.runtime['task']['recoveryHold'])
+            self.assertTrue(self.runtime.store.current_job()['recoveryHold'])
+            self.assertEqual(before, self.runtime.inventory.state)
 
     def test_retry_exhaustion_is_final_and_cannot_be_resumed(self) -> None:
         self.runtime.runtime["override"]["offline"] = True
@@ -437,6 +464,18 @@ class RuntimeTest(unittest.TestCase):
         saved = json.loads((self.instance / "device.json").read_text(encoding="utf-8"))
         self.assertEqual(saved["ui"]["locale"], "en-US")
         self.assertNotIn("_configPath", saved)
+
+    def test_showcase_service_is_lazy_separate_and_has_no_order_payload(self) -> None:
+        self.assertIsNone(self.runtime._showcase_service)
+        before = deepcopy(self.runtime.runtime)
+        connection = self.runtime.get_showcase_connection()
+        self.assertEqual(connection, self.runtime.get_showcase_connection())
+        self.assertNotIn(str(self.runtime.local_api.server.server_port) + '/', connection['publicUrl'] + '/')
+        with urlopen(connection['publicUrl'] + '/active.json') as response:
+            state = json.load(response)
+        self.assertEqual(set(state), {'active', 'previous', 'revision'})
+        self.assertEqual(self.runtime.runtime, before)
+        self.assertTrue((self.instance / 'showcase').is_dir())
 
 
 if __name__ == "__main__":

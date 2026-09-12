@@ -1,0 +1,112 @@
+{
+  "recipeId": "bj-americano-v1",
+  "skuCode": "BJ_AMERICANO",
+  "version": "1.1.0",
+  "name": "朝阳热美式",
+  "priceMinor": 1200,
+  "enabled": true,
+  "display": {
+    "description": "双份浓缩与热水",
+    "sortOrder": 10
+  },
+  "visual": {
+    "profile": "americano",
+    "cup": "ceramic-mug",
+    "layers": [
+      "coffee",
+      "water"
+    ]
+  },
+  "steps": [
+    {
+      "id": "prepare-cup",
+      "name": "准备杯子",
+      "animationCue": "cup-arrive",
+      "durationSeconds": 8,
+      "durationRandomization": {
+        "minSeconds": 7,
+        "maxSeconds": 10
+      },
+      "failureProfile": "cup-dispenser",
+      "robotActions": [
+        "cups"
+      ],
+      "consumes": [
+        {
+          "materialId": "cup-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
+    },
+    {
+      "id": "extract-coffee",
+      "name": "萃取双份浓缩",
+      "animationCue": "brew-stream",
+      "durationSeconds": 28,
+      "durationRandomization": {
+        "minSeconds": 25,
+        "maxSeconds": 32
+      },
+      "failureProfile": "brewer",
+      "robotActions": [
+        "brew"
+      ],
+      "consumes": [
+        {
+          "materialId": "coffee-beans",
+          "amount": 18,
+          "unit": "g"
+        },
+        {
+          "materialId": "water",
+          "amount": 45,
+          "unit": "ml"
+        }
+      ]
+    },
+    {
+      "id": "add-hot-water",
+      "name": "添加热水",
+      "animationCue": "water-pour",
+      "durationSeconds": 16,
+      "durationRandomization": {
+        "minSeconds": 14,
+        "maxSeconds": 19
+      },
+      "failureProfile": "water-pump",
+      "robotActions": [
+        "water"
+      ],
+      "consumes": [
+        {
+          "materialId": "water",
+          "amount": 200,
+          "unit": "ml"
+        }
+      ]
+    },
+    {
+      "id": "seal-and-serve",
+      "name": "封杯并出杯",
+      "animationCue": "seal",
+      "durationSeconds": 10,
+      "durationRandomization": {
+        "minSeconds": 9,
+        "maxSeconds": 13
+      },
+      "failureProfile": "lid-dispenser",
+      "robotActions": [
+        "lid",
+        "pickup"
+      ],
+      "consumes": [
+        {
+          "materialId": "lid-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
+    }
+  ]
+}

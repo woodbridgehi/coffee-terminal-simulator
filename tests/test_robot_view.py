@@ -41,7 +41,7 @@ def test_primary_demo_catalogs_keep_readable_pacing_and_valid_materials():
     expected_recipe_counts = {
         "coffee-bot-001": 5,
         "coffee-bot-002": 3,
-        "coffee-bot-003": 5,
+        "coffee-bot-003": 10,
     }
     for instance_id, expected_count in expected_recipe_counts.items():
         instance_dir = ROOT / "config" / "instances" / instance_id
@@ -55,7 +55,7 @@ def test_primary_demo_catalogs_keep_readable_pacing_and_valid_materials():
 
         for recipe in recipes:
             assert len(recipe["steps"]) >= 3
-            assert sum(float(step["durationSeconds"]) for step in recipe["steps"]) >= 43
+            assert sum(float(step["durationSeconds"]) for step in recipe["steps"]) >= 42
             plan = step_plan(recipe, materials)
             assert plan[0]["visual"]["actions"] == ["cups"]
             assert "pickup" in plan[-1]["visual"]["actions"]

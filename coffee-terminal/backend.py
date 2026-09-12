@@ -12,6 +12,7 @@ from functools import wraps
 import threading
 import time
 import uuid
+import zipfile
 from base64 import b64encode
 from datetime import datetime, timezone
 from io import BytesIO
@@ -68,6 +69,7 @@ class CoffeeDeviceRuntime:
         if self.mode != "local" and self.transport_name not in SUPPORTED_TRANSPORTS:
             raise ValueError(f"unsupported remote transport: {self.transport_name}")
         self.lock = threading.RLock()
+        self._showcase_service = None
         self.stop_event = threading.Event()
         self.boot_id = str(uuid.uuid4())
         self.sequence = 0
@@ -78,7 +80,12 @@ class CoffeeDeviceRuntime:
         recovery_hold = bool(self.mode == "remote" and recovered_task and recovered_task.get("state") in ACTIVE_STATES)
         if recovery_hold:
             previous_state = recovered_task.get("state")
-            recovered_task.update({"state": "PAUSED", "message": "重启恢复后等待后台对账，禁止直接继续制作", "recoveryPreviousState": previous_state, "recoveryHold": True})
+            recovered_task.setdefault("recoveryPreviousState", previous_state)
+            recovered_task.setdefault("recoveryDetectedAt", self.store.first_recovery_at(recovered_task['taskId']) or now())
+            recovered_task.setdefault("recoveryReason", (recovered_task.get("failure") or {}).get("message") or
+                                      (recovered_task.get("message") if recovered_task.get("failure") else "制作过程中终端重启，物理制作结果未知"))
+            recovered_task["revision"] = int(recovered_task.get("revision", 0)) + 1
+            recovered_task.update({"state": "PAUSED", "message": "制作中断，等待现场人工核验", "recoveryHold": True})
             self.store.save_job(recovered_task)
         self.command_cursor: str | None = self.store.get_meta("command_cursor")
         self.last_synced_capability: tuple[str, int] | None = None
@@ -112,6 +119,7 @@ class CoffeeDeviceRuntime:
             "events": self.events,
         }
         self.cloud = CloudClient(config) if self.mode == "remote" else None
+        self.menu_sync = {"status": "LOCAL" if not self.cloud else "PENDING", "syncedVersion": None, "syncedAt": None, "error": None}
         pickup = self.store.get_meta('pickup_slot')
         if pickup is None:
             pickup = {'state': 'EMPTY', 'revision': 0}
@@ -137,7 +145,7 @@ class CoffeeDeviceRuntime:
             self._emit(
                 "task.recovered",
                 "已从本地事务状态恢复任务",
-                {**self._task_ref(recovered_task), "state": recovered_task.get("state"), "revision": recovered_task.get("revision")},
+                {**self._task_ref(recovered_task), "state": recovered_task.get("state"), "revision": recovered_task.get("revision"), "recovery": self._recovery_summary()},
             )
         self.background_threads = [threading.Thread(target=self._execution_loop, daemon=True)]
         self.background_threads[0].start()
@@ -163,6 +171,10 @@ class CoffeeDeviceRuntime:
     def close(self) -> None:
         """Stop background work and release the per-instance local API port."""
         self.stop_event.set()
+        with self.lock:
+            showcase_service = self._showcase_service
+        if showcase_service:
+            showcase_service.close()
         if self.mqtt:
             self.mqtt.close()
         if self.local_api:
@@ -170,6 +182,21 @@ class CoffeeDeviceRuntime:
         for thread in self.background_threads:
             thread.join(timeout=self.cloud.timeout + 1 if self.cloud else 2)
         self.store.close()
+
+    def get_showcase_connection(self) -> dict[str, Any]:
+        """Lazy, independent content service; never part of the production loop."""
+        from showcase_packages import ShowcaseServer
+        with self.lock:
+            if self.stop_event.is_set():
+                raise RuntimeError("Terminal is closing")
+            if self._showcase_service is None:
+                self._showcase_service = ShowcaseServer(self.instance_dir / "showcase")
+            return self._showcase_service.connection()
+
+    def report_showcase_failure(self, key: str, message: str) -> dict[str, Any]:
+        if self._showcase_service:
+            return self._showcase_service.store.rollback(failed=key, reason=message)
+        return {"ok": False}
 
     @staticmethod
     def _device_status_for_task(task: dict[str, Any] | None) -> str:
@@ -209,6 +236,7 @@ class CoffeeDeviceRuntime:
             runtime["events"] = list(self.events)
             runtime["qrDataUrl"] = self._qr_data_url(runtime.get("qrUrl", ""))
             runtime["inventory"] = self.inventory.snapshot()
+            runtime["menuSync"] = {**self.menu_sync, "localVersion": self.catalog.version}
             if runtime.get("task"):
                 runtime["task"] = dict(runtime["task"])
                 runtime["task"]["stepPlan"] = runtime["task"].get("stepPlan") or robot_step_plan(runtime["task"]["recipe"], self.inventory.definitions)
@@ -226,6 +254,7 @@ class CoffeeDeviceRuntime:
 
     def capabilities(self) -> dict[str, Any]:
         result = self.catalog.capabilities(self.device_id, self.config.get("storeId", ""))
+        result['recipes'] = deepcopy(self.catalog.list())
         result["generatedAt"] = now()
         return result
 
@@ -301,6 +330,15 @@ class CoffeeDeviceRuntime:
                     validation = RecipeCatalog(candidate, self.inventory)
                     if validation.invalid:
                         return {"ok": False, "error": "配方校验失败", "invalidRecipes": validation.invalid}
+                if old and old.get('version') != recipe.get('version'):
+                    version = str(old.get('version', ''))
+                    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,79}', version):
+                        raise ValueError('旧配方版本不能安全归档')
+                    archive = self.instance_dir / 'recipe-archive' / safe_name / (version + '.json')
+                    if archive.exists() and json.loads(archive.read_text(encoding='utf-8')) != old:
+                        raise ValueError('同版本历史配方内容冲突，禁止覆盖')
+                    archive.parent.mkdir(parents=True, exist_ok=True)
+                    if not archive.exists(): write_config(archive, old)
                 write_config(target, recipe)
                 try:
                     self.catalog.reload()
@@ -388,7 +426,10 @@ class CoffeeDeviceRuntime:
             if not recipe.get("enabled", True):
                 return self._reject(command, "RECIPE_DISABLED", {"recipeId": command.get("recipeId")})
             if command.get("recipeVersion") and command["recipeVersion"] != recipe["version"]:
-                return self._reject(command, "RECIPE_VERSION_MISMATCH", {"requested": command["recipeVersion"], "installed": recipe["version"]})
+                historical = self.catalog.historical(recipe['recipeId'], command['recipeVersion'])
+                if historical is None:
+                    return self._reject(command, "RECIPE_VERSION_MISMATCH", {"requested": command["recipeVersion"], "installed": recipe["version"]})
+                recipe = historical
             legacy_default = False
             if recipe.get('optionSchema') or command.get('customization') or command.get('compiledRecipeDigest'):
                 base_recipe = recipe
@@ -470,6 +511,39 @@ class CoffeeDeviceRuntime:
         self.store.save_job(task)
 
     # Local task commands
+    def _recovery_summary(self) -> dict[str, Any] | None:
+        task = self.runtime.get("task") or {}
+        if not task.get("recoveryHold") or task.get("state") not in ACTIVE_STATES:
+            return None
+        steps = task.get("recipe", {}).get("steps", [])
+        index = task.get("stepIndex", 0)
+        step = steps[index] if 0 <= index < len(steps) else {}
+        return {"taskId": task.get("taskId"), "taskKind": "DEBUG" if str(task.get("orderId", "")).startswith("debug-") else "ORDER",
+                "detectedAt": task.get("recoveryDetectedAt"), "stepId": step.get("id"), "stepName": step.get("name"),
+                "reasonCode": (task.get("failure") or {}).get("code") or "DEVICE_RESTARTED_OUTCOME_UNKNOWN",
+                "reason": task.get("recoveryReason") or task.get("message") or "制作结果未知，等待现场人工核验"}
+
+    @atomic_runtime
+    def confirm_recovery(self, task_id: str, revision: int, checks: dict[str, Any]) -> dict[str, Any]:
+        """Native operator review; never exposed as a public/local HTTP action."""
+        task = self.runtime.get("task") or {}
+        if task.get("taskId") != task_id or task.get("revision") != revision or not self._recovery_summary():
+            return {"ok": False, "error": "任务状态已改变，请重新打开人工核验", "reasonCode": "RECOVERY_CHANGED"}
+        if not isinstance(checks, dict) or any(checks.get(k) is not True for k in ("cupRemoved", "workspaceClear", "cancelConfirmed")):
+            return {"ok": False, "error": "请完成全部现场核验", "reasonCode": "REVIEW_REQUIRED"}
+        review = {"reviewedAt": now(), "source": "TERMINAL_OPERATOR", "checks": checks,
+                  "recovery": self._recovery_summary(), "outcome": "CANCELLED_AFTER_INSPECTION"}
+        self.inventory.release(task_id)
+        task.update(state="CANCELLED", recoveryHold=False, recoveryReview=review, message="现场核验完成，已取消中断任务")
+        self._set_pickup("EMPTY", task)
+        self._persist_task(task)
+        self._emit("task.cancelled", task["message"], {**self._task_ref(task), "recoveryReview": review})
+        self._inventory_changed()
+        self.runtime["task"] = None
+        self.runtime["deviceStatus"] = "IDLE"
+        self.store.clear_current_job()
+        return {"ok": True}
+
     def confirm_pickup(self, task_id: str) -> dict[str, Any]:
         """Local simulated sensor confirmation, bound to the displayed task."""
         return self._apply_command('collect', target_task_id=task_id)
@@ -551,6 +625,8 @@ class CoffeeDeviceRuntime:
                 task.update(self._task_progress_fields(task))
                 self._persist_task(task); self._emit("task.retry", "任务开始重试", self._task_ref(task)); self._inventory_changed()
             elif action == "cancel" and task["state"] in ACTIVE_STATES:
+                if task.get("recoveryHold"):
+                    return {"ok": False, "reasonCode": "REVIEW_REQUIRED", "error": "请在终端完成人工核验后取消中断任务"}
                 self.inventory.release(task["taskId"]); task["state"] = "CANCELLED"; task["message"] = "任务已取消"; self.runtime["deviceStatus"] = "IDLE"; self._persist_task(task); self._emit("task.cancelled", task["message"], self._task_ref(task)); self._inventory_changed()
             elif action == "clear" and task["state"] in {"SUCCEEDED", "FAILED", "CANCELLED"}:
                 self.runtime["task"] = None; self.runtime["deviceStatus"] = "IDLE"; self.store.clear_current_job(); self._emit("task.cleared", "终端返回待机")
@@ -571,6 +647,7 @@ class CoffeeDeviceRuntime:
                     if not task:
                         continue
                     task.update(state="PAUSED", recoveryHold=True,
+                                recoveryDetectedAt=now(),
                                 message="本地状态保存失败，请检查后人工恢复",
                                 failure={"code": "LOCAL_STORAGE_ERROR", "retryable": False})
                     self.runtime["deviceStatus"] = "BUSY"
@@ -632,6 +709,7 @@ class CoffeeDeviceRuntime:
             changes = self.inventory.consume_step(task["taskId"], step["id"], step.get("consumes", []), attempt=int(task.get("attempt", 1)))
         except InventoryError as exc:
             task.update(state="PAUSED", recoveryHold=True, message=str(exc),
+                        recoveryDetectedAt=now(),
                         failure={"code": "INVENTORY_INCONSISTENT", "stepId": step["id"], "retryable": False})
             self.runtime["deviceStatus"] = "BUSY"
             self._persist_task(task)
@@ -900,7 +978,7 @@ class CoffeeDeviceRuntime:
         with self.lock:
             self.sequence += 1
             sequence = self.sequence
-        return {"deviceId": self.device_id, "messageId": f"hb-{self.boot_id}-{sequence}", "bootId": self.boot_id, "sequence": sequence, "instanceId": self.config["instanceId"], "storeId": self.config.get("storeId"), "deviceStatus": self.runtime["deviceStatus"], "currentTaskId": task.get("taskId"), "currentTaskState": task.get("state"), "currentTaskRevision": task.get("revision"), "capabilityVersion": self.catalog.version, "inventoryVersion": self.inventory.state["version"], "deliveries": self.store.delivery_stats(), "localApiUrl": f"http://{local_api.get('host', '127.0.0.1')}:{local_api.get('port', 9101)}" if local_api.get("enabled", True) else None, "appVersion": "1.2.0", "sentAt": now()}
+        return {"deviceId": self.device_id, "messageId": f"hb-{self.boot_id}-{sequence}", "bootId": self.boot_id, "sequence": sequence, "instanceId": self.config["instanceId"], "storeId": self.config.get("storeId"), "deviceStatus": self.runtime["deviceStatus"], "currentTaskId": task.get("taskId"), "currentTaskState": task.get("state"), "currentTaskRevision": task.get("revision"), "capabilityVersion": self.catalog.version, "inventoryVersion": self.inventory.state["version"], "recovery": self._recovery_summary(), "deliveries": self.store.delivery_stats(), "localApiUrl": f"http://{local_api.get('host', '127.0.0.1')}:{local_api.get('port', 9101)}" if local_api.get("enabled", True) else None, "appVersion": "1.2.0", "sentAt": now()}
 
     def _publish_mqtt_state_if_changed(self) -> None:
         """Retain one authoritative state snapshot; heartbeats need not duplicate it."""
@@ -920,18 +998,76 @@ class CoffeeDeviceRuntime:
             "currentTaskId": task.get("taskId"),
             "currentTaskState": task.get("state"),
             "currentTaskRevision": task.get("revision"),
+            "recovery": self._recovery_summary(),
             "pickupSlot": deepcopy(self.runtime['pickupSlot']),
             "sentAt": now(),
         })
         self._last_mqtt_state_fingerprint = fingerprint
 
+    def request_menu_sync(self) -> dict[str, Any]:
+        if not self.cloud:
+            return {"ok": False, "error": "本地模式未连接服务器", "reasonCode": "LOCAL_MODE"}
+        with self.lock:
+            if self.runtime['pickupSlot']['state'] != 'EMPTY':
+                return {"ok": False, "error": "请先确认取杯后再同步菜单"}
+            result = self.reload_config()
+            if not result['ok']: return result
+            self.menu_sync.update(status='PENDING', error=None)
+            self.last_synced_capability = None
+            self.last_synced_inventory = -1
+            return {"ok": True, "queued": True, "capabilityVersion": self.catalog.version}
+
+    def export_operations_bundle(self) -> dict[str, Any]:
+        """Operator-only export; never include device credentials or live orders."""
+        from showcase_packages import PackageStore
+        with self.lock:
+            result = self.reload_config()
+            if not result['ok']: return result
+            store = self._showcase_service.store if self._showcase_service else PackageStore(self.instance_dir / 'showcase')
+            active = store.state()['active']
+            manifest = store.manifest(active)
+            directory = store.directory(active)
+            content = BytesIO()
+            with zipfile.ZipFile(content, 'w', zipfile.ZIP_DEFLATED) as archive:
+                for path in sorted(directory.rglob('*')):
+                    if path.is_file(): archive.write(path, path.relative_to(directory))
+            output = self.instance_dir / 'exports' / ('operations-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + uuid.uuid4().hex[:6] + '.zip')
+            output.parent.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr('operations.json', json.dumps({'schemaVersion': 1, 'kind': 'coffee.operations-export', 'createdAt': now(), 'capabilityVersion': self.catalog.version, 'showcase': {'id': manifest['id'], 'version': manifest['version'], 'file': 'showcase.zip'}, 'recipes': [r['recipeId'] for r in self.catalog.list()]}, ensure_ascii=False, indent=2))
+                archive.writestr('showcase.zip', content.getvalue())
+                archive.writestr('materials.json', (self.instance_dir / 'materials.json').read_bytes())
+                for recipe in self.catalog.list():
+                    archive.writestr('recipes/' + recipe['recipeId'] + '.json', json.dumps(recipe, ensure_ascii=False, indent=2))
+                for path in sorted((self.instance_dir / 'recipe-archive').rglob('*.json')):
+                    archive.write(path, path.relative_to(self.instance_dir))
+                archive.writestr('README.txt', 'Operator review bundle. Not a showcase ZIP. Import showcase.zip in content management; recipes and materials require operator validation and installation before menu sync. No credentials, live inventory, or orders included.\n')
+            return {"ok": True, "path": str(output), "recipeCount": len(self.catalog.list()), "showcase": active}
+
     def _sync_snapshots(self) -> None:
-        capability_key = (self.catalog.version, int(self.inventory.state["version"]))
-        if capability_key != self.last_synced_capability:
-            self.cloud.sync_capabilities(self.capabilities()); self.last_synced_capability = capability_key
-        inventory_version = int(self.inventory.state["version"])
-        if inventory_version != self.last_synced_inventory:
-            self.cloud.sync_inventory(self.inventory_snapshot()); self.last_synced_inventory = inventory_version
+        with self.lock:
+            capability_key = (self.catalog.version, int(self.inventory.state["version"]))
+            capabilities = self.capabilities() if capability_key != self.last_synced_capability else None
+            inventory_version = int(self.inventory.state['version'])
+            inventory = self.inventory_snapshot() if inventory_version != self.last_synced_inventory else None
+        try:
+            if capabilities is not None:
+                response = self.cloud.sync_capabilities(capabilities)
+                if not response.get('ok'): raise CloudError('服务器未确认菜单更新', retryable=True)
+                self.last_synced_capability = capability_key
+                with self.lock:
+                    self.menu_sync.update(status='SYNCED' if self.catalog.version == capability_key[0] else 'PENDING', syncedVersion=capability_key[0], syncedAt=response.get('receivedAt') or now(), error=None)
+            if inventory is not None:
+                response = self.cloud.sync_inventory(inventory)
+                if not response.get('ok'): raise CloudError('服务器未确认库存更新', retryable=True)
+                self.last_synced_inventory = inventory_version
+            with self.lock:
+                current = (self.catalog.version, int(self.inventory.state['version']))
+                if self.last_synced_capability == current and self.last_synced_inventory == current[1]:
+                    self.menu_sync.update(status='SYNCED', error=None)
+        except CloudError as exc:
+            with self.lock: self.menu_sync.update(status='FAILED', error=str(exc))
+            raise
 
     def _flush_outbox(self) -> None:
         for record in self.store.pending_events():

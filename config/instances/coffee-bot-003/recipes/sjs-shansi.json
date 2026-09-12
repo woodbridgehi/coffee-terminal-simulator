@@ -1,0 +1,178 @@
+{
+  "recipeId": "bj-sjs-shansi-v1",
+  "skuCode": "BJ_SJS_SHANSI",
+  "version": "1.0.0",
+  "name": "山寺香雪 · 香草冰拿铁",
+  "priceMinor": 2300,
+  "enabled": true,
+  "display": {
+    "description": "香草冰拿铁",
+    "sortOrder": 80,
+    "brandName": "山寺香雪",
+    "category": "香草冰拿铁",
+    "nameEn": "Mountain Temple Vanilla",
+    "showcaseSlideId": "sjs-shansi",
+    "collection": "石景山"
+  },
+  "visual": {
+    "profile": "iced-latte",
+    "cup": "transparent-tall",
+    "layers": [
+      "milk",
+      "coffee",
+      "vanilla-syrup",
+      "ice"
+    ]
+  },
+  "steps": [
+    {
+      "id": "prepare-cup",
+      "name": "准备冰饮杯",
+      "animationCue": "cup-arrive",
+      "durationSeconds": 8,
+      "failureProfile": "cup-dispenser",
+      "robotActions": [
+        "cups"
+      ],
+      "consumes": [
+        {
+          "materialId": "cup-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
+    },
+    {
+      "id": "add-ice",
+      "name": "加入冰块",
+      "animationCue": "ice-drop",
+      "durationSeconds": 12,
+      "failureProfile": "ice-dispenser",
+      "robotActions": [
+        "ice"
+      ],
+      "consumes": [
+        {
+          "materialId": "ice",
+          "amount": 160,
+          "unit": "g"
+        }
+      ],
+      "dispenseChannel": "ice-dispenser",
+      "customizationRole": "ice"
+    },
+    {
+      "id": "extract-coffee",
+      "name": "萃取双份浓缩",
+      "animationCue": "brew-stream",
+      "durationSeconds": 28,
+      "failureProfile": "brewer",
+      "robotActions": [
+        "brew"
+      ],
+      "consumes": [
+        {
+          "materialId": "coffee-beans",
+          "amount": 18,
+          "unit": "g"
+        },
+        {
+          "materialId": "water",
+          "amount": 45,
+          "unit": "ml"
+        }
+      ]
+    },
+    {
+      "id": "add-vanilla",
+      "name": "加入香草糖浆",
+      "animationCue": "syrup-swirl",
+      "durationSeconds": 10,
+      "failureProfile": "syrup-pump",
+      "robotActions": [
+        "syrup"
+      ],
+      "consumes": [
+        {
+          "materialId": "vanilla-syrup",
+          "amount": 20,
+          "unit": "ml"
+        }
+      ],
+      "dispenseChannel": "vanilla-pump",
+      "customizationRole": "sugar"
+    },
+    {
+      "id": "add-milk",
+      "name": "加入鲜奶",
+      "animationCue": "milk-pour",
+      "durationSeconds": 16,
+      "failureProfile": "milk-pump",
+      "robotActions": [
+        "milk"
+      ],
+      "consumes": [
+        {
+          "materialId": "milk",
+          "amount": 170,
+          "unit": "ml"
+        }
+      ],
+      "dispenseChannel": "milk-pump",
+      "customizationRole": "milk"
+    },
+    {
+      "id": "seal-and-serve",
+      "name": "封杯并出杯",
+      "animationCue": "seal",
+      "durationSeconds": 10,
+      "failureProfile": "lid-dispenser",
+      "robotActions": [
+        "lid",
+        "pickup"
+      ],
+      "consumes": [
+        {
+          "materialId": "lid-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
+    }
+  ],
+  "optionSchema": {
+    "version": "1.0.0",
+    "options": {
+      "ice": {
+        "default": "STANDARD",
+        "values": [
+          "NONE",
+          "STANDARD"
+        ],
+        "priceDeltaMinor": {}
+      },
+      "sugar": {
+        "default": "STANDARD",
+        "values": [
+          "NONE",
+          "LIGHT",
+          "LESS",
+          "STANDARD",
+          "EXTRA"
+        ],
+        "priceDeltaMinor": {}
+      },
+      "milk": {
+        "default": "STANDARD",
+        "values": [
+          "NONE",
+          "STANDARD"
+        ],
+        "priceDeltaMinor": {}
+      }
+    },
+    "temperature": "ICED",
+    "fillPolicy": "NO_TOP_UP",
+    "notice": "不加冰不等于热饮；去冰/去奶不补液、杯量会减少。不加奶会改变饮品口感；无添加糖仅指可调糖浆，牛奶和巧克力等原料仍可能含糖。"
+  }
+}

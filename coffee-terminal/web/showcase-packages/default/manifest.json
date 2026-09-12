@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "id": "default",
+  "version": "1.1.0",
+  "name": "北京城市限定 · 展厅图册",
+  "designSize": {
+    "width": 1600,
+    "height": 1100
+  },
+  "background": "#FFF9F0",
+  "playlist": "sequence",
+  "slides": [
+    {
+      "id": "cover",
+      "type": "svg",
+      "srcByLocale": {
+        "zh-CN": "assets/cover-zh.svg",
+        "en-US": "assets/cover-en.svg"
+      },
+      "fit": "contain",
+      "durationMs": 3500
+    },
+    {
+      "id": "haidian-open",
+      "type": "html",
+      "src": "slides/haidian-open.html",
+      "layout": "responsive",
+      "durationMs": 7000
+    },
+    {
+      "id": "hd-xishan",
+      "type": "html",
+      "src": "slides/hd-xishan.html",
+      "layout": "responsive",
+      "durationMs": 8000
+    },
+    {
+      "id": "hd-kunming",
+      "type": "html",
+      "src": "slides/hd-kunming.html",
+      "layout": "responsive",
+      "durationMs": 8000
+    },
+    {
+      "id": "hd-yuquan",
+      "type": "html",
+      "src": "slides/hd-yuquan.html",
+      "layout": "responsive",
+      "durationMs": 8000
+    },
+    {
+      "id": "hd-yihe",
+      "type": "html",
+      "src": "slides/hd-yihe.html",
+      "layout": "responsive",
+      "durationMs": 8000
+    },
+    {
+      "id": "hd-yuanming",
+      "type": "html",
+      "src": "slides/hd-yuanming.html",
+      "layout": "responsive",
+      "durationMs": 8000
+    },
+    {
+      "id": "shijingshan-open",
+      "type": "html",
+      "src": "slides/shijingshan-open.html",
+      "layout": "responsive",
+      "durationMs": 7000
+    },
+    {
+      "id": "sjs-luguang",
+      "type": "html",
+      "src": "slides/sjs-luguang.html",
+      "layout": "responsive",
+      "durationMs": 8000
+    },
+    {
+      "id": "sjs-yongding",
+      "type": "html",
+      "src": "slides/sjs-yongding.html",
+      "layout": "responsive",
+      "durationMs": 8000
+    },
+    {
+      "id": "sjs-shansi",
+      "type": "html",
+      "src": "slides/sjs-shansi.html",
+      "layout": "responsive",
+      "durationMs": 8000
+    },
+    {
+      "id": "sjs-gucha",
+      "type": "html",
+      "src": "slides/sjs-gucha.html",
+      "layout": "responsive",
+      "durationMs": 8000
+    },
+    {
+      "id": "sjs-gangcheng",
+      "type": "html",
+      "src": "slides/sjs-gangcheng.html",
+      "layout": "responsive",
+      "durationMs": 8000
+    },
+    {
+      "id": "motion",
+      "type": "animation",
+      "src": "slides/motion.html",
+      "layout": "canvas",
+      "fit": "contain",
+      "durationMs": 8000
+    },
+    {
+      "id": "space",
+      "type": "image",
+      "src": "assets/shop.png",
+      "content": {
+        "zh-CN": {
+          "title": "一杯咖啡，一处停留。",
+          "eyebrow": "空间图册 / 01"
+        },
+        "en-US": {
+          "title": "A coffee. A moment.",
+          "eyebrow": "THE SPACE / 01"
+        }
+      },
+      "durationMs": 4000
+    },
+    {
+      "id": "craft",
+      "type": "image",
+      "src": "assets/perspective.png",
+      "content": {
+        "zh-CN": {
+          "title": "看见每一步制作。",
+          "eyebrow": "空间图册 / 02"
+        },
+        "en-US": {
+          "title": "Craft, in full view.",
+          "eyebrow": "THE SPACE / 02"
+        }
+      },
+      "durationMs": 4000
+    },
+    {
+      "id": "detail",
+      "type": "image",
+      "src": "assets/art.png",
+      "content": {
+        "zh-CN": {
+          "title": "细节，落在这一杯。",
+          "eyebrow": "空间图册 / 03"
+        },
+        "en-US": {
+          "title": "The finishing touch.",
+          "eyebrow": "THE SPACE / 03"
+        }
+      },
+      "durationMs": 4000
+    }
+  ]
+}

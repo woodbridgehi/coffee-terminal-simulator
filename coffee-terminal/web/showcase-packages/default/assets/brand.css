@@ -1,0 +1,164 @@
+/* ============================================================
+   Coffee Terminal · 北京城市限定系列 · 轮播内容包
+   brand.css — 品牌令牌与版式系统 v1.1.0
+   令牌来源：Coffee-Terminal-Interface-Redesign
+   （森林绿 × 奶油白 × 黄铜光标；禁止渐变与体系外色相）
+   ============================================================ */
+
+/* --- 品牌字体：包内自持，无外链 -------------------------------------------------
+   ① 思源宋体 CN（Source Han Serif）— SIL OFL 1.1 · 标题与衬线正文
+      仅子集化包内实际用字（678 字符 / 728 字形），锁定 400 / 600 两档字重。
+   ② JetBrains Mono — SIL OFL 1.1 · 等宽位（眉标/菜单/页脚/数字）
+      品牌系统 --font-mono 首位字体，此前全包依赖系统 Menlo 兜底。        */
+@font-face{
+  font-family:"Source Han Serif SC";
+  src:url("fonts/SourceHanSerifCN-Regular.woff2") format("woff2");
+  font-weight:400;font-style:normal;font-display:swap;
+}
+@font-face{
+  font-family:"Source Han Serif SC";
+  src:url("fonts/SourceHanSerifCN-SemiBold.woff2") format("woff2");
+  font-weight:600;font-style:normal;font-display:swap;
+}
+@font-face{
+  font-family:"JetBrains Mono";
+  src:url("fonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-weight:400;font-style:normal;font-display:swap;
+}
+
+:root{
+  --cream:#FFF9F0;        /* 奶油白底 */
+  --cream-2:#F6F0E5;      /* 次级奶油面 */
+  --paper:#FDFAF3;        /* 杯身纸面 */
+  --ink:#17382D;          /* 森林绿主笔画 */
+  --ink-soft:#2E5A4B;
+  --espresso:#5A3827;     /* 浓咖啡（温度/饮品场景） */
+  --milk:#E9DFD0;         /* 奶油奶泡 */
+  --fg:#342F2A;           /* 正文墨色 */
+  --muted:#746D64;        /* 次级文字 */
+  --line:#DDD3C4;         /* 分隔线 */
+  --brass:#B78A52;        /* 黄铜（亮底）— 每图仅一次，只落光标 */
+  --brass-300:#D7B67E;    /* 黄铜 300（深底专用） */
+  --forest:#123D31;       /* 深色底 1 */
+  --forest-deep:#0B2D24;  /* 深色底 2 */
+  --cream-fg:#F6F0E5;     /* 深底主文字 */
+  --cream-muted:#9FB0A6;  /* 深底次级文字 */
+  --line-dark:#2A3C34;    /* 深底分隔线 */
+  --font-display:"Source Han Serif SC","Noto Serif SC","Songti SC","STSong","Iowan Old Style",Charter,Georgia,SimSun,serif;
+  --font-body:"Inter","Manrope",-apple-system,BlinkMacSystemFont,"PingFang SC","Source Han Sans SC","Microsoft YaHei","Source Han Serif SC",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono","SF Mono",Menlo,Consolas,"Source Han Serif SC",monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;overflow:hidden;background:var(--cream);color:var(--fg);
+  font-family:var(--font-body);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+body.dark{background:var(--forest-deep);color:var(--cream-fg)}
+
+/* ---------- 饮品页骨架 ---------- */
+.wrap{
+  position:absolute;inset:0;display:grid;
+  grid-template-columns:minmax(0,10fr) minmax(0,9fr);
+  grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:"top top" "copy scene" "foot foot";
+  column-gap:clamp(24px,4vw,72px);
+  padding:clamp(18px,4vh,40px) clamp(22px,4.2vw,68px) clamp(14px,3vh,30px);
+}
+
+/* 顶栏：眉标 + 品类徽记 */
+.top{grid-area:top;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding-bottom:clamp(8px,1.6vh,14px);border-bottom:1px solid var(--line);
+  margin-bottom:clamp(4px,1vh,12px)}
+.dark .top{border-bottom-color:var(--line-dark)}
+.eyebrow{font-family:var(--font-mono);font-size:clamp(10px,1.15vw,13px);letter-spacing:.18em;
+  text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.dark .eyebrow{color:var(--cream-muted)}
+.chip{font-family:var(--font-mono);font-size:clamp(10px,1.1vw,13px);letter-spacing:.12em;
+  color:var(--ink);border:1px solid var(--ink);border-radius:999px;
+  padding:.42em 1.05em;white-space:nowrap}
+.dark .chip{color:var(--cream-fg);border-color:var(--brass-300)}
+
+/* ---------- 文案区 ---------- */
+.copy{grid-area:copy;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.title{font-family:var(--font-display);font-weight:600;line-height:1.14;margin:0;
+  font-size:clamp(38px,6.6vw,88px);letter-spacing:.08em;color:var(--ink)}
+.dark .title{color:var(--cream-fg)}
+.title-en{font-family:var(--font-mono);font-size:clamp(11px,1.25vw,15px);letter-spacing:.3em;
+  text-transform:uppercase;color:var(--muted);margin-top:1em}
+.dark .title-en{color:var(--cream-muted)}
+.cursor{display:block;width:clamp(30px,3.2vw,44px);height:5px;border-radius:3px;
+  background:var(--brass);margin:clamp(12px,2.4vh,24px) 0;
+  animation:blink 1.3s steps(1) infinite}
+.dark .cursor{background:var(--brass-300)}
+.lead{margin:0 0 clamp(12px,2.2vh,22px);max-width:34em;
+  font-size:clamp(15px,1.8vw,22px);line-height:1.8;color:var(--fg)}
+.dark .lead{color:var(--cream-fg)}
+
+/* 特性列表 */
+.feats{list-style:none;margin:0;padding:0;display:grid;gap:clamp(9px,1.8vh,16px)}
+.feat{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:14px;align-items:center}
+.feat svg{width:clamp(26px,2.6vw,34px);height:auto;display:block;color:var(--ink)}
+.dark .feat svg{color:var(--cream-fg)}
+.feat b{display:block;font-size:clamp(13px,1.45vw,18px);font-weight:600;
+  letter-spacing:.05em;color:var(--ink);line-height:1.3}
+.dark .feat b{color:var(--cream-fg)}
+.feat span{display:block;font-size:clamp(11px,1.2vw,14px);color:var(--muted);margin-top:2px}
+.dark .feat span{color:var(--cream-muted)}
+
+/* ---------- 插画区 ---------- */
+.scene{grid-area:scene;position:relative;min-width:0;min-height:0;
+  display:flex;align-items:flex-end;justify-content:center}
+.scene svg.cup{width:min(100%,clamp(250px,33vw,470px));height:auto;max-height:100%;aspect-ratio:560/640;display:block}
+.vtag{position:absolute;top:clamp(2px,3vh,32px);right:0;writing-mode:vertical-rl;
+  font-family:var(--font-mono);font-size:clamp(10px,1.05vw,12px);letter-spacing:.4em;
+  color:var(--muted)}
+.dark .vtag{color:var(--cream-muted)}
+
+/* ---------- 页脚：系列行 + 背书（每屏仅一处） ---------- */
+.foot{grid-area:foot;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding-top:clamp(8px,1.5vh,13px);border-top:1px solid var(--line);
+  margin-top:clamp(4px,1vh,12px)}
+.dark .foot{border-top-color:var(--line-dark)}
+.series{font-family:var(--font-mono);font-size:clamp(9px,1vw,12px);letter-spacing:.22em;
+  text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.dark .series{color:var(--cream-muted)}
+.endorse{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);
+  font-size:clamp(9px,1vw,12px);letter-spacing:.14em;color:var(--muted);white-space:nowrap}
+.dark .endorse{color:var(--cream-muted)}
+.endorse svg{width:14px;height:14px;display:block;flex:none}
+
+/* ---------- 动效：眨眼 1.3s / 呼吸 2.8s（品牌三种之内） ---------- */
+@keyframes blink{0%,55%{opacity:1}56%,100%{opacity:.15}}
+@keyframes breathe{0%,100%{transform:translateY(0);opacity:.85}50%{transform:translateY(-9px);opacity:1}}
+.steam{animation:breathe 2.8s ease-in-out infinite}
+.steam.s2{animation-delay:-1.4s}
+@media (prefers-reduced-motion:reduce){
+  .cursor,.steam{animation:none}
+}
+
+/* ---------- 竖屏重排（820×1180 → 444×871 · 390×844 → 356×390） ---------- */
+@media (max-aspect-ratio:4/5){
+  .wrap{grid-template-columns:minmax(0,1fr);
+    grid-template-rows:auto auto minmax(0,1fr) auto;
+    grid-template-areas:"top" "copy" "scene" "foot";row-gap:6px}
+  .copy{justify-content:flex-start}
+  .title{font-size:clamp(38px,11vw,62px)}
+  .title-en{display:none}
+  .cursor{margin:8px 0;height:4px}
+  .lead{font-size:clamp(13px,3.6vw,16px);margin-bottom:8px}
+  .scene svg.cup{width:min(70vw,290px)}
+  .vtag{display:none}
+  .feats{gap:7px}
+  .feat span{display:none}
+}
+/* ---------- 矮窗压缩（558×469 · 882×469） ---------- */
+@media (max-height:520px) and (min-aspect-ratio:4/5){
+  .feat span{display:none}
+  .steam{display:none}
+  .title{font-size:clamp(32px,5.8vw,60px)}
+  .title-en{margin-top:.5em}
+  .lead{font-size:clamp(12px,1.55vw,15px);line-height:1.65;margin-bottom:8px}
+  .cursor{margin:8px 0;height:4px}
+}

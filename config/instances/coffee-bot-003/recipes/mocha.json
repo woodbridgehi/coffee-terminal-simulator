@@ -1,13 +1,18 @@
 {
   "recipeId": "bj-mocha-v1",
   "skuCode": "BJ_MOCHA",
-  "version": "2.0.0",
-  "name": "朝阳摩卡",
+  "version": "3.0.0",
+  "name": "圆明祺韵 · 摩卡",
   "priceMinor": 2200,
   "enabled": true,
   "display": {
-    "description": "双份浓缩、巧克力与鲜奶",
-    "sortOrder": 40
+    "description": "摩卡 · 双臂螺旋拉花",
+    "sortOrder": 50,
+    "brandName": "圆明祺韵",
+    "category": "摩卡",
+    "nameEn": "A Classic Reborn",
+    "showcaseSlideId": "hd-yuanming",
+    "collection": "海淀"
   },
   "visual": {
     "profile": "hazelnut-special",
@@ -24,10 +29,6 @@
       "name": "准备杯子",
       "animationCue": "cup-arrive",
       "durationSeconds": 8,
-      "durationRandomization": {
-        "minSeconds": 7,
-        "maxSeconds": 10
-      },
       "failureProfile": "cup-dispenser",
       "robotActions": [
         "cups"
@@ -45,10 +46,6 @@
       "name": "萃取双份浓缩",
       "animationCue": "brew-stream",
       "durationSeconds": 28,
-      "durationRandomization": {
-        "minSeconds": 25,
-        "maxSeconds": 32
-      },
       "failureProfile": "brewer",
       "robotActions": [
         "brew"
@@ -71,10 +68,6 @@
       "name": "加入巧克力酱",
       "animationCue": "syrup-swirl",
       "durationSeconds": 10,
-      "durationRandomization": {
-        "minSeconds": 8,
-        "maxSeconds": 13
-      },
       "failureProfile": "syrup-pump",
       "robotActions": [
         "syrup"
@@ -90,13 +83,9 @@
     },
     {
       "id": "add-milk",
-      "name": "加入鲜奶",
+      "name": "注入温热鲜奶",
       "animationCue": "milk-pour",
       "durationSeconds": 16,
-      "durationRandomization": {
-        "minSeconds": 14,
-        "maxSeconds": 19
-      },
       "failureProfile": "milk-pump",
       "robotActions": [
         "milk"
@@ -104,7 +93,7 @@
       "consumes": [
         {
           "materialId": "milk",
-          "amount": 150,
+          "amount": 140,
           "unit": "ml"
         }
       ],
@@ -112,14 +101,31 @@
       "customizationRole": "milk"
     },
     {
+      "id": "latte-art",
+      "name": "双臂螺旋拉花",
+      "durationSeconds": 30,
+      "robotActions": [
+        "latte-art"
+      ],
+      "latteArt": {
+        "patternId": "spiral",
+        "patternVersion": "1.0.0"
+      },
+      "customizationRole": "milk",
+      "dispenseChannel": "foam-pitcher",
+      "consumes": [
+        {
+          "materialId": "milk",
+          "amount": 20,
+          "unit": "ml"
+        }
+      ]
+    },
+    {
       "id": "seal-and-serve",
       "name": "封杯并出杯",
       "animationCue": "seal",
       "durationSeconds": 10,
-      "durationRandomization": {
-        "minSeconds": 9,
-        "maxSeconds": 13
-      },
       "failureProfile": "lid-dispenser",
       "robotActions": [
         "lid",

@@ -38,6 +38,8 @@ const mockApi = (() => {
   }, 250);
   return {
     get_state: async () => ({ config: { deviceId: 'coffee-bot-001', deviceName: 'COFFEE BOT 001', ui: { locale: 'zh-CN' } }, recipes: [recipe], capabilities: { products: [{ recipeId: recipe.recipeId, available: true, maxServings: 13 }] }, runtime }),
+    request_menu_sync: async () => ({ ok: false, error: t('terminal.menu.local') }),
+    export_operations_bundle: async () => ({ ok: false, error: t('terminal.menu.nativeRequired') }),
     set_ui_locale: async (locale) => ({ ok: true, locale }),
     confirm_pickup: async (taskId) => {
       if (runtime.task?.taskId !== taskId || runtime.task?.state !== 'SUCCEEDED') return { ok: false, error: '没有对应的待取杯任务' };
@@ -144,10 +146,14 @@ function render(data) {
   renderRecipes(recipes, capabilities); renderInventory(runtime.inventory);
   if (!$('#recipeEditor').matches(':focus')) { const selected = recipes.find((item) => item.recipeId === selectedRecipeId); if (selected && $('#recipeEditor').dataset.recipeId !== selected.recipeId) { $('#recipeEditor').value = JSON.stringify(selected, null, 2); $('#recipeEditor').dataset.recipeId = selected.recipeId; } }
 
+  const menu = runtime.menuSync || {status:'LOCAL'};
+  const menuState = menu.status === 'SYNCED' && menu.localVersion !== menu.syncedVersion ? 'PENDING' : menu.status;
+  $('#menuSyncStatus').textContent = [t('terminal.menu.' + ({SYNCED:'synced',FAILED:'failed',LOCAL:'local',PENDING:'pending'}[menuState] || 'pending')), menu.syncedAt ? new Date(menu.syncedAt).toLocaleString(terminalI18n.getLocale()) : '', menu.error || ''].filter(Boolean).join(' · ');
   const isReady = task?.state === 'SUCCEEDED';
   const isCancelled = task?.state === 'CANCELLED';
   const isFailed = task?.state === 'FAILED';
   const isHold = !!task?.recoveryHold || task?.state === 'HOLD' || runtime.deviceStatus === 'RECOVERING';
+  setVisible('#recoveryOpen', isHold);
   const isMaking = task && ['RECEIVED', 'VALIDATING', 'ACKNOWLEDGED', 'RUNNING', 'PAUSED', 'RETRY_WAIT'].includes(task.state) && !isHold;
   const isIdle = !task;
 
@@ -295,6 +301,32 @@ $('#retryTask').onclick = () => invoke('command', 'retry');
 $('#clearButton').onclick = () => invoke('confirm_pickup', state?.runtime?.task?.taskId);
 $('#cancelledClearBtn').onclick = () => { stopCancelledCountdown(); invoke('command', 'clear'); };
 $('#errorClearBtn').onclick = () => invoke('command', 'clear');
+let recoveryTarget = null;
+$('#recoveryOpen').onclick = () => {
+  const task = state?.runtime?.task;
+  if (!task?.recoveryHold) return;
+  recoveryTarget = { taskId: task.taskId, revision: task.revision };
+  $('#recoveryForm').reset();
+  $('#recoveryError').textContent = '';
+  const step = task.recipe?.steps?.[task.stepIndex];
+  const detected = task.recoveryDetectedAt ? new Date(task.recoveryDetectedAt).toLocaleString(terminalI18n.getLocale()) : t('terminal.review.unknown');
+  $('#recoveryDetails').textContent = [task.taskId, t(String(task.orderId || '').startsWith('debug-') ? 'terminal.review.debug' : 'terminal.review.order'), detected, step?.name || step?.id, task.failure?.code || 'DEVICE_RESTARTED_OUTCOME_UNKNOWN', task.recoveryReason || task.message].filter(Boolean).join('\n');
+  $('#recoveryDialog').showModal();
+};
+$('#recoveryClose').onclick = () => $('#recoveryDialog').close();
+$('#recoveryForm').onsubmit = async event => {
+  event.preventDefault();
+  if (!recoveryTarget || $('#recoveryConfirm').disabled) return;
+  $('#recoveryConfirm').disabled = true;
+  $('#recoveryError').textContent = '';
+  const checks = Object.fromEntries(['cupRemoved', 'workspaceClear', 'cancelConfirmed'].map(key => [key, $('#recoveryForm').elements[key].checked]));
+  try {
+    const result = await api().confirm_recovery(recoveryTarget.taskId, recoveryTarget.revision, checks);
+    if (!result?.ok) $('#recoveryError').textContent = result?.reasonCode === 'RECOVERY_CHANGED' ? t('terminal.review.changed') : result?.error || t('terminal.error.operationGeneric');
+    else { $('#recoveryDialog').close(); await refresh(); }
+  } catch (error) { $('#recoveryError').textContent = t('terminal.error.operation', { message: error.message }); }
+  finally { $('#recoveryConfirm').disabled = false; }
+};
 
 document.addEventListener?.('keydown', (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setConsole(!$('.app-shell').classList.contains('console-open')); }
@@ -314,4 +346,16 @@ $('#addLatteArt').onclick = () => {
     $('#recipeEditor').value=JSON.stringify(recipe,null,2);
     toast('已添加螺旋拉花并拆分 20 ml 奶量，请检查后保存配方');
   } catch(error) { toast(error.message); }
+};
+
+$('#syncMenu').onclick = async () => {
+  $('#syncMenu').disabled = true;
+  try { const result = await invoke('request_menu_sync'); if(result?.ok) toast(t('terminal.menu.queued')); }
+  finally { $('#syncMenu').disabled = false; }
+};
+$('#exportOperations').onclick = async () => {
+  $('#exportOperations').disabled = true;
+  try { const result = await invoke('export_operations_bundle'); if(result?.ok) $('#operationsExportPath').textContent = `${t('terminal.menu.exported')} · ${result.recipeCount} ${t('terminal.menu.count')}
+${result.path}`; }
+  finally { $('#exportOperations').disabled = false; }
 };

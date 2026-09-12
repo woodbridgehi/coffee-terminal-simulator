@@ -274,6 +274,14 @@ class LocalStateStore:
         with self.lock:
             self.connection.execute("DELETE FROM terminal_meta WHERE key = 'current_task_id'")
 
+    def first_recovery_at(self, task_id: str) -> str | None:
+        with self.lock:
+            row = self.connection.execute(
+                "select created_at from event_outbox where aggregate_id=? and event_type='task.recovered' order by created_at limit 1",
+                (task_id,),
+            ).fetchone()
+            return row[0] if row else None
+
     def enqueue_event(self, event: dict[str, Any]) -> None:
         with self.lock:
             if event["type"] == "task.progress" and event.get("payload", {}).get("taskId"):

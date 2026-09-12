@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "partner-starter",
+  "version": "1.1.0",
+  "name": "Partner starter · 第三方交付示例",
+  "designSize": {
+    "width": 1600,
+    "height": 1100
+  },
+  "background": "#FFF9F0",
+  "slides": [
+    {
+      "id": "cover",
+      "type": "svg",
+      "src": "assets/cover.svg",
+      "fit": "contain",
+      "durationMs": 3500
+    },
+    {
+      "id": "message",
+      "type": "text",
+      "duration": "auto",
+      "content": {
+        "zh-CN": {
+          "eyebrow": "品牌内容示例",
+          "title": "把日常，留给一杯咖啡。",
+          "body": "此处替换为经品牌方确认的内容。"
+        },
+        "en-US": {
+          "eyebrow": "SAMPLE BRAND CONTENT",
+          "title": "A moment for your daily coffee.",
+          "body": "Replace this sample with approved brand copy."
+        }
+      }
+    },
+    {
+      "id": "editorial",
+      "type": "html",
+      "src": "slides/editorial.html",
+      "layout": "responsive",
+      "durationMs": 9000
+    },
+    {
+      "id": "motion",
+      "type": "animation",
+      "src": "slides/motion.html",
+      "layout": "canvas",
+      "fit": "contain",
+      "durationMs": 8000
+    }
+  ]
+}

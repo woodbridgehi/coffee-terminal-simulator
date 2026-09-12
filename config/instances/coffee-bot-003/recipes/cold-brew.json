@@ -1,13 +1,18 @@
 {
   "recipeId": "bj-cold-brew-v1",
   "skuCode": "BJ_COLD_BREW",
-  "version": "2.0.0",
-  "name": "北城冷萃",
+  "version": "3.0.0",
+  "name": "昆明湖影 · 冷萃",
   "priceMinor": 2000,
   "enabled": true,
   "display": {
-    "description": "冷萃咖啡与冰块",
-    "sortOrder": 30
+    "description": "冷萃",
+    "sortOrder": 20,
+    "brandName": "昆明湖影",
+    "category": "冷萃",
+    "nameEn": "Lake of Still Light",
+    "showcaseSlideId": "hd-kunming",
+    "collection": "海淀"
   },
   "visual": {
     "profile": "americano",
@@ -23,10 +28,6 @@
       "name": "准备冰饮杯",
       "animationCue": "cup-arrive",
       "durationSeconds": 8,
-      "durationRandomization": {
-        "minSeconds": 7,
-        "maxSeconds": 10
-      },
       "failureProfile": "cup-dispenser",
       "robotActions": [
         "cups"
@@ -41,39 +42,27 @@
     },
     {
       "id": "dispense-cold-brew",
-      "name": "注入冷萃咖啡",
+      "name": "注入预制冷萃基底",
       "animationCue": "brew-stream",
-      "durationSeconds": 20,
-      "durationRandomization": {
-        "minSeconds": 18,
-        "maxSeconds": 23
-      },
+      "durationSeconds": 12,
       "failureProfile": "brewer",
       "robotActions": [
         "brew"
       ],
       "consumes": [
         {
-          "materialId": "coffee-beans",
-          "amount": 20,
-          "unit": "g"
-        },
-        {
-          "materialId": "water",
-          "amount": 120,
+          "materialId": "cold-brew-coffee",
+          "amount": 150,
           "unit": "ml"
         }
-      ]
+      ],
+      "dispenseChannel": "cold-brew-pump"
     },
     {
       "id": "add-ice",
       "name": "加入冰块",
       "animationCue": "ice-drop",
       "durationSeconds": 12,
-      "durationRandomization": {
-        "minSeconds": 10,
-        "maxSeconds": 15
-      },
       "failureProfile": "ice-dispenser",
       "robotActions": [
         "ice"
@@ -93,10 +82,6 @@
       "name": "封杯并出杯",
       "animationCue": "seal",
       "durationSeconds": 10,
-      "durationRandomization": {
-        "minSeconds": 9,
-        "maxSeconds": 13
-      },
       "failureProfile": "lid-dispenser",
       "robotActions": [
         "lid",

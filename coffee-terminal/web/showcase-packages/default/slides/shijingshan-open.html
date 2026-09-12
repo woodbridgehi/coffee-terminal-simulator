@@ -1,0 +1,148 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../assets/brand.css">
+<style>
+.owrap{position:absolute;inset:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;
+  padding:clamp(20px,4.5vh,48px) clamp(24px,4.5vw,76px);z-index:1}
+.bg{position:absolute;inset:0;z-index:0;display:block;width:100%;height:100%}
+.ohead{display:flex;justify-content:space-between;align-items:baseline;gap:16px;
+  padding-bottom:clamp(8px,1.6vh,14px);border-bottom:1px solid var(--line-dark)}
+.oindex{font-family:var(--font-mono);font-size:clamp(10px,1.1vw,13px);letter-spacing:.2em;color:var(--cream-muted)}
+.obody{display:flex;flex-direction:column;justify-content:center;min-height:0;padding:clamp(10px,2vh,20px) 0}
+.otitle{font-family:var(--font-display);font-weight:600;margin:0;color:var(--cream-fg);
+  font-size:clamp(30px,5.1vw,66px);line-height:1.25;letter-spacing:.06em;max-width:22em}
+.ocursor{margin:clamp(12px,2.6vh,26px) 0}
+.olead{margin:0 0 clamp(14px,3vh,30px);font-size:clamp(13px,1.6vw,20px);line-height:1.8;color:var(--cream-muted);max-width:40em}
+.omenu{list-style:none;margin:0;padding:0;max-width:56em}
+.omenu li{display:grid;grid-template-columns:4ch minmax(0,1fr) auto;align-items:baseline;gap:clamp(10px,2vw,24px);
+  padding:clamp(6px,1.4vh,13px) 0;border-top:1px solid var(--line-dark)}
+.omenu li:last-child{border-bottom:1px solid var(--line-dark)}
+.omenu i{font-family:var(--font-mono);font-style:normal;font-size:clamp(10px,1.15vw,14px);letter-spacing:.12em;color:var(--cream-muted)}
+.omenu b{font-family:var(--font-display);font-weight:600;font-size:clamp(14px,2vw,24px);letter-spacing:.1em;color:var(--cream-fg)}
+.omenu em{font-family:var(--font-mono);font-style:normal;font-size:clamp(9px,1.05vw,13px);letter-spacing:.14em;color:var(--cream-muted);text-transform:uppercase}
+.ofoot{display:flex;justify-content:space-between;align-items:center;gap:16px;
+  padding-top:clamp(8px,1.5vh,13px);border-top:1px solid var(--line-dark)}
+/* 页面底色绑定品牌令牌：深色底 1「森林绿」--forest (#123D31)，不使用体系外绿色 */
+body.dark{background:var(--forest)}
+#furnace{fill:var(--forest)}
+/* 黄铜蚀刻层：默认强度（为原强度的一半，--brass 是唯一强度旋钮） */
+.bg{--brass:.33}
+.bg .bLayer{opacity:var(--brass)}
+/* 浅色肌理与黄铜层在小内容区自动降噪，保护小字号对比度 */
+@media (max-width:1240px){.bg .tex{opacity:.62}}
+@media (max-width:900px){.bg .tex{opacity:.5}.bg{--brass:.24}}
+@media (max-width:760px){.bg .tex{opacity:.42}.bg{--brass:.2}}
+@media (max-width:560px){.bg{--brass:.13}}
+@media (max-aspect-ratio:4/5){
+  .bg .tex{opacity:.5}.bg{--brass:.19}
+  .otitle{font-size:clamp(28px,7.6vw,48px)}
+  .omenu b{font-size:clamp(13px,3.8vw,18px)}
+  .omenu li{padding:6px 0}
+  .olead{font-size:clamp(12px,3.4vw,15px);margin-bottom:10px}
+}
+</style><link rel="stylesheet" href="../assets/terminal-fit.css"></head>
+<body class="dark">
+<!-- 底纹：80 方格 + 45° 点阵（与饮品页 p45 同源）→ 黄铜蚀刻「西山余脉 + 首钢高炉」 -->
+<svg class="bg" viewBox="0 0 1600 1100" preserveAspectRatio="xMaxYMid slice" aria-hidden="true" data-od-id="shijingshan-open-bg">
+  <defs>
+    <pattern id="tg" width="80" height="80" patternUnits="userSpaceOnUse">
+      <path d="M80 0H0V80" fill="none" stroke="#F6F0E5" stroke-opacity="0.045" stroke-width="1"/>
+    </pattern>
+    <pattern id="p45" width="30" height="30" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <circle cx="4" cy="4" r="2" fill="#F6F0E5" opacity="0.05"/>
+    </pattern>
+    <!-- 黄铜斜纹 · 山峦岩层 -->
+    <pattern id="brassD" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(-38)">
+      <line x1="0" y1="0" x2="0" y2="18" stroke="#D7B67E" stroke-width="4.4" stroke-opacity="0.85"/>
+    </pattern>
+    <!-- 黄铜竖纹 · 高炉钢结构 -->
+    <pattern id="brassV" width="10" height="10" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="10" stroke="#D7B67E" stroke-width="3.2" stroke-opacity="0.9"/>
+    </pattern>
+    <clipPath id="grd"><rect x="820" y="0" width="780" height="1002"/></clipPath>
+  </defs>
+
+  <!-- ① 浅色肌理：方格 + 45° 点阵 -->
+  <g class="tex">
+    <rect width="1600" height="1100" fill="url(#tg)"/>
+    <rect width="1600" height="1100" fill="url(#p45)"/>
+  </g>
+
+  <!-- ② 黄铜蚀刻：山峦岩层 + 首钢高炉 -->
+  <g clip-path="url(#grd)">
+    <!-- 西山余脉：斜纹山体 + 实线山脊 + 三道岩层线 -->
+    <g class="bLayer">
+      <path d="M900 1002 L936 946 L972 902 L1010 934 L1058 856 L1100 898 L1156 786 L1214 862 L1272 742 L1334 838 L1392 792 L1452 876 L1512 818 L1572 884 L1600 858 L1600 1002 Z" fill="url(#brassD)"/>
+      <g fill="none" stroke="#D7B67E">
+        <path d="M900 1002 L936 946 L972 902 L1010 934 L1058 856 L1100 898 L1156 786 L1214 862 L1272 742 L1334 838 L1392 792 L1452 876 L1512 818 L1572 884 L1600 858" stroke-width="2.4"/>
+      </g>
+      <g fill="none" stroke="#D7B67E" stroke-width="1.1" stroke-opacity="0.45">
+        <path d="M900 1002 L936 946 L972 902 L1010 934 L1058 856 L1100 898 L1156 786 L1214 862 L1272 742 L1334 838 L1392 792 L1452 876 L1512 818 L1572 884 L1600 858" transform="translate(0,52)"/>
+        <path d="M900 1002 L936 946 L972 902 L1010 934 L1058 856 L1100 898 L1156 786 L1214 862 L1272 742 L1334 838 L1392 792 L1452 876 L1512 818 L1572 884 L1600 858" transform="translate(0,104)"/>
+        <path d="M900 1002 L936 946 L972 902 L1010 934 L1058 856 L1100 898 L1156 786 L1214 862 L1272 742 L1334 838 L1392 792 L1452 876 L1512 818 L1572 884 L1600 858" transform="translate(0,156)"/>
+      </g>
+    </g>
+    <!-- 高炉底衬：挖空山峦，压出前后关系 -->
+    <path id="furnace" d="M1146 1002 V812 A50 50 0 0 1 1246 812 V1002 Z M1290 1002 L1290 700 L1306 660 L1306 632 L1400 632 L1400 660 L1416 700 L1416 1002 Z M1336 632 V448 H1364 V632 Z"/>
+    <!-- 首钢高炉：竖纹炉体 + 热风炉 + 烟囱 + 下降管 -->
+    <g class="bLayer">
+      <path d="M1146 1002 V812 A50 50 0 0 1 1246 812 V1002 Z M1290 1002 L1290 700 L1306 660 L1306 632 L1400 632 L1400 660 L1416 700 L1416 1002 Z M1336 632 V448 H1364 V632 Z" fill="url(#brassV)"/>
+      <g fill="none" stroke="#D7B67E" stroke-width="2.4">
+        <path d="M1146 1002 V812 A50 50 0 0 1 1246 812 V1002"/>
+        <path d="M1290 1002 L1290 700 L1306 660 L1306 632 L1400 632 L1400 660 L1416 700 L1416 1002"/>
+        <path d="M1336 632 V448 H1364 V632"/>
+      </g>
+      <g fill="none" stroke="#D7B67E" stroke-width="1.1" stroke-opacity="0.6">
+        <path d="M1294 632 H1412"/>
+        <path d="M1296 742 H1410"/>
+        <path d="M1296 812 H1410"/>
+        <path d="M1296 882 H1410"/>
+        <path d="M1296 952 H1410"/>
+        <path d="M1152 882 H1240"/>
+        <path d="M1152 952 H1240"/>
+      </g>
+      <!-- 下降管：烟囱 → 热风炉 -->
+      <path d="M1336 512 C1244 540 1202 668 1200 800" fill="none" stroke="#D7B67E" stroke-width="2.4"/>
+      <!-- 地平线 -->
+      <path d="M820 1002 H1600" fill="none" stroke="#D7B67E" stroke-width="1.9" stroke-opacity="0.7"/>
+    </g>
+  </g>
+</svg>
+<main class="owrap" data-od-id="shijingshan-open-root">
+  <header class="ohead">
+    <span class="eyebrow" data-i18n="eyebrow">FROM BEIJING · SHIJINGSHAN</span>
+    <span class="oindex">BEIJING CITY COLLECTION — 02</span>
+  </header>
+  <section class="obody" data-od-id="shijingshan-open-body">
+    <h1 class="otitle" data-i18n="title">山河与工业，在这里重新相遇。</h1>
+    <span class="cursor ocursor" aria-hidden="true"></span>
+    <p class="olead" data-i18n="lead">西山余脉、永定河水、首钢炉火——一杯饮下新城的晨与昏。</p>
+    <ol class="omenu" data-od-id="shijingshan-menu">
+      <li><i>01</i><b data-i18n="m1">炉光晨曜</b><em data-i18n="t1">热美式 · HOT AMERICANO</em></li>
+      <li><i>02</i><b data-i18n="m2">永定澄波</b><em data-i18n="t2">冷萃 · COLD BREW</em></li>
+      <li><i>03</i><b data-i18n="m3">山寺香雪</b><em data-i18n="t3">香草冰拿铁 · ICED VANILLA LATTE</em></li>
+      <li><i>04</i><b data-i18n="m4">古刹云岚</b><em data-i18n="t4">热拿铁 · HOT LATTE</em></li>
+      <li><i>05</i><b data-i18n="m5">钢城夜醇</b><em data-i18n="t5">摩卡 · MOCHA</em></li>
+    </ol>
+  </section>
+  <footer class="ofoot">
+    <span class="series">COFFEE TERMINAL · 北京城市限定</span>
+    <span class="endorse"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><path d="M15.5 15.5 20 20"/></svg><span data-i18n="endorse">千臂机器人旗下品牌 · A QARM COMPANY</span></span>
+  </footer>
+</main>
+<script>
+(function(){
+  var T={
+    'zh-CN':{eyebrow:'FROM BEIJING · SHIJINGSHAN',title:'山河与工业，在这里重新相遇。',lead:'西山余脉、永定河水、首钢炉火——一杯饮下新城的晨与昏。',m1:'炉光晨曜',t1:'热美式 · HOT AMERICANO',m2:'永定澄波',t2:'冷萃 · COLD BREW',m3:'山寺香雪',t3:'香草冰拿铁 · ICED VANILLA LATTE',m4:'古刹云岚',t4:'热拿铁 · HOT LATTE',m5:'钢城夜醇',t5:'摩卡 · MOCHA',endorse:'千臂机器人旗下品牌 · A QARM COMPANY'},
+    'en-US':{eyebrow:'FROM BEIJING · SHIJINGSHAN',title:'Where mountains and steel meet again.',lead:'Ridges, rivers and furnace light — a new town\u2019s day, in one cup.',m1:'Furnace Dawn',t1:'HOT AMERICANO',m2:'The River Runs Clear',t2:'COLD BREW',m3:'Mountain Temple Vanilla',t3:'ICED VANILLA LATTE',m4:'Mist Over the Temple',t4:'HOT LATTE',m5:'Steel City Nightcap',t5:'MOCHA',endorse:'A QARM COMPANY · 千臂机器人旗下品牌'}
+  };
+  addEventListener('message',function(e){
+    var c=e.data;
+    if(e.source!==parent||!c||c.protocol!=='coffee.showcase.v1'||c.type!=='showcase-context')return;
+    var d=T[c.locale]||T['zh-CN'];
+    document.documentElement.lang=c.locale||'zh-CN';
+    for(var k in d){var el=document.querySelector('[data-i18n="'+k+'"]');if(el)el.textContent=d[k];}
+    parent.postMessage({protocol:'coffee.showcase.v1',type:'showcase-ready',channel:c.channel},'*');
+  });
+})();
+</script>
+</body></html>

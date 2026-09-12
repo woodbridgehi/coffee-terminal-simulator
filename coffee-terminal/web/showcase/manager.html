@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Content Packages · Coffee Terminal</title><link rel="stylesheet" href="manager.css"></head>
+<body><main><header><img src="../assets/brand/logo-symbol.svg" alt="" width="40" height="40"><h1 data-copy="title">轮播内容包</h1><select id="locale" aria-label="Language"><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></header>
+<p data-copy="intro">导入 ZIP，预览后启用。终端在待机时自动加载。</p>
+<section class="actions"><label class="button"><span data-copy="import">导入 ZIP</span><input id="archive" type="file" accept=".zip" hidden></label><button id="refresh" data-copy="refresh">刷新</button><button id="rollback" data-copy="rollback">回退上一版本</button></section>
+<p id="status" role="status"></p><p id="active"></p><p id="last-error" class="error"></p>
+<div class="layout"><section id="packages" aria-label="Packages"></section><section class="preview-area"><div class="actions"><strong data-copy="preview">内容预览</strong><select id="size" aria-label="Preview size"><option value="916,559">916 × 559</option><option value="1163,739">1163 × 739</option><option value="882,469">882 × 469</option><option value="558,469">558 × 469</option><option value="356,390">356 × 390</option><option value="444,871">444 × 871</option></select></div><div class="preview-scroll"><iframe id="preview" title="Content preview" sandbox="allow-scripts allow-same-origin"></iframe></div><p data-copy="previewNote">预览使用示例饮品，不连接设备订单。</p></section></div>
+<footer>COFFEE TERMINAL · <span data-copy="footer">本机内容管理</span></footer></main><script src="manager.bundle.js"></script></body></html>

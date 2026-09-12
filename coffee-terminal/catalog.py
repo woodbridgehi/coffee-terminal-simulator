@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import random
+import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -127,6 +128,21 @@ class RecipeCatalog:
 
     def get(self, recipe_id: str) -> dict[str, Any] | None:
         return self.recipes.get(recipe_id)
+
+    def historical(self, recipe_id: str, version: str) -> dict[str, Any] | None:
+        """Versioned queued orders may use a locally archived, validated recipe."""
+        if not all(isinstance(x, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,79}', x) for x in (recipe_id, version)):
+            return None
+        path = self.recipes_dir.parent / 'recipe-archive' / recipe_id / (version + '.json')
+        try:
+            recipe = json.loads(path.read_text(encoding='utf-8'))
+            if recipe.get('recipeId') != recipe_id or recipe.get('version') != version:
+                return None
+            if self._validate(recipe) or self.inventory.validate_recipe(recipe):
+                return None
+            return recipe
+        except (OSError, ValueError, TypeError, AttributeError, KeyError):
+            return None
 
     def capabilities(self, device_id: str, store_id: str) -> dict[str, Any]:
         products = []

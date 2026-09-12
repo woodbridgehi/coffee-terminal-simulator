@@ -1,0 +1,20 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="../assets/editorial.css"></head><body>
+<div class="page"><header><span>COFFEE TERMINAL</span><span class="chip" id="edition"></span></header><main><h1></h1><span class="cursor"></span><p></p></main><footer><span>COFFEE TERMINAL · BEIJING</span><span>千臂机器人旗下品牌 · A QARM COMPANY</span></footer></div>
+<script>
+let generation=0;
+addEventListener('message',async event=>{
+  const data=event.data;if(event.source!==parent||data?.protocol!=='coffee.showcase.v1'||data.type!=='showcase-context')return;
+  const current=++generation,en=data.locale==='en-US';document.documentElement.lang=en?'en-US':'zh-CN';
+  document.querySelector('#edition').textContent=en?'BEIJING CITY COLLECTION':'北京城市限定';
+  document.querySelector('h1').textContent=en?'Mountain Morning':'西山晨引';
+  document.querySelector('p').textContent=en?'Take the ridge at dawn — let the day begin, clearly.':'取西山之势，唤醒新一天的灵感。';
+  try{
+    // Essential fonts are part of readiness. Report failure instead of quietly
+    // accepting a layout that only works with fonts installed on the designer’s PC.
+    const faces=await Promise.all([document.fonts.load('600 28px PartnerSerif'),document.fonts.load('400 14px PartnerSerif'),document.fonts.load('400 10px PartnerMono')]);
+    if(faces.some(list=>!list.length))throw new Error('Required font face unavailable');
+    await document.fonts.ready;if(current!==generation)return;
+    parent.postMessage({protocol:'coffee.showcase.v1',channel:data.channel,type:'showcase-ready'},'*');
+  }catch(error){if(current===generation)parent.postMessage({protocol:'coffee.showcase.v1',channel:data.channel,type:'showcase-error',message:'Required package font failed to load'},'*');}
+});
+</script></body></html>

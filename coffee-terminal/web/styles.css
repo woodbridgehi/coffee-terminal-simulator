@@ -84,3 +84,10 @@
 @media(max-width:600px){.display-footer{grid-template-columns:1fr auto}.display-footer #footerMessage{display:none}.display-footer .terminal-robot-launch{margin-right:0}.footer-brand{font-size:8px;letter-spacing:.08em}}
 .console-scroll{height:calc(100dvh - 140px)}
 @media(max-width:600px){.device-lockup{max-width:100px;justify-self:center}.device-name{font-size:12px}}
+
+/* Operator recovery review stays within the viewport in both languages. */
+.recovery-dialog{width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);box-sizing:border-box;overflow:auto;border:1px solid var(--line);border-radius:24px;padding:28px;background:var(--paper,#fffdf8);color:var(--forest-950);box-shadow:0 24px 80px #12372a33}
+.recovery-dialog::backdrop{background:#102d2466;backdrop-filter:blur(5px)}
+.recovery-dialog h2{margin:0 0 18px;font-size:25px}.recovery-details{white-space:pre-line;overflow-wrap:anywhere;font-size:13px;line-height:1.7;color:var(--muted)}
+.recovery-dialog label{display:flex;align-items:flex-start;gap:12px;margin:18px 0;line-height:1.6;text-align:left}.recovery-dialog input{flex:none;width:18px;height:18px;margin-top:4px;accent-color:var(--forest-700)}
+.recovery-actions{display:flex;gap:10px;flex-wrap:wrap}.recovery-actions button{border:1px solid var(--line);border-radius:24px;padding:12px 18px;background:white;color:var(--forest-700);font:inherit;cursor:pointer;white-space:normal}.recovery-actions button[type=submit]{background:var(--forest-700);color:white;flex:1}.recovery-actions button:disabled{opacity:.5;cursor:wait}#recoveryError{color:var(--err);font-size:14px}

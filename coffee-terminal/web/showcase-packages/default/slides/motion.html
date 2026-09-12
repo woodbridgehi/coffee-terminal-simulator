@@ -1,0 +1,92 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>咖啡，正在制作</title>
+<style>
+/* 设计画布 1600×1100 · fit:contain 等比缩放居中 · 品牌动效：眨眼 1.3s / 呼吸 2.8s / 旋转 24s */
+:root{--cream:#F6F0E5;--ink:#17382D;--brass:#D7B67E;--muted:#9FB0A6}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#123D31;
+  font-family:Inter,Manrope,-apple-system,"PingFang SC","Source Han Sans SC","Microsoft YaHei",sans-serif;color:var(--cream)}
+.gridbg{position:fixed;inset:0;width:100%;height:100%}
+.canvas{position:absolute;left:50%;top:50%;margin:0;width:1600px;height:1100px;flex:none;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding-bottom:36px;transform-origin:center center;
+  transform:translate(-50%,-50%) scale(1)}
+.ring-wrap{position:relative;width:264px;height:264px;flex:none}
+.ring{position:absolute;inset:0;animation:spin 24s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.steam{animation:breathe 2.8s ease-in-out infinite}
+.steam.s2{animation-delay:-1.4s}
+@keyframes breathe{0%,100%{transform:translateY(0);opacity:.8}50%{transform:translateY(-12px);opacity:1}}
+.cursor{animation:blink 1.3s steps(1) infinite}
+@keyframes blink{0%,55%{opacity:1}56%,100%{opacity:.15}}
+.copy{text-align:center;margin-top:90px}
+.eyebrow{font-family:"JetBrains Mono","SF Mono",Menlo,Consolas,monospace;font-size:25px;letter-spacing:.32em;color:var(--muted);text-transform:uppercase}
+h1{font-family:"Source Han Serif SC","Noto Serif SC","Songti SC",Georgia,serif;font-weight:600;font-size:80px;letter-spacing:.1em;margin:30px 0 0;line-height:1.3;white-space:nowrap}
+.series{margin-top:36px;font-family:"JetBrains Mono",Menlo,monospace;font-size:21px;letter-spacing:.26em;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.ring,.steam,.cursor{animation:none}}
+</style><link rel="stylesheet" href="../assets/terminal-fit.css"></head>
+<body>
+<svg class="gridbg" aria-hidden="true" preserveAspectRatio="none">
+  <defs><pattern id="tg" width="80" height="80" patternUnits="userSpaceOnUse">
+    <path d="M80 0H0V80" fill="none" stroke="#F6F0E5" stroke-opacity="0.05" stroke-width="1"/>
+  </pattern></defs>
+  <rect width="100%" height="100%" fill="url(#tg)"/>
+</svg>
+<main class="canvas" id="canvas">
+  <div class="ring-wrap" aria-hidden="true">
+    <svg class="ring" viewBox="0 0 520 520" fill="none">
+      <circle cx="260" cy="260" r="238" stroke="#F6F0E5" stroke-opacity="0.28" stroke-width="3" stroke-dasharray="3 14"/>
+      <g stroke="#F6F0E5" stroke-opacity="0.4" stroke-width="3">
+        <path d="M260 6v20M260 494v20M6 260h20M494 260h20"/>
+      </g>
+      <circle cx="260" cy="22" r="8" fill="#D7B67E"/>
+    </svg>
+    <svg viewBox="0 0 520 520" fill="none" style="position:absolute;inset:0">
+      <g stroke="#F6F0E5" stroke-linecap="round">
+        <path class="steam" d="M238 132 C226 158 254 172 242 198 C232 220 250 232 242 248" stroke-width="6" opacity="0.85"/>
+        <path class="steam s2" d="M282 150 C272 172 296 184 286 208 C278 226 292 236 286 250" stroke-width="5" opacity="0.5"/>
+      </g>
+      <g transform="translate(160 240) scale(3.2)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="17" y="15" width="25" height="35" rx="7" stroke="#F6F0E5" stroke-width="4"/>
+        <path d="M42 27a7 7 0 0 1 0 12" stroke="#F6F0E5" stroke-width="4"/>
+        <path class="cursor" d="M24.5 27h11" stroke="#D7B67E" stroke-width="4"/>
+      </g>
+    </svg>
+  </div>
+  <div class="copy">
+    <div class="eyebrow" id="eyebrow">BREW IN PROGRESS · 制作中</div>
+    <h1 id="title">日常的一杯，也值得认真。</h1>
+    <div class="series" id="series">COFFEE TERMINAL · 北京城市限定</div>
+  </div>
+</main>
+<script>
+(function(){
+  var W=1600,H=1100;
+  function fit(){
+    var k=Math.min(window.innerWidth/W,window.innerHeight/H);
+    var c=document.getElementById('canvas');
+    if(c)c.style.transform='translate(-50%,-50%) scale('+k+')';
+  }
+  addEventListener('resize',fit);fit();
+  var T={
+    'zh-CN':{eyebrow:'BREW IN PROGRESS · 制作中',title:'日常的一杯，也值得认真。'},
+    'en-US':{eyebrow:'BREW IN PROGRESS',title:'Your daily cup, done properly.'}
+  };
+  function motion(paused){
+    var els=document.querySelectorAll('.ring,.steam,.cursor');
+    for(var i=0;i<els.length;i++)els[i].style.animationPlayState=paused?'paused':'running';
+  }
+  addEventListener('message',function(e){
+    var c=e.data;
+    if(e.source!==parent||!c||c.protocol!=='coffee.showcase.v1'||c.type!=='showcase-context')return;
+    var d=T[c.locale]||T['zh-CN'];
+    document.documentElement.lang=c.locale||'zh-CN';
+    document.getElementById('eyebrow').textContent=d.eyebrow;
+    document.getElementById('title').textContent=d.title;
+    fit();
+    motion(!!(c.paused||c.reducedMotion));
+    parent.postMessage({protocol:'coffee.showcase.v1',type:'showcase-ready',channel:c.channel},'*');
+  });
+})();
+</script>
+</body></html>

@@ -36,6 +36,7 @@ hiddenimports = collect_submodules("clr_loader") + collect_submodules("pythonnet
     "robot_view",
     "simulator_identity",
     "state_store",
+    "showcase_packages",
     "windows_security",
 ]
 

@@ -11,6 +11,8 @@ config/instances/*/state/inventory.json
 config/instances/*/state/runtime.db
 config/instances/*/state/runtime.db-wal
 config/instances/*/state/runtime.db-shm
+config/instances/*/showcase/
+.showcase-local/
 
 # ---- 以下为补充（避免与上方原有规则重复）----
 # Lint / 类型检查 / 测试缓存

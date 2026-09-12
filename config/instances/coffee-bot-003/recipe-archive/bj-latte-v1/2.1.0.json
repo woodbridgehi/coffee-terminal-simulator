@@ -1,0 +1,151 @@
+{
+  "recipeId": "bj-latte-v1",
+  "skuCode": "BJ_LATTE",
+  "version": "2.1.0",
+  "name": "朝阳热拿铁",
+  "priceMinor": 1800,
+  "enabled": true,
+  "display": {
+    "description": "双份浓缩与醇厚鲜奶，UR 双臂螺旋拉花",
+    "sortOrder": 20
+  },
+  "visual": {
+    "profile": "iced-latte",
+    "cup": "ceramic-mug",
+    "layers": [
+      "coffee",
+      "milk"
+    ]
+  },
+  "steps": [
+    {
+      "id": "prepare-cup",
+      "name": "准备杯子",
+      "animationCue": "cup-arrive",
+      "durationSeconds": 8,
+      "durationRandomization": {
+        "minSeconds": 7,
+        "maxSeconds": 10
+      },
+      "failureProfile": "cup-dispenser",
+      "robotActions": [
+        "cups"
+      ],
+      "consumes": [
+        {
+          "materialId": "cup-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
+    },
+    {
+      "id": "extract-coffee",
+      "name": "萃取双份浓缩",
+      "animationCue": "brew-stream",
+      "durationSeconds": 28,
+      "durationRandomization": {
+        "minSeconds": 25,
+        "maxSeconds": 32
+      },
+      "failureProfile": "brewer",
+      "robotActions": [
+        "brew"
+      ],
+      "consumes": [
+        {
+          "materialId": "coffee-beans",
+          "amount": 18,
+          "unit": "g"
+        },
+        {
+          "materialId": "water",
+          "amount": 45,
+          "unit": "ml"
+        }
+      ]
+    },
+    {
+      "id": "add-milk",
+      "name": "加入鲜奶",
+      "animationCue": "milk-pour",
+      "durationSeconds": 16,
+      "durationRandomization": {
+        "minSeconds": 14,
+        "maxSeconds": 19
+      },
+      "failureProfile": "milk-pump",
+      "robotActions": [
+        "milk"
+      ],
+      "consumes": [
+        {
+          "materialId": "milk",
+          "amount": 160,
+          "unit": "ml"
+        }
+      ],
+      "dispenseChannel": "milk-pump",
+      "customizationRole": "milk"
+    },
+    {
+      "id": "latte-art",
+      "name": "螺旋拉花",
+      "durationSeconds": 30,
+      "robotActions": [
+        "latte-art"
+      ],
+      "latteArt": {
+        "patternId": "spiral",
+        "patternVersion": "1.0.0"
+      },
+      "customizationRole": "milk",
+      "dispenseChannel": "foam-pitcher",
+      "consumes": [
+        {
+          "materialId": "milk",
+          "amount": 20,
+          "unit": "ml"
+        }
+      ]
+    },
+    {
+      "id": "seal-and-serve",
+      "name": "封杯并出杯",
+      "animationCue": "seal",
+      "durationSeconds": 10,
+      "durationRandomization": {
+        "minSeconds": 9,
+        "maxSeconds": 13
+      },
+      "failureProfile": "lid-dispenser",
+      "robotActions": [
+        "lid",
+        "pickup"
+      ],
+      "consumes": [
+        {
+          "materialId": "lid-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
+    }
+  ],
+  "optionSchema": {
+    "version": "1.0.0",
+    "options": {
+      "milk": {
+        "default": "STANDARD",
+        "values": [
+          "NONE",
+          "STANDARD"
+        ],
+        "priceDeltaMinor": {}
+      }
+    },
+    "temperature": "HOT",
+    "fillPolicy": "NO_TOP_UP",
+    "notice": "不加冰不等于热饮；去冰/去奶不补液、杯量会减少。不加奶会改变饮品口感；无添加糖仅指可调糖浆，牛奶和巧克力等原料仍可能含糖。"
+  }
+}

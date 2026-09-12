@@ -1,0 +1,8 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;width:1600px;height:1100px;overflow:hidden;background:#fff9f0;color:#17382d;display:grid;place-content:center;text-align:center;font-family:system-ui,sans-serif}.bean{width:180px;height:260px;border:8px solid #17382d;border-radius:50%;margin:0 auto 70px;transform:rotate(25deg);animation:float 4s ease-in-out infinite paused}.bean::after{content:'';display:block;width:0;height:210px;border-left:6px solid #b78a52;margin:20px auto;border-radius:50%}h1{font-size:60px}@keyframes float{50%{transform:translateY(-25px) rotate(40deg)}}@media(prefers-reduced-motion:reduce){.bean{animation:none}}</style></head><body><div class="bean"></div><h1></h1><script>
+addEventListener('message',event=>{
+  const data=event.data;if(event.source!==parent || data?.protocol!=='coffee.showcase.v1' || data.type!=='showcase-context')return;
+  document.documentElement.lang=data.locale;document.querySelector('h1').textContent=data.locale==='en-US'?'YOUR DAILY COFFEE RITUAL':'日常的一杯，也值得认真。';
+  document.querySelector('.bean').style.animationPlayState=data.paused||data.reducedMotion?'paused':'running';
+  parent.postMessage({protocol:'coffee.showcase.v1',channel:data.channel,type:'showcase-ready'},'*');
+});
+</script></body></html>

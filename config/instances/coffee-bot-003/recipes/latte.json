@@ -1,13 +1,18 @@
 {
   "recipeId": "bj-latte-v1",
   "skuCode": "BJ_LATTE",
-  "version": "2.1.0",
-  "name": "朝阳热拿铁",
+  "version": "3.0.0",
+  "name": "颐和云岚 · 热拿铁",
   "priceMinor": 1800,
   "enabled": true,
   "display": {
-    "description": "双份浓缩与醇厚鲜奶，UR 双臂螺旋拉花",
-    "sortOrder": 20
+    "description": "热拿铁 · 双臂螺旋拉花",
+    "sortOrder": 40,
+    "brandName": "颐和云岚",
+    "category": "热拿铁",
+    "nameEn": "Summer Palace Mist",
+    "showcaseSlideId": "hd-yihe",
+    "collection": "海淀"
   },
   "visual": {
     "profile": "iced-latte",
@@ -23,10 +28,6 @@
       "name": "准备杯子",
       "animationCue": "cup-arrive",
       "durationSeconds": 8,
-      "durationRandomization": {
-        "minSeconds": 7,
-        "maxSeconds": 10
-      },
       "failureProfile": "cup-dispenser",
       "robotActions": [
         "cups"
@@ -44,10 +45,6 @@
       "name": "萃取双份浓缩",
       "animationCue": "brew-stream",
       "durationSeconds": 28,
-      "durationRandomization": {
-        "minSeconds": 25,
-        "maxSeconds": 32
-      },
       "failureProfile": "brewer",
       "robotActions": [
         "brew"
@@ -67,13 +64,9 @@
     },
     {
       "id": "add-milk",
-      "name": "加入鲜奶",
+      "name": "注入温热鲜奶",
       "animationCue": "milk-pour",
       "durationSeconds": 16,
-      "durationRandomization": {
-        "minSeconds": 14,
-        "maxSeconds": 19
-      },
       "failureProfile": "milk-pump",
       "robotActions": [
         "milk"
@@ -90,7 +83,7 @@
     },
     {
       "id": "latte-art",
-      "name": "螺旋拉花",
+      "name": "双臂螺旋拉花",
       "durationSeconds": 30,
       "robotActions": [
         "latte-art"
@@ -114,10 +107,6 @@
       "name": "封杯并出杯",
       "animationCue": "seal",
       "durationSeconds": 10,
-      "durationRandomization": {
-        "minSeconds": 9,
-        "maxSeconds": 13
-      },
       "failureProfile": "lid-dispenser",
       "robotActions": [
         "lid",

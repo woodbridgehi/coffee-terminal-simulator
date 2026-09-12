@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="frame-src http://127.0.0.1:*; object-src 'none'">
   <title>Coffee Terminal Simulator</title>
-  <link rel="stylesheet" href="styles.css?v=20260911-showcase" />
+  <link rel="stylesheet" href="styles.css?v=20260912-menu" />
   <link rel="stylesheet" href="inventory.css?v=20260911-dual-side-grip" />
   <link rel="stylesheet" href="drink-visual.css?v=20260911-dual-side-grip" />
   <link rel="stylesheet" href="robot-live.css?v=20260911-director" />
@@ -12,6 +13,7 @@
   <link rel="stylesheet" href="responsive.css?v=review-20260911-scene-finish">
   <link rel="icon" href="assets/brand/monogram-ct.svg">
   <link rel="stylesheet" href="brand-system.css?v=20260911-qarm">
+  <link rel="stylesheet" href="showcase/player.css?v=20260912-packages">
 </head>
 <body>
   <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
@@ -133,18 +135,32 @@
         <h1 id="errorTitle">设备正在处理</h1>
         <p class="subhead" id="errorMessage">请稍候或联系门店工作人员</p>
         <button class="clear-button is-hidden" id="errorClearBtn" data-i18n="terminal.returnIdle">返回待机</button>
+        <button class="clear-button is-hidden" id="recoveryOpen" data-i18n="terminal.review.open">工作人员 · 人工核验</button>
       </div>
 
       <footer class="display-footer"><span class="footer-brand"><img src="assets/brand/logo-horizontal.svg" alt="Coffee Terminal" width="203" height="32"></span><button class="rv-launch terminal-robot-launch is-hidden" data-open-robot><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 9 8-4.5M12 12 4 7.5M12 12v9"/></svg><span data-i18n="terminal.robot.open">查看三维制作</span><span class="robot-live-dot" aria-hidden="true"></span></button><div id="footerMessage"><div class="brand-credit terminal-credit"><img src="assets/brand/qarm/qarm-symbol.svg" alt="" aria-hidden="true"><span class="brand-zh">千臂机器人旗下品牌</span><span class="brand-en" lang="en">A QARM COMPANY</span></div></div></footer>
     </section>
 
+    <dialog id="recoveryDialog" class="recovery-dialog" aria-labelledby="recoveryTitle">
+      <form id="recoveryForm">
+        <p class="quiet-label" data-i18n="terminal.hold.kicker">待人工处理</p>
+        <h2 id="recoveryTitle" data-i18n="terminal.review.title">现场安全核验</h2>
+        <p id="recoveryDetails" class="recovery-details"></p>
+        <label><input type="checkbox" name="cupRemoved" required><span data-i18n="terminal.review.cup">已移除制作区与取杯位的杯子</span></label>
+        <label><input type="checkbox" name="workspaceClear" required><span data-i18n="terminal.review.workspace">已清理工作区，确认机械臂和工具可安全复位</span></label>
+        <label><input type="checkbox" name="cancelConfirmed" required><span data-i18n="terminal.review.cancel">确认取消本次中断任务，不继续制作；订单退款状态请在后台核对</span></label>
+        <p id="recoveryError" role="alert"></p>
+        <div class="recovery-actions"><button type="button" id="recoveryClose" data-i18n="terminal.review.later">稍后处理</button><button type="submit" id="recoveryConfirm" data-i18n="terminal.review.confirm">核验完成，取消任务并返回待机</button></div>
+      </form>
+    </dialog>
     <aside class="console" id="console" aria-label="开发控制台">
       <header class="console-header"><div class="console-title"><svg class="console-mark" aria-hidden="true"><use href="#mk-terminal"/></svg><div><span class="console-kicker">DEVELOPER CONSOLE</span><h2 data-i18n="terminal.console.title">开发控制台</h2><span class="console-connection"><span>●</span><span id="consoleConnectionText">DEVICE ONLINE</span></span></div></div><button class="close-console" id="closeConsole" aria-label="关闭控制台" data-i18n-aria-label="terminal.console.close">×</button></header>
       <div class="console-scroll">
+        <section class="console-section"><div class="section-heading" data-i18n="terminal.showcase.title">品牌轮播</div><button type="button" class="action" data-manage-showcase data-i18n="terminal.showcase.manage">管理内容包</button><button type="button" class="action" id="exportOperations" data-i18n="terminal.menu.export">导出轮播＋配方交付包</button><p class="help" id="operationsExportPath" role="status" style="overflow-wrap:anywhere"></p></section>
         <section class="console-section"><div id="terminal-sound-controls"></div></section>
         <section class="console-section"><div class="section-heading"><span data-i18n="terminal.ui.scene">三维工作站</span></div><button class="action" data-open-robot data-i18n="terminal.robot.open">查看三维制作</button><p class="help" data-i18n="terminal.ui.sceneHelp">与当前任务、配方和本地库存同步</p></section>
         <section class="console-section task-section"><div class="section-heading"><span data-i18n="terminal.ui.task">当前任务</span><span class="state" id="taskState">IDLE</span></div><div class="task-title" id="taskTitle">暂无制作任务</div><div class="task-meta" id="taskMeta">等待销售服务下发订单</div><button class="action primary-action" id="demoOrder" data-i18n="terminal.ui.demo">模拟后台下单</button></section>
-        <section class="console-section"><div class="section-heading"><span data-i18n="terminal.ui.recipe">制作配方</span><button class="text-button" id="saveRecipe" data-i18n="terminal.ui.save">保存</button></div><select id="recipeSelect" aria-label="选择配方"></select><div class="section-heading"><label for="lattePattern" data-i18n="terminal.ui.pattern">拉花花型</label><select id="lattePattern"><option value="spiral" data-i18n="terminal.ui.spiral">螺旋</option></select><button class="text-button" id="addLatteArt" data-i18n="terminal.ui.addArt">添加拉花步骤</button></div><textarea id="recipeEditor" spellcheck="false" aria-label="配方 JSON"></textarea><p class="help" data-i18n="terminal.ui.recipeHelp">配方变更保存到本地，仅用于调试。</p></section>
+        <section class="console-section"><div class="section-heading"><span data-i18n="terminal.ui.recipe">制作配方</span><button class="text-button" id="saveRecipe" data-i18n="terminal.ui.save">保存</button></div><select id="recipeSelect" aria-label="选择配方"></select><div class="section-heading"><label for="lattePattern" data-i18n="terminal.ui.pattern">拉花花型</label><select id="lattePattern"><option value="spiral" data-i18n="terminal.ui.spiral">螺旋</option></select><button class="text-button" id="addLatteArt" data-i18n="terminal.ui.addArt">添加拉花步骤</button></div><div class="action-grid"><button type="button" class="action primary-action" id="syncMenu" data-i18n="terminal.menu.sync">同步菜单到后台</button></div><p id="menuSyncStatus" class="help" role="status" style="overflow-wrap:anywhere"></p><textarea id="recipeEditor" spellcheck="false" aria-label="配方 JSON"></textarea><p class="help" data-i18n="terminal.ui.recipeHelp">配方变更保存到本地，仅用于调试。</p></section>
         <section class="console-section"><div class="section-heading"><span data-i18n="terminal.ui.inventory">物料库存</span><button class="text-button" id="reloadConfig" data-i18n="terminal.ui.reload">刷新配置</button></div><div id="inventoryList" class="inventory-list"></div><p class="help" data-i18n="terminal.ui.stockHelp">补满会写入当前实例的库存状态，并同步给后台。</p></section>
         <section class="console-section"><div class="section-heading"><span data-i18n="terminal.ui.fault">故障注入</span><span id="failureValue">0%</span></div><input id="failureRate" type="range" min="0" max="100" value="0" /><div class="range-labels"><span data-i18n="terminal.ui.stable">稳定</span><span data-i18n="terminal.ui.risk">高风险</span></div><div class="action-grid"><button class="action" id="forceFail" data-i18n="terminal.ui.fail">下一步失败</button><button class="action" id="toggleOffline">模拟断网</button></div></section>
         <section class="console-section"><div class="section-heading"><span data-i18n="terminal.ui.operations">任务操作</span></div><div class="action-grid three"><button class="action" id="pauseResume">暂停</button><button class="action" id="skipStep" data-i18n="terminal.ui.skip">跳过</button><button class="action" id="retryTask" data-i18n="terminal.ui.retry">重试</button></div></section>
@@ -154,14 +170,14 @@
   </main>
   <div class="toast is-hidden" id="toast"></div>
   <script src="i18n.js?v=20260904-i18n1"></script>
-  <script src="locales.js?v=review-20260911-brand-qarm"></script>
+  <script src="locales.js?v=20260912-menu"></script>
   <script src="vendor/animejs/anime.umd.min.js"></script>
   <script src="drink-visual.js?v=20260911-dual-side-grip"></script>
   <script src="robot-integration.bundle.js?v=20260912-qarm-transparent"></script>
   <script src="status-sound.js?v=20260911-process-sound"></script>
   <script src="terminal-sound.js?v=20260911"></script>
   <script src="recipe-latte-art.js"></script>
-<script src="showcase.js?v=20260911-brand-qarm"></script>
-<script src="app.js?v=20260911-scene-finish"></script>
+<script src="showcase.js?v=20260912-beijing"></script>
+<script src="app.js?v=20260912-menu"></script>
 </body>
 </html>

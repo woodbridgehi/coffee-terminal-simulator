@@ -1,0 +1,101 @@
+{
+  "recipeId": "bj-sjs-luguang-v1",
+  "skuCode": "BJ_SJS_LUGUANG",
+  "version": "1.0.0",
+  "name": "炉光晨曜 · 热美式",
+  "priceMinor": 1200,
+  "enabled": true,
+  "display": {
+    "description": "热美式",
+    "sortOrder": 60,
+    "brandName": "炉光晨曜",
+    "category": "热美式",
+    "nameEn": "Furnace Dawn",
+    "showcaseSlideId": "sjs-luguang",
+    "collection": "石景山"
+  },
+  "visual": {
+    "profile": "americano",
+    "cup": "ceramic-mug",
+    "layers": [
+      "coffee",
+      "water"
+    ]
+  },
+  "steps": [
+    {
+      "id": "prepare-cup",
+      "name": "准备杯子",
+      "animationCue": "cup-arrive",
+      "durationSeconds": 8,
+      "failureProfile": "cup-dispenser",
+      "robotActions": [
+        "cups"
+      ],
+      "consumes": [
+        {
+          "materialId": "cup-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
+    },
+    {
+      "id": "extract-coffee",
+      "name": "萃取双份浓缩",
+      "animationCue": "brew-stream",
+      "durationSeconds": 28,
+      "failureProfile": "brewer",
+      "robotActions": [
+        "brew"
+      ],
+      "consumes": [
+        {
+          "materialId": "coffee-beans",
+          "amount": 18,
+          "unit": "g"
+        },
+        {
+          "materialId": "water",
+          "amount": 45,
+          "unit": "ml"
+        }
+      ]
+    },
+    {
+      "id": "add-hot-water",
+      "name": "添加热水",
+      "animationCue": "water-pour",
+      "durationSeconds": 12,
+      "failureProfile": "water-pump",
+      "robotActions": [
+        "water"
+      ],
+      "consumes": [
+        {
+          "materialId": "water",
+          "amount": 200,
+          "unit": "ml"
+        }
+      ]
+    },
+    {
+      "id": "seal-and-serve",
+      "name": "封杯并出杯",
+      "animationCue": "seal",
+      "durationSeconds": 10,
+      "failureProfile": "lid-dispenser",
+      "robotActions": [
+        "lid",
+        "pickup"
+      ],
+      "consumes": [
+        {
+          "materialId": "lid-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
+    }
+  ]
+}

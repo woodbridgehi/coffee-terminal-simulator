@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
+    "build:showcase": "node scripts/build_showcase.mjs",
     "build:scene": "node scripts/build_scene.mjs",
     "sync:cloud-scene": "npm run build:scene && node scripts/sync_cloud_scene.mjs",
     "test:scene": "node --test tests/test_robot_scene.mjs",

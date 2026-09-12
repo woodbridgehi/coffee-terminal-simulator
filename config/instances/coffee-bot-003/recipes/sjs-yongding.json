@@ -1,0 +1,115 @@
+{
+  "recipeId": "bj-sjs-yongding-v1",
+  "skuCode": "BJ_SJS_YONGDING",
+  "version": "1.0.0",
+  "name": "永定澄波 · 冷萃",
+  "priceMinor": 2000,
+  "enabled": true,
+  "display": {
+    "description": "冷萃",
+    "sortOrder": 70,
+    "brandName": "永定澄波",
+    "category": "冷萃",
+    "nameEn": "The River Runs Clear",
+    "showcaseSlideId": "sjs-yongding",
+    "collection": "石景山"
+  },
+  "visual": {
+    "profile": "americano",
+    "cup": "transparent-tall",
+    "layers": [
+      "coffee",
+      "ice"
+    ]
+  },
+  "steps": [
+    {
+      "id": "prepare-cup",
+      "name": "准备冰饮杯",
+      "animationCue": "cup-arrive",
+      "durationSeconds": 8,
+      "failureProfile": "cup-dispenser",
+      "robotActions": [
+        "cups"
+      ],
+      "consumes": [
+        {
+          "materialId": "cup-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
+    },
+    {
+      "id": "dispense-cold-brew",
+      "name": "注入预制冷萃基底",
+      "animationCue": "brew-stream",
+      "durationSeconds": 12,
+      "failureProfile": "brewer",
+      "robotActions": [
+        "brew"
+      ],
+      "consumes": [
+        {
+          "materialId": "cold-brew-coffee",
+          "amount": 150,
+          "unit": "ml"
+        }
+      ],
+      "dispenseChannel": "cold-brew-pump"
+    },
+    {
+      "id": "add-ice",
+      "name": "加入冰块",
+      "animationCue": "ice-drop",
+      "durationSeconds": 12,
+      "failureProfile": "ice-dispenser",
+      "robotActions": [
+        "ice"
+      ],
+      "consumes": [
+        {
+          "materialId": "ice",
+          "amount": 180,
+          "unit": "g"
+        }
+      ],
+      "dispenseChannel": "ice-dispenser",
+      "customizationRole": "ice"
+    },
+    {
+      "id": "seal-and-serve",
+      "name": "封杯并出杯",
+      "animationCue": "seal",
+      "durationSeconds": 10,
+      "failureProfile": "lid-dispenser",
+      "robotActions": [
+        "lid",
+        "pickup"
+      ],
+      "consumes": [
+        {
+          "materialId": "lid-12oz",
+          "amount": 1,
+          "unit": "count"
+        }
+      ]
+    }
+  ],
+  "optionSchema": {
+    "version": "1.0.0",
+    "options": {
+      "ice": {
+        "default": "STANDARD",
+        "values": [
+          "NONE",
+          "STANDARD"
+        ],
+        "priceDeltaMinor": {}
+      }
+    },
+    "temperature": "ICED",
+    "fillPolicy": "NO_TOP_UP",
+    "notice": "不加冰不等于热饮；去冰/去奶不补液、杯量会减少。不加奶会改变饮品口感；无添加糖仅指可调糖浆，牛奶和巧克力等原料仍可能含糖。"
+  }
+}
