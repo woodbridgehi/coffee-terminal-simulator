@@ -40,8 +40,9 @@ html,body{min-width:0;overflow-wrap:anywhere}
 .brand h1{width:100%;margin-top:40px;text-align:center}
 .steps{width:min(230px,100%);margin:34px auto 0;text-align:left}
 .brand-badge-rotator{position:relative;z-index:1;width:230px;height:126px;margin:52px auto 0;display:grid;place-items:center}
-.brand-badge-rotator .brand-art{position:absolute;inset:0;margin:auto;width:auto;max-width:210px;max-height:112px;opacity:0;filter:brightness(0) invert(1) sepia(.18);transform:translateY(8px) scale(.96);transition:opacity .85s ease,transform .85s ease}
-.brand-badge-rotator .brand-art.current{opacity:.82;transform:translateY(0) scale(1)}
+.brand .brand-badge-rotator .brand-art{position:absolute;inset:0;margin:auto;width:auto;max-width:210px;max-height:112px;opacity:0;filter:brightness(0) invert(1) sepia(.18);transform:translateY(8px) scale(.96);transition:opacity .7s ease,transform .7s ease}
+.brand .brand-badge-rotator .brand-art.current{opacity:.82;transform:translateY(0) scale(1)}
+.brand-badge-rotator .brand-art[hidden]{display:none!important}
 .onboarding-powered{position:relative;z-index:1;margin-top:auto;padding-top:28px;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;color:rgba(246,240,229,.72);font:10px/1.4 var(--mono);letter-spacing:.05em}
 .onboarding-powered img{width:17px;height:17px;object-fit:contain}
 .onboarding-powered b{color:var(--cream-50);font-family:var(--ui);font-size:11px;font-weight:600;letter-spacing:.08em}

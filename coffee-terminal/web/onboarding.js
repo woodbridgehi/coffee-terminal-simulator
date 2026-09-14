@@ -8,12 +8,23 @@ let completing = false;
 let completedResult = null;
 let currentStep = 1;
 let badgeIndex = 0;
+let badgeTransitioning = false;
 function rotateBrandBadge() {
   const badges = [...document.querySelectorAll('#brandBadgeRotator .brand-art')];
-  if (badges.length < 2) return;
-  badges[badgeIndex].classList.remove('current');
-  badgeIndex = (badgeIndex + 1) % badges.length;
-  badges[badgeIndex].classList.add('current');
+  if (badges.length < 2 || badgeTransitioning) return;
+  badgeTransitioning = true;
+  const outgoing = badges[badgeIndex];
+  outgoing.classList.remove('current');
+  window.setTimeout(() => {
+    outgoing.hidden = true;
+    badgeIndex = (badgeIndex + 1) % badges.length;
+    const incoming = badges[badgeIndex];
+    incoming.hidden = false;
+    window.requestAnimationFrame(() => {
+      incoming.classList.add('current');
+      badgeTransitioning = false;
+    });
+  }, 750);
 }
 function markCompleted() {
   document.querySelectorAll('.step').forEach(el => { el.classList.remove('current'); el.classList.add('done'); el.querySelector('.step-dot').textContent = '✓'; });
@@ -111,7 +122,7 @@ async function initialize() {
   $('footNote').textContent = '';
   $('retryBtn').disabled = false;
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    window.setInterval(rotateBrandBadge, 3000);
+    window.setInterval(rotateBrandBadge, 5000);
   }
 }
 $('localeSelect').addEventListener('change', async event => {
