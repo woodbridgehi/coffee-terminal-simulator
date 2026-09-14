@@ -65,9 +65,10 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    # Keep runtime files in COLLECT.  Passing binaries/data here as well
+    # creates a redundant dist/CoffeeTerminal.exe beside the portable folder.
+    exclude_binaries=True,
     name="CoffeeTerminal",
     debug=False,
     bootloader_ignore_signals=False,
