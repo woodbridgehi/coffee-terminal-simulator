@@ -1,0 +1,16 @@
+:root{--cream:#f6f0e5;--forest:#17382d;--brass:#b78a52}
+*,*::before,*::after{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--cream);font-family:Inter,Manrope,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+.splash{position:relative;width:100%;height:100%;display:grid;place-items:center;overflow:hidden;background:var(--cream);-webkit-app-region:drag}
+.bean-texture{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.bean-mark{position:absolute;left:var(--x);top:var(--y);width:var(--size);height:var(--size);opacity:var(--opacity);transform:translate(-50%,-50%) rotate(var(--rotation));filter:saturate(.75)}
+.splash-lockup{position:relative;z-index:1;width:min(68vw,440px);display:flex;flex-direction:column;align-items:center;opacity:0;transform:translateY(8px);animation:lockup-in 1.15s cubic-bezier(.22,1,.36,1) .18s forwards}
+.endorsed-lockup{display:block;width:100%;height:auto}
+.progress-glyph{width:42px;height:42px;margin-top:42px;color:var(--forest)}
+.progress-glyph svg{display:block;width:100%;height:100%;overflow:visible;animation:arc-turn 1.7s linear infinite}
+.progress-glyph path{fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round}.progress-glyph circle{fill:var(--brass)}
+.startup-error{display:none;max-width:420px;margin:24px 0 0;color:#9a3f35;font-size:13px;line-height:1.6;text-align:center;overflow-wrap:anywhere;-webkit-app-region:no-drag}
+.splash.has-error .progress-glyph{animation:error-settle .3s ease forwards}.splash.has-error .progress-glyph svg{animation-play-state:paused}.splash.has-error .startup-error{display:block}
+@keyframes lockup-in{to{opacity:1;transform:none}}@keyframes arc-turn{to{transform:rotate(360deg)}}@keyframes error-settle{to{opacity:.38}}
+@media(max-width:520px){.splash-lockup{width:min(76vw,360px)}.progress-glyph{margin-top:32px}}
+@media(prefers-reduced-motion:reduce){.splash-lockup{animation-duration:.01ms;animation-delay:0s}.progress-glyph svg{animation-duration:3.4s}}

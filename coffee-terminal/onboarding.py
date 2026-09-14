@@ -15,12 +15,14 @@ from cloud import CloudClient, CloudError
 from configuration import read_env_values, write_config, write_env_values
 from locales import normalize_locale
 from simulator_identity import SimulatorIdentity
+from window_chrome import WindowChromeBridge
 
 NUMBER_RE = re.compile(r"^[0-9]{3,6}$")
 
 
-class OnboardingAdapter:
+class OnboardingAdapter(WindowChromeBridge):
     def __init__(self, config: dict[str, Any], config_path: Path, simulator_root: Path) -> None:
+        self._init_window_chrome()
         self.config = config
         self.config_path = config_path
         self.instance_dir = config_path.parent

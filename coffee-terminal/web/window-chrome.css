@@ -1,0 +1,15 @@
+.window-chrome{position:fixed;z-index:10000;inset:0 0 auto;height:42px;display:none;grid-template-columns:minmax(0,1fr) auto;align-items:stretch;background:#0b2d24;color:#f6f0e5;border-bottom:1px solid rgba(215,182,126,.24);box-shadow:0 4px 18px rgba(11,45,36,.14);user-select:none}
+.windows-frameless .window-chrome{display:grid}
+.window-chrome-drag{min-width:0;display:flex;align-items:center;gap:10px;padding:0 14px;color:#d7b67e;font:600 10px/1 var(--font-mono,var(--mono,monospace));letter-spacing:.16em}
+.window-chrome-drag svg{width:20px;height:20px;flex:none;color:#f6f0e5}
+.window-chrome-actions{display:flex;align-items:stretch}
+.window-chrome-button{width:46px;border:0;border-left:1px solid rgba(215,182,126,.12);border-radius:0;background:transparent;color:#d8e2dc;display:grid;place-items:center;cursor:pointer;transition:background .16s ease,color .16s ease}
+.window-chrome-button:hover{background:rgba(117,165,142,.16);color:#fff9f0}
+.window-chrome-button.close:hover{background:#8f3f35;color:#fff}
+.window-chrome-button:focus-visible{position:relative;z-index:1;outline:2px solid #d7b67e;outline-offset:-3px}
+.window-chrome-button svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.windows-frameless{padding-top:42px}
+.windows-frameless .app-shell,.windows-frameless>.shell{min-height:calc(100vh - 42px)}
+.windows-frameless .display,.windows-frameless .console,.windows-frameless .content{min-height:calc(100vh - 42px)}
+@media(max-width:520px){.window-chrome-drag span{display:none}.window-chrome-button{width:42px}}
+@media(prefers-reduced-motion:reduce){.window-chrome-button{transition:none}}

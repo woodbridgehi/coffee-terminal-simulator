@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from window_chrome import WindowChromeBridge
 
 import qrcode
 
@@ -59,8 +60,9 @@ def atomic_runtime(method):
     return wrapped
 
 
-class CoffeeDeviceRuntime:
+class CoffeeDeviceRuntime(WindowChromeBridge):
     def __init__(self, config: dict[str, Any], instance_dir: Path) -> None:
+        self._init_window_chrome()
         self.config = config
         self.instance_dir = instance_dir
         self.device_id = config["deviceId"]
@@ -221,7 +223,10 @@ class CoffeeDeviceRuntime:
         cached = cls._qr_cache.get(value)
         if cached:
             return cached
-        image = qrcode.make(value, border=2)
+        qr = qrcode.QRCode(border=4)
+        qr.add_data(value)
+        qr.make(fit=True)
+        image = qr.make_image(fill_color="#17382D", back_color="#FFFFFF")
         buffer = BytesIO(); image.save(buffer, format="PNG")
         encoded = "data:image/png;base64," + b64encode(buffer.getvalue()).decode("ascii")
         if len(cls._qr_cache) > 50:

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coffee Terminal</title>
+  <link rel="icon" href="assets/brand/monogram-ct.svg" />
+  <link rel="stylesheet" href="splash.css?v=20260914-brand-v2" />
+</head>
+<body>
+  <main class="splash" aria-label="Coffee Terminal 正在启动">
+    <div class="bean-texture" id="beanTexture" aria-hidden="true"></div>
+    <section class="splash-lockup" aria-live="polite">
+      <img class="endorsed-lockup" src="assets/brand/qarm/co-brand-lockup.svg?v=20260914-full" alt="Coffee Terminal by QARM 千臂机器人" />
+      <div class="progress-glyph" id="progressGlyph" role="progressbar" aria-label="正在启动" aria-valuetext="正在启动">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3.5A8.5 8.5 0 1 0 20.5 12" />
+          <circle cx="20.5" cy="12" r="2.2" />
+        </svg>
+      </div>
+      <p class="startup-error" id="startupError" role="alert"></p>
+    </section>
+  </main>
+  <script src="splash.js?v=20260914-brand"></script>
+</body>
+</html>

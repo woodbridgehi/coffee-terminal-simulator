@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy" content="frame-src http://127.0.0.1:*; object-src 'none'">
   <title>Coffee Terminal Simulator</title>
-  <link rel="stylesheet" href="styles.css?v=20260912-menu" />
+  <link rel="stylesheet" href="styles.css?v=20260914-qr-v2" />
+  <link rel="stylesheet" href="window-chrome.css?v=20260914-windows" />
   <link rel="stylesheet" href="inventory.css?v=20260911-dual-side-grip" />
   <link rel="stylesheet" href="drink-visual.css?v=20260911-dual-side-grip" />
   <link rel="stylesheet" href="robot-live.css?v=20260911-director" />
@@ -42,7 +43,13 @@
           <span class="order-step">SCAN · ORDER · ENJOY</span>
           <h1 data-i18n="terminal.idle.title">扫码点一杯</h1>
           <p class="subhead" data-i18n="terminal.idle.sub">手机点单，静候咖啡</p>
-          <div class="qr-frame" id="qrFrame"><img id="qrImage" alt="咖啡下单二维码" data-i18n-alt="terminal.qr.alt" /></div>
+          <div class="qr-frame" id="qrFrame">
+            <span class="qr-position-marker qr-position-tl" aria-hidden="true"></span>
+            <span class="qr-position-marker qr-position-tr" aria-hidden="true"></span>
+            <span class="qr-position-marker qr-position-br" aria-hidden="true"></span>
+            <span class="qr-position-marker qr-position-bl" aria-hidden="true"></span>
+            <img id="qrImage" alt="咖啡下单二维码" data-i18n-alt="terminal.qr.alt" />
+          </div>
           <p class="qr-note" id="qrNote"></p>
           <div class="welcome-signoff"><img src="assets/brand/marks/bean.svg" alt=""/><span>YOUR DAILY COFFEE RITUAL</span></div>
         </aside>
@@ -179,5 +186,6 @@
   <script src="recipe-latte-art.js"></script>
 <script src="showcase.js?v=20260912-beijing"></script>
 <script src="app.js?v=20260912-menu"></script>
+<script src="window-chrome.js?v=20260914-windows"></script>
 </body>
 </html>
