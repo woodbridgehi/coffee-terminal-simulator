@@ -7,6 +7,14 @@ let pollTimer = null;
 let completing = false;
 let completedResult = null;
 let currentStep = 1;
+let badgeIndex = 0;
+function rotateBrandBadge() {
+  const badges = [...document.querySelectorAll('#brandBadgeRotator .brand-art')];
+  if (badges.length < 2) return;
+  badges[badgeIndex].classList.remove('current');
+  badgeIndex = (badgeIndex + 1) % badges.length;
+  badges[badgeIndex].classList.add('current');
+}
 function markCompleted() {
   document.querySelectorAll('.step').forEach(el => { el.classList.remove('current'); el.classList.add('done'); el.querySelector('.step-dot').textContent = '✓'; });
   $('stepTitle').textContent = t('onboarding.successTitle');
@@ -16,13 +24,14 @@ let connectionCopy = null;
 function localizedConnection(key, params = {}, type = "") { connectionCopy = {key, params, type}; setConnection(t(key, params), type); }
 
 const previewApi = {
-  get_setup_state: async () => ({ backendUrl: '浏览器预览服务', instanceName: 'coffee-bot-preview' }),
-  set_ui_locale: async (locale) => ({ ok: true, locale }),
-  get_pairing_state: async () => ({ ok: true, serialNumber: 'SIM-8E0A12F4B76C', deviceId: 'coffee-bot-582901', pairingCode: '7K4M-92QP', expiresAt: new Date(Date.now() + 900000).toISOString(), status: 'PENDING' }),
-  get_pairing_status: async () => ({ ok: true, status: 'PENDING' }),
-  complete_pairing: async () => ({ ok: true, deviceId: 'coffee-bot-582901', serialNumber: 'SIM-8E0A12F4B76C', deviceName: '大堂 1 号机', storeName: '演示门店' }),
+  get_setup_state: async () => ({}),
+  set_ui_locale: async locale => ({ ok: true, locale }),
+  get_pairing_state: async () => ({ ok: false, error: t('onboarding.nativeRequired') }),
 };
 function api() { return window.pywebview?.api || previewApi; }
+let creating = false;
+let statusPending = false;
+let generation = 0;
 async function ready() { if (window.pywebview?.api) return; if (location.protocol !== 'file:') return; await new Promise(resolve => window.addEventListener('pywebviewready', resolve, { once: true })); }
 function setConnection(message, type = '') { const el = $('connection'); el.lastChild.textContent = message; el.className = `connection ${type}`; }
 function setStep(next) {
@@ -36,10 +45,10 @@ function setStep(next) {
 }
 function fmtExpiry(value) { const date = new Date(value); return Number.isNaN(date.getTime()) ? t('onboarding.expiresShort') : t('onboarding.expires', { time: date.toLocaleTimeString(TerminalI18n.getLocale(), { hour: '2-digit', minute: '2-digit' }) }); }
 function renderPairing(result) {
-  pairing = result; $('pairingPanel').hidden = false;
+  pairing = result; $('welcomePanel').hidden = true; $('pairingPanel').hidden = false;
   $('serialNumber').textContent = result.serialNumber || '—'; $('deviceId').textContent = result.deviceId || '—';
   $('pairingCode').textContent = result.pairingCode || '—'; $('expiresAt').textContent = fmtExpiry(result.expiresAt);
-  $('refreshBtn').disabled = false; $('retryBtn').hidden = false;
+  $('refreshBtn').hidden = false; $('refreshBtn').disabled = false; $('retryBtn').hidden = false;
   $('footNote').textContent = t('onboarding.codeReady');
   setStep(2); localizedConnection('onboarding.connected', { backend: setupState.backendUrl || 'Cloud' }, 'ok');
 }
@@ -49,7 +58,7 @@ function statusCopy(status) {
   if (status === 'EXPIRED') return [t('onboarding.status.expired'), t('onboarding.status.expiredDesc')];
   return [t('onboarding.status.waiting'), t('onboarding.status.waitingDesc')];
 }
-function setStatus(status) { if (pairing) pairing.status = status; const [title, desc] = statusCopy(status); $('pairingStatus').querySelector('b').textContent = title; $('pairingStatus').querySelector('p').textContent = desc; $('pairingStatus').dataset.status = status || 'PENDING'; }
+function setStatus(status) { if (status === 'EXPIRED') { clearInterval(pollTimer); $('pairingCode').textContent = '—'; $('refreshBtn').disabled = true; } if (pairing) pairing.status = status; const [title, desc] = statusCopy(status); $('pairingStatus').querySelector('b').textContent = title; $('pairingStatus').querySelector('p').textContent = desc; $('pairingStatus').dataset.status = status || 'PENDING'; }
 async function complete() {
   if (completing) return; completing = true; setStep(3); $('refreshBtn').disabled = true; $('retryBtn').hidden = true; $('error').textContent = '';
   try {
@@ -65,18 +74,31 @@ async function complete() {
   } catch (error) { completing = false; setStatus('CLAIMED'); $('refreshBtn').disabled = false; $('error').textContent = error.message || t('onboarding.error.credentials'); }
 }
 async function refreshStatus() {
-  if (!pairing || completing) return;
-  const result = await api().get_pairing_status();
-  if (!result?.ok) throw new Error(result?.error || t('onboarding.error.status'));
-  setStatus(result.status);
-  if (result.status === 'CLAIMED' || result.status === 'PROVISIONED') await complete();
+  if (!pairing || creating || completing || statusPending || pairing.status === 'EXPIRED') return;
+  if (Date.parse(pairing.expiresAt) <= Date.now() && pairing.status === 'PENDING') { setStatus('EXPIRED'); return; }
+  const revision = generation;
+  statusPending = true;
+  try {
+    const result = await api().get_pairing_status();
+    if (revision !== generation) return;
+    if (!result?.ok) throw new Error(result?.error || t('onboarding.error.status'));
+    setStatus(result.status);
+    if (result.status === 'CLAIMED' || result.status === 'PROVISIONED') await complete();
+  } finally { statusPending = false; }
 }
 async function createPairing() {
-  clearInterval(pollTimer); $('refreshBtn').disabled = true; $('retryBtn').hidden = true; $('pairingPanel').hidden = true; $('error').textContent = '';
+  if (creating || completing || completedResult) return;
+  creating = true; generation += 1; pairing = null;
+  clearInterval(pollTimer); $('refreshBtn').disabled = true; $('retryBtn').disabled = true;
+  $('pairingPanel').hidden = true; $('welcomePanel').hidden = false; $('pairingCode').textContent = '—'; $('error').textContent = '';
   localizedConnection('onboarding.connection.creating');
-  const result = await api().get_pairing_state(); if (!result?.ok) throw new Error(result?.error || t('onboarding.error.create'));
-  renderPairing(result); setStatus(result.status || 'PENDING');
-  pollTimer = setInterval(() => refreshStatus().catch(error => { $('error').textContent = error.message || t('onboarding.error.status'); }), 2500);
+  try {
+    const result = await api().get_pairing_state();
+    if (!result?.ok) throw new Error(result?.error || t('onboarding.error.create'));
+    if (!result.pairingCode || !Number.isFinite(Date.parse(result.expiresAt)) || Date.parse(result.expiresAt) <= Date.now()) throw new Error(t('onboarding.error.invalidCode'));
+    renderPairing(result); setStatus(result.status || 'PENDING');
+    pollTimer = setInterval(() => refreshStatus().catch(error => { $('error').textContent = error.message || t('onboarding.error.status'); }), 2500);
+  } finally { creating = false; $('retryBtn').disabled = false; $('retryBtn').hidden = false; }
 }
 async function initialize() {
   await ready();
@@ -84,7 +106,13 @@ async function initialize() {
   const locale = TerminalI18n.setLocale(setupState.uiLocale || 'zh-CN');
   $('localeSelect').value = locale;
   document.title = t('onboarding.title');
-  await createPairing();
+  setStep(1);
+  localizedConnection('onboarding.ready');
+  $('footNote').textContent = '';
+  $('retryBtn').disabled = false;
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    window.setInterval(rotateBrandBadge, 3000);
+  }
 }
 $('localeSelect').addEventListener('change', async event => {
   const locale = TerminalI18n.setLocale(event.target.value);
@@ -93,7 +121,7 @@ $('localeSelect').addEventListener('change', async event => {
   setStep(currentStep);
   if (completedResult) markCompleted();
   if (connectionCopy) setConnection(t(connectionCopy.key, connectionCopy.params), connectionCopy.type);
-  $('footNote').textContent = t(completedResult ? 'onboarding.completed' : pairing ? 'onboarding.codeReady' : 'onboarding.connection.creating');
+  $('footNote').textContent = t(completedResult ? 'onboarding.completed' : pairing ? 'onboarding.codeReady' : 'onboarding.ready');
   if (pairing) { $('expiresAt').textContent = fmtExpiry(pairing.expiresAt); setStatus(pairing.status); }
   await api().set_ui_locale(locale);
 });

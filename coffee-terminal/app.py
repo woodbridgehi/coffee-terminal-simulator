@@ -39,7 +39,7 @@ def main() -> None:
         adapter = OnboardingAdapter(config, config_path, data_root)
         window = webview.create_window(
             "Coffee Terminal · 首次安装", str(ROOT / "web" / "onboarding.html"),
-            js_api=adapter, width=980, height=760, min_size=(640, 480),
+            js_api=adapter, width=1120, height=820, min_size=(640, 480),
         )
         webview.start(debug=args.debug, icon=icon_path)
         return

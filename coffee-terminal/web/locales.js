@@ -330,3 +330,70 @@ TerminalI18n.register("en-US", {
 
 TerminalI18n.register('zh-CN', {'terminal.ui.footer':'精品咖啡 · 新鲜现制'});
 TerminalI18n.register('en-US', {'terminal.ui.footer':'Specialty coffee · Freshly made'});
+
+TerminalI18n.register('zh-CN', {'onboarding.poweredBy':'千臂机器人'});
+TerminalI18n.register('en-US', {'onboarding.poweredBy':'QARM Robotics'});
+
+TerminalI18n.register("zh-CN", {
+  "onboarding.heading": "设备接入",
+  "onboarding.identity": "获取配对码",
+  "onboarding.merchant": "绑定门店",
+  "onboarding.provision": "完成接入",
+  "onboarding.ready": "等待获取配对码",
+  "onboarding.welcome": "连接您的门店",
+  "onboarding.welcomeHint": "获取配对码后，在商户后台添加此设备。",
+  "onboarding.nativeRequired": "请在模拟器应用中获取配对码。",
+  "onboarding.error.invalidCode": "未获取到有效配对码，请重试。",
+  "onboarding.step1.eyebrow": "STEP 1 / 3",
+  "onboarding.step1.title": "连接设备",
+  "onboarding.step1.desc": "",
+  "onboarding.step2.eyebrow": "STEP 2 / 3",
+  "onboarding.step2.title": "绑定门店",
+  "onboarding.step2.desc": "",
+  "onboarding.step3.desc": "正在完成配对…",
+  "onboarding.retry": "获取最新配对码",
+  "onboarding.refresh": "检查配对状态",
+  "onboarding.pairingCode.help": "商户后台 → 我的设备 → 配对新设备",
+  "onboarding.status.waitingDesc": "",
+  "onboarding.status.claimedDesc": "正在完成接入…",
+  "onboarding.status.provisionedDesc": "",
+  "onboarding.status.expiredDesc": "请获取新的配对码。",
+  "onboarding.connected": "已连接云端",
+  "onboarding.codeReady": "等待商户确认",
+  "onboarding.successDesc": "重新启动模拟器即可使用。",
+  "onboarding.factorySerial": "设备序列号",
+  "onboarding.serial": "设备序列号",
+  "onboarding.cloudId": "设备编号"
+});
+
+TerminalI18n.register("en-US", {
+  "onboarding.heading": "Device setup",
+  "onboarding.identity": "Pairing code",
+  "onboarding.merchant": "Link store",
+  "onboarding.provision": "Ready",
+  "onboarding.ready": "Ready to request a code",
+  "onboarding.welcome": "Connect your store",
+  "onboarding.welcomeHint": "Request a code, then add this device in Merchant Workspace.",
+  "onboarding.nativeRequired": "Request a pairing code in the simulator app.",
+  "onboarding.error.invalidCode": "No valid pairing code received. Please try again.",
+  "onboarding.step1.eyebrow": "STEP 1 / 3",
+  "onboarding.step1.title": "Connect device",
+  "onboarding.step1.desc": "",
+  "onboarding.step2.eyebrow": "STEP 2 / 3",
+  "onboarding.step2.title": "Link your store",
+  "onboarding.step2.desc": "",
+  "onboarding.step3.desc": "Completing pairing…",
+  "onboarding.retry": "Get a new pairing code",
+  "onboarding.refresh": "Check status",
+  "onboarding.pairingCode.help": "Merchant Workspace → My Devices → Pair New Device",
+  "onboarding.status.waitingDesc": "",
+  "onboarding.status.claimedDesc": "Finishing setup…",
+  "onboarding.status.provisionedDesc": "",
+  "onboarding.status.expiredDesc": "Request a new code.",
+  "onboarding.connected": "Connected to cloud",
+  "onboarding.codeReady": "Awaiting store confirmation",
+  "onboarding.successDesc": "Restart the simulator to continue.",
+  "onboarding.factorySerial": "Serial number",
+  "onboarding.serial": "Serial number",
+  "onboarding.cloudId": "Device ID"
+});
