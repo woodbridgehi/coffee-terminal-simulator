@@ -142,7 +142,7 @@ export class CoffeeScene {
 
   dispose() {
     this.resizeObserver.disconnect(); this.controls.dispose(); this.shop.dispose();
-    const geometries = new Set(), materials = new Set(), textures = new Set();
+    const geometries = new Set(), materials = new Set(), textures = new Set(), images = new Set();
     this.scene.traverse((object) => {
       if (object.isLight && object.shadow) object.shadow.dispose();
       if (object.isInstancedMesh) object.dispose();
@@ -150,8 +150,9 @@ export class CoffeeScene {
       if (object.material) for (const mat of [object.material].flat()) materials.add(mat);
     });
     for (const geometry of geometries) geometry.dispose();
-    for (const mat of materials) { if (mat.map) textures.add(mat.map); mat.dispose(); }
-    for (const texture of textures) texture.dispose();
+    for (const mat of materials) { for (const value of Object.values(mat)) if (value?.isTexture) textures.add(value); mat.dispose(); }
+    for (const texture of textures) { if (texture.image) images.add(texture.image); texture.dispose(); }
+    for (const image of images) image.close?.();
     this.environment.dispose(); this.pmrem.dispose(); this.renderer.dispose();
   }
 }

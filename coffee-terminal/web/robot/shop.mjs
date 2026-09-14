@@ -1,3 +1,4 @@
+import { attachShopAsset } from './shop-asset.mjs';
 import endorsement from '../assets/brand/qarm/qarm-endorsement.svg';
 import seal from '../assets/brand/badges/ai-brew-system.svg';
 import * as THREE from 'three';
@@ -28,6 +29,8 @@ export function createShop() {
   const group = new THREE.Group(); group.name = 'coffee-terminal-shop';
   let disposed = false;
   const pending = [];
+  const fallback = [];
+  const replacementBox = (...args) => { const object = box(...args); fallback.push(object); return object; };
   const mat = (color, roughness = .65, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
   const green = mat(SHOP.green), cream = mat(SHOP.cream), brass = mat(SHOP.brass, .32, .65);
   const dark = mat('#14261e'), glow = new THREE.MeshBasicMaterial({ color: '#ffe0a0' });
@@ -50,7 +53,7 @@ export function createShop() {
   });
   stone.wrapS = stone.wrapT = THREE.RepeatWrapping; stone.repeat.set(3.8,2.9);
   const floorMat = mat('#ffffff', .78); floorMat.map = stone;
-  box(group,[7.6,.14,5.8],[0,-.07,.3],floorMat,.025);
+  replacementBox(group,[7.6,.14,5.8],[0,-.07,.3],floorMat,.025);
   // Narrow brass perimeter set into the terrazzo; no infinite engineering grid.
   for (const z of [-2.49,3.09]) box(group,[7.38,.004,.016],[0,.003,z],brass,0);
   for (const x of [-3.69,3.69]) box(group,[.016,.004,5.58],[x,.003,.3],brass,0);
@@ -66,8 +69,8 @@ export function createShop() {
   });
   oakMap.wrapS=oakMap.wrapT=THREE.RepeatWrapping;oakMap.repeat.set(2,1);
   const oak=mat('#ffffff',.58);oak.map=oakMap;
-  box(group,[7.6,3.5,.14],[0,1.75,-2.53],wallMat,.015);
-  box(group,[.14,3.5,5.8],[-3.73,1.75,.3],wallMat,.015);
+  replacementBox(group,[7.6,3.5,.14],[0,1.75,-2.53],wallMat,.015);
+  replacementBox(group,[.14,3.5,5.8],[-3.73,1.75,.3],wallMat,.015);
   box(group,[7.4,.09,.03],[0,.055,-2.44],brass,.004);
   box(group,[.03,.09,5.65],[-3.645,.055,.3],brass,.004);
   box(group,[6.25,1.9,.065],[.50,.99,-2.42],green,.005);
@@ -106,7 +109,7 @@ export function createShop() {
   // Scattered brand beans surround the centered badge on the cream panel.
   box(group,[.07,2.28,4.38],[-3.61,2.13,.30],mat(sidePanelCream),.05);
   graphic(scatteredBeans(),4.26,2.16,[-3.57,2.13,.30],Math.PI/2,sidePanelCream,1,false,.26);
-  box(group,[.43,.075,4.50],[-3.40,1.02,.30],oak,.014);
+  replacementBox(group,[.43,.075,4.50],[-3.40,1.02,.30],oak,.014);
   for(const z of [-1.45,2.05]) box(group,[.30,.035,.035],[-3.45,.88,z],brass,.003);
   // Two compact seats on the side ledge, with a clear aisle to the workcell.
   function stool(x,z,height=.72,radius=.22) {
@@ -116,12 +119,15 @@ export function createShop() {
     ring.rotation.x=Math.PI/2;ring.position.set(x,.27,z);group.add(ring);
     cylinder(group,radius,.075,[x,height,z],green);
   }
+  const stoolsStart=group.children.length;
   stool(-3.08,-.7);stool(-3.08,1.10);
+  fallback.push(...group.children.slice(stoolsStart));
   // Airy window frame: open glazing avoids transparent sorting across the robot.
   for(const z of [-2.48,-1.38,-.28,.82,1.92,3.08]) box(group,[.07,3.5,.055],[3.73,1.75,z],brass,.004);
   for(const y of [.08,1.30,3.48]) box(group,[.085,.055,5.64],[3.73,y,.30],brass,.004);
   box(group,[.17,.07,5.73],[3.73,3.52,.30],oak,.01);
   // Low lounge furniture remains below the worktop and outside the pickup zone.
+  const loungeStart=group.children.length;
   for(const [x,z] of [[2.54,2.19],[3.12,2.60]]) {
     cylinder(group,.255,.055,[x,.04,z],brass);
     cylinder(group,.27,.39,[x,.255,z],green);
@@ -130,6 +136,7 @@ export function createShop() {
   cylinder(group,.16,.035,[3.20,.03,1.76],brass);
   cylinder(group,.075,.52,[3.20,.28,1.76],oak);
   cylinder(group,.30,.045,[3.20,.565,1.76],oak);
+  fallback.push(...group.children.slice(loungeStart));
   function plant(x,z,scale=1,baseY=0) {
     const plantGroup=new THREE.Group();plantGroup.position.set(x,baseY,z);plantGroup.scale.setScalar(scale);group.add(plantGroup);
     cylinder(plantGroup,.23,.43,[0,.215,0],cream,.28);
@@ -163,8 +170,10 @@ export function createShop() {
   box(group,[.05,.53,.028],[-2.025,.475,1.218],brass,.008);
   box(group,[2.74,.025,.027],[-.69,.20,1.218],brass,.004);
   graphic(logo,1.65,1.65*80/508,[-.75,.47,1.245],0,SHOP.cream,1,true);
+  const asset=attachShopAsset(group,fallback);
+  pending.push(asset.ready);
   const ready=Promise.all(pending);
   // Keep rejections handled for callers that render immediately rather than await assets.
   ready.catch(error=>console.error(error.message));
-  return {group,ready,dispose(){disposed=true;}};
+  return {group,ready,dispose(){disposed=true;asset.dispose();}};
 }

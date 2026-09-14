@@ -11,3 +11,7 @@ console.log('Cloud viewer assets synchronized.');
 // Keep the shared status sound controller and controls identical on both surfaces.
 for (const name of ['status-sound.js', 'status-sound.css'])
   await copyFile(new URL(`../coffee-terminal/web/${name}`, import.meta.url), new URL(`../shared/${name}`, output));
+
+// Embedded PBR textures travel inside the GLB; keep the same bundle-relative URL.
+await mkdir(new URL('assets/scene/',output),{recursive:true});
+await copyFile(new URL('../coffee-terminal/web/assets/scene/coffee-shop-v1.glb',import.meta.url),new URL('assets/scene/coffee-shop-v1.glb',output));
