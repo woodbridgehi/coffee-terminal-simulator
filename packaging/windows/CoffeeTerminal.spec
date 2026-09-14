@@ -6,12 +6,20 @@ from PyInstaller.utils.hooks import collect_submodules
 
 
 project = Path(SPECPATH).parent.parent
-# Conda's ``_ctypes.pyd`` links to ffi-*.dll under Library/bin.  PyInstaller
-# does not always discover that dependency, which makes the windowed release
-# exit during startup with ``ImportError: DLL load failed ... _ctypes``.
-ffi_binaries = [
+# Conda extension modules may load DLLs from either the active environment's
+# Library/bin or Conda's base prefix.  In particular, a named environment's
+# _sqlite3.pyd can depend on base-prefix sqlite3.dll.  PyInstaller does not
+# consistently discover those indirect DLLs, so collect the required runtime
+# libraries explicitly for the portable Windows build.
+python_prefix = Path(sys.prefix)
+library_bin_dirs = [python_prefix / "Library" / "bin"]
+if python_prefix.parent.name == "envs":
+    library_bin_dirs.append(python_prefix.parents[1] / "Library" / "bin")
+runtime_binaries = [
     (str(dll), ".")
-    for dll in (Path(sys.prefix) / "Library" / "bin").glob("ffi*.dll")
+    for library_bin in library_bin_dirs
+    for pattern in ("ffi*.dll", "sqlite*.dll")
+    for dll in library_bin.glob(pattern)
 ]
 datas = [
     (str(project / "coffee-terminal" / "web"), "coffee-terminal/web"),
@@ -43,7 +51,7 @@ hiddenimports = collect_submodules("clr_loader") + collect_submodules("pythonnet
 a = Analysis(
     [str(project / "windows_entry.py")],
     pathex=[str(project / "coffee-terminal")],
-    binaries=ffi_binaries,
+    binaries=runtime_binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
