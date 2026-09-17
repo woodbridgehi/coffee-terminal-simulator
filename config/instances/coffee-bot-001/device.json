@@ -12,10 +12,30 @@
     "baseUrl": "https://coffee-api.woodbridge.top",
     "commandPollSeconds": 2,
     "heartbeatIntervalSeconds": 30,
-    "progressReport": {"minDeltaPercent": 5, "maxIntervalSeconds": 5},
+    "progressReport": {
+      "minDeltaPercent": 5,
+      "maxIntervalSeconds": 5
+    },
     "requestTimeoutSeconds": 8,
-    "mqtt": {"host": "mqtt-api.woodbridge.top", "port": 8883, "keepaliveSeconds": 30, "sessionExpirySeconds": 604800}
+    "mqtt": {
+      "host": "mqtt-api.woodbridge.top",
+      "port": 8883,
+      "keepaliveSeconds": 30,
+      "sessionExpirySeconds": 604800,
+      "username": "coffee-bot",
+      "password": "7EZP-K-WUnj6H0BvxampaR0XGRZny7E_nArn-Zi6GVOeWtm_",
+      "connectHost": "127.0.0.1",
+      "connectPort": 18884
+    },
+    "authToken": "Ld2XNbdt9FnEs7te6t7znVmzwui2k2uO4f-XAnyd44br3NoPVo43j8maRq-TeK67"
   },
-  "localApi": {"enabled": true, "host": "127.0.0.1", "port": 9101},
-  "enableConsole": true
+  "localApi": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 9101
+  },
+  "enableConsole": true,
+  "ui": {
+    "locale": "zh-CN"
+  }
 }
