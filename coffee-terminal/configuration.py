@@ -92,13 +92,18 @@ def write_config(path: Path, config: dict[str, Any]) -> None:
     mqtt = backend.get("mqtt", {})
     mqtt.pop("password", None)
     mqtt.pop("proxyPassword", None)
+    payload = (json.dumps(config, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+    write_config_bytes(path, payload)
+
+
+def write_config_bytes(path: Path, payload: bytes) -> None:
+    """Atomic byte-preserving replacement, including rollback of a recipe file."""
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temporary = Path(temporary_name)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-            json.dump(config, stream, ensure_ascii=False, indent=2, allow_nan=False)
-            stream.write("\n")
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from config_validation import loads
+from config_validation import loads, finite_number
 import math
 import random
 import re
@@ -42,7 +42,7 @@ class RecipeCatalog:
                     invalid.append({"file": path.name, "errors": [f"重复 recipeId: {recipe['recipeId']}"]})
                     continue
                 recipes[recipe["recipeId"]] = recipe
-            except (json.JSONDecodeError, OSError, KeyError, TypeError, ValueError, AttributeError) as exc:
+            except (json.JSONDecodeError, OSError, KeyError, TypeError, ValueError, AttributeError, OverflowError) as exc:
                 invalid.append({"file": path.name, "errors": [str(exc)]})
         self.recipes = recipes
         self.invalid = invalid
@@ -56,6 +56,14 @@ class RecipeCatalog:
         if not isinstance(recipe.get("steps"), list) or not recipe.get("steps"):
             errors.append("steps 必须是非空数组")
             return errors
+        display = recipe.get("display", {})
+        if not isinstance(display, dict):
+            errors.append("display 必须是对象")
+        elif "sortOrder" in display:
+            try:
+                finite_number(display["sortOrder"], "display.sortOrder")
+            except ValueError as exc:
+                errors.append(str(exc))
         visual_profile = recipe.get("visual", {}).get("profile")
         if visual_profile and visual_profile not in VISUAL_PROFILES:
             errors.append(f"不支持的 visual.profile: {visual_profile}")
@@ -88,7 +96,7 @@ class RecipeCatalog:
                     duration = float(step["durationSeconds"])
                     if not math.isfinite(duration) or duration <= 0:
                         errors.append(f"步骤 {step.get('id')} 时长必须是有限正数")
-                except (TypeError, ValueError):
+                except (TypeError, ValueError, OverflowError):
                     errors.append(f"步骤 {step.get('id')} 时长必须是数字")
             if step.get("animationCue") and step["animationCue"] not in ANIMATION_CUES:
                 errors.append(f"步骤 {step.get('id')} 使用了不支持的 animationCue: {step['animationCue']}")
@@ -105,7 +113,7 @@ class RecipeCatalog:
                         errors.append(f"步骤 {step.get('id')} 的随机时长范围无效")
                     elif not minimum <= baseline <= maximum:
                         errors.append(f"步骤 {step.get('id')} 的 durationSeconds 必须位于随机范围内")
-                except (TypeError, ValueError):
+                except (TypeError, ValueError, OverflowError):
                     errors.append(f"步骤 {step.get('id')} 的随机时长必须是数字")
         errors.extend(validate_options(recipe))
         errors.extend(validate_latte_art(recipe))
@@ -145,7 +153,7 @@ class RecipeCatalog:
             if self._validate(recipe) or self.inventory.validate_recipe(recipe):
                 return None
             return recipe
-        except (OSError, ValueError, TypeError, AttributeError, KeyError):
+        except (OSError, ValueError, TypeError, AttributeError, KeyError, OverflowError):
             return None
 
     def capabilities(self, device_id: str, store_id: str) -> dict[str, Any]:

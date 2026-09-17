@@ -208,3 +208,119 @@ def test_malformed_control_does_not_block_following_command(case, command):
     case.runtime._process_commands([{**command, "messageId": "malformed"}, adjustment()])
     assert case.runtime.store.command("malformed")["state"] == "REJECTED"
     assert case.runtime.inventory.state["items"]["beans"]["onHand"] == 45
+
+
+@pytest.mark.parametrize("sort_order", ["1", True, None, [], 10**400])
+def test_recipe_invalid_sort_order_leaves_disk_and_live_catalog_unchanged(case, sort_order):
+    runtime = case.runtime
+    path = case.instance / "recipes/coffee.json"
+    previous_file = path.read_bytes()
+    previous_catalog = runtime.catalog
+    previous_capabilities = runtime.capabilities()["products"]
+    recipe = json.loads(previous_file)
+    recipe["display"] = {"sortOrder": sort_order}
+    assert not runtime.save_recipe(json.dumps(recipe))["ok"]
+    assert path.read_bytes() == previous_file
+    assert runtime.catalog is previous_catalog
+    assert runtime.capabilities()["products"] == previous_capabilities
+
+
+def test_oversized_inventory_amount_rejected_without_blocking_following_command(case):
+    command = adjustment(messageId="oversized", payload={"materialId": "beans", "mode": "ADD", "amount": 10**400})
+    case.runtime._process_commands([command, adjustment()])
+    assert case.runtime.store.command("oversized")["state"] == "REJECTED"
+    assert case.runtime.store.command("oversized")["result"]["reasonCode"] == "INVALID_COMMAND"
+    assert case.runtime.inventory.state["items"]["beans"]["onHand"] == 45
+
+
+def test_recipe_projection_failure_is_detected_before_publishing_files(case):
+    from catalog import RecipeCatalog
+    runtime = case.runtime
+    path = case.instance / "recipes/coffee.json"
+    previous_file = path.read_bytes()
+    previous_catalog = runtime.catalog
+    recipe = json.loads(previous_file); recipe["name"] = "valid edit"
+    with patch.object(RecipeCatalog, "capabilities", side_effect=TypeError("projection failed")):
+        assert not runtime.save_recipe(json.dumps(recipe))["ok"]
+    assert path.read_bytes() == previous_file
+    assert runtime.catalog is previous_catalog
+    assert runtime.capabilities()["products"]
+
+
+@pytest.mark.parametrize("new_recipe", [False, True])
+def test_recipe_commit_failure_restores_exact_file_and_catalog(case, new_recipe):
+    from contextlib import contextmanager
+    import sqlite3
+    runtime = case.runtime
+    directory = case.instance / "recipes"
+    before = {p.name: p.read_bytes() for p in directory.glob("*.json")}
+    previous_catalog = runtime.catalog
+    previous_events = deepcopy(runtime.events)
+    recipe = json.loads(before["coffee.json"]); recipe["name"] = "candidate"
+    if new_recipe: recipe["recipeId"] = "new-coffee"
+    transaction = runtime.store.transaction
+    @contextmanager
+    def fail_commit():
+        with transaction():
+            yield
+            raise sqlite3.OperationalError("injected commit failure after file replacement")
+    with patch.object(runtime.store, "transaction", fail_commit):
+        assert not runtime.save_recipe(json.dumps(recipe))["ok"]
+    assert {p.name: p.read_bytes() for p in directory.glob("*.json")} == before
+    assert runtime.catalog is previous_catalog
+    assert runtime.events == previous_events
+    assert runtime.capabilities()["products"]
+
+
+def test_valid_sort_order_publishes_prevalidated_capabilities(case):
+    path = case.instance / "recipes/coffee.json"
+    recipe = json.loads(path.read_text()); recipe["display"] = {"sortOrder": -1.5}
+    result = case.runtime.save_recipe(json.dumps(recipe))
+    assert result["ok"]
+    assert result["capabilities"]["products"] == case.runtime.capabilities()["products"]
+    assert json.loads(path.read_text())["display"]["sortOrder"] == -1.5
+
+
+def test_legacy_oversized_command_does_not_prevent_subprocess_startup(case):
+    case.runtime.store.record_command(adjustment(messageId="legacy-overflow", payload={"materialId": "beans", "mode": "ADD", "amount": 10**400}))
+    case.runtime.store.record_command(adjustment())
+    config = deepcopy(case.config); config["localApi"]["enabled"] = False
+    code = '''
+import json, sys
+from pathlib import Path
+from backend import CoffeeDeviceRuntime
+runtime = CoffeeDeviceRuntime(json.loads(sys.argv[1]), Path(sys.argv[2]))
+try:
+    assert runtime.store.command("legacy-overflow")["state"] == "REJECTED"
+    assert runtime.store.command("add-once")["state"] == "APPLIED"
+    assert runtime.inventory.state["items"]["beans"]["onHand"] == 45
+finally:
+    runtime.close()
+'''
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "coffee-terminal")}
+    result = subprocess.run([sys.executable, "-c", code, json.dumps(config), str(case.instance)],
+                            env=env, capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stderr
+    assert case.runtime.store.command("legacy-overflow")["state"] == "REJECTED"
+
+
+@pytest.mark.parametrize("error", [OSError("disk failure"), ValueError("storage serialization failure")])
+def test_inventory_persistence_failure_is_not_a_permanent_rejection(case, error):
+    with patch.object(case.runtime.inventory, "_save", side_effect=error):
+        with pytest.raises(type(error)):
+            case.runtime._process_commands([adjustment()])
+    assert case.runtime.store.command("add-once")["state"] == "RECEIVED"
+    assert case.runtime.inventory.state["items"]["beans"]["onHand"] == 40
+    case.runtime._process_commands([adjustment()])
+    assert case.runtime.inventory.state["items"]["beans"]["onHand"] == 45
+
+
+def test_reload_with_oversized_recipe_number_does_not_poison_command_queue(case):
+    path = case.instance / "recipes/coffee.json"
+    recipe = json.loads(path.read_text()); recipe["steps"][0]["durationSeconds"] = 10**400
+    path.write_text(json.dumps(recipe))
+    before = case.runtime.catalog
+    case.runtime._process_commands([{"messageId": "invalid-reload", "type": "RELOAD_CONFIG"}, adjustment()])
+    assert case.runtime.store.command("invalid-reload")["state"] == "REJECTED"
+    assert case.runtime.catalog is before
+    assert case.runtime.store.command("add-once")["state"] == "APPLIED"

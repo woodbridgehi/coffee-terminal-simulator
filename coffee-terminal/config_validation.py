@@ -14,9 +14,20 @@ def loads(value):
     return json.loads(value, parse_constant=reject, parse_float=finite_float)
 
 
-def number(value, field, minimum=0, maximum=None):
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+def finite_number(value, field):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{field} must be a finite number")
+    try:
+        finite = math.isfinite(value)
+    except OverflowError:
+        finite = False
+    if not finite:
+        raise ValueError(f"{field} must be a finite number")
+    return value
+
+
+def number(value, field, minimum=0, maximum=None):
+    finite_number(value, field)
     if value < minimum or (maximum is not None and value > maximum):
         raise ValueError(f"{field} is out of range")
     return value

@@ -3,6 +3,7 @@ from __future__ import annotations
 from customization import compile_recipe
 
 import json
+import math
 import random
 import re
 import tempfile
@@ -25,7 +26,7 @@ import qrcode
 
 from catalog import RecipeCatalog
 from cloud import CloudClient, CloudError
-from configuration import write_config
+from configuration import write_config, write_config_bytes
 from config_validation import loads as config_loads
 from failures import FailurePolicy
 from inventory import InventoryError, InventoryManager
@@ -363,6 +364,12 @@ class CoffeeDeviceRuntime(WindowChromeBridge):
                     validation = RecipeCatalog(candidate, self.inventory)
                     if validation.invalid:
                         return {"ok": False, "error": "配方校验失败", "invalidRecipes": validation.invalid}
+                    # Exercise the complete response/sync projection before any
+                    # live file, catalog or history is changed.
+                    capabilities = validation.capabilities(self.device_id, self.config.get("storeId", ""))
+                    capabilities["recipes"] = deepcopy(validation.list())
+                    capabilities["generatedAt"] = now()
+                validation.recipes_dir = directory
                 if old and old.get('version') != recipe.get('version'):
                     version = str(old.get('version', ''))
                     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,79}', version):
@@ -372,36 +379,51 @@ class CoffeeDeviceRuntime(WindowChromeBridge):
                         raise ValueError('同版本历史配方内容冲突，禁止覆盖')
                     archive.parent.mkdir(parents=True, exist_ok=True)
                     if not archive.exists(): write_config(archive, old)
-                write_config(target, recipe)
                 try:
-                    self.catalog.reload()
-                    if self.catalog.invalid:
-                        raise ValueError("配方加载失败")
-                except Exception:
+                    return self._install_recipe(target, recipe, validation, capabilities)
+                except BaseException:
+                    # The runtime/SQLite savepoint has already rolled back.
+                    # Preserve the exact prior bytes, even if commit failed after
+                    # the atomic file replacement. Files and SQL are not one WAL.
                     if previous is None:
-                        target.unlink()
-                    else:
-                        write_config(target, json.loads(previous))
-                    self.catalog.reload()
+                        target.unlink(missing_ok=True)
+                    elif target.read_bytes() != previous:
+                        write_config_bytes(target, previous)
                     raise
-                self.last_synced_capability = None
-                self._emit("capability.changed", "配方已保存", {"capabilityVersion": self.catalog.version})
-                return {"ok": True, "recipeVersion": recipe["version"], "capabilities": self.capabilities()}
-        except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        except (OSError, sqlite3.Error, ValueError, KeyError, TypeError, AttributeError, OverflowError) as exc:
             return {"ok": False, "error": str(exc)}
 
     @atomic_runtime
+    def _install_recipe(self, target: Path, recipe: dict[str, Any], candidate: RecipeCatalog,
+                        capabilities: dict[str, Any]) -> dict[str, Any]:
+        self.catalog = candidate
+        self.last_synced_capability = None
+        self._emit("capability.changed", "配方已保存", {"capabilityVersion": candidate.version})
+        write_config(target, recipe)
+        return {"ok": True, "recipeVersion": recipe["version"], "capabilities": capabilities}
+
+    @atomic_runtime
     def adjust_inventory(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # Only deterministic input conversion errors are permanent rejections.
+        # Storage/event failures must escape so the outer command remains RECEIVED.
         try:
             if not isinstance(payload, dict) or not isinstance(payload.get("materialId"), str) or not isinstance(payload.get("mode", "ADD"), str):
                 raise InventoryError("无效库存调整参数")
-            change = self.inventory.adjust(payload["materialId"], payload.get("mode", "ADD"), float(payload["amount"]))
-            change.update({"reason": payload.get("reason", "OPERATOR_ADJUSTMENT"), "operatorId": payload.get("operatorId")})
-            self._emit("inventory.adjusted", f"物料 {change['materialId']} 已调整", change)
-            self._inventory_changed()
-            return {"ok": True, "change": change, "inventory": self.inventory_snapshot()}
-        except (InventoryError, KeyError, TypeError, ValueError) as exc:
+            if isinstance(payload.get("amount"), bool):
+                raise InventoryError("库存调整数量必须是有限数字")
+            amount = float(payload["amount"])
+            if not math.isfinite(amount):
+                raise InventoryError("库存调整数量必须是有限数字")
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            return {"ok": False, "reasonCode": "INVALID_COMMAND", "error": str(exc)}
+        try:
+            change = self.inventory.adjust(payload["materialId"], payload.get("mode", "ADD"), amount)
+        except InventoryError as exc:
             return {"ok": False, "error": str(exc)}
+        change.update({"reason": payload.get("reason", "OPERATOR_ADJUSTMENT"), "operatorId": payload.get("operatorId")})
+        self._emit("inventory.adjusted", f"物料 {change['materialId']} 已调整", change)
+        self._inventory_changed()
+        return {"ok": True, "change": change, "inventory": self.inventory_snapshot()}
 
     def update_override(self, payload: dict[str, Any]) -> dict[str, Any]:
         rate = float(payload.get("globalFailureRate", self.failures.runtime_failure_rate))
