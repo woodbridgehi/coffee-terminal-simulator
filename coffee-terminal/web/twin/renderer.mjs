@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {createWorkcell} from '../robot/models.mjs';
+import mainLayout from '../../../config/twin/coffee-workcell-main-v2.json' with {type:'json'};
 import {createShop} from '../robot/shop.mjs';
 import {armVisualState,containerFill,scenePosition} from './visual-state.mjs';
 import {ownMaterials,cabinetVisual,deviceVisual,armVisual,cupVisual,milkVesselVisual} from './visuals.mjs';
@@ -27,7 +29,11 @@ export class TwinRenderer {
     this.root=new THREE.Group();this.root.rotation.x=-Math.PI/2;this.scene.add(this.root);
     this.shop=createShop();ownMaterials(this.shop.group);this.scene.add(this.shop.group);
     const jobs=[this.shop.ready];this.devices={};
+    if(config.presentation==='main-workcell'&&JSON.stringify(config.obstacles)===JSON.stringify(mainLayout.obstacles)&&JSON.stringify(config.stations)===JSON.stringify(mainLayout.stations)) {
+      this.workcell=createWorkcell();ownMaterials(this.workcell.group);this.scene.add(this.workcell.group);
+    }
     for(const def of config.obstacles){
+      if(this.workcell)continue;
       const holder=new THREE.Group();holder.name=`twin-obstacle:${def.id}`;this.setPose(holder,def.pose);this.root.add(holder);
       let visual;
       if(def.id==='table')visual=cabinetVisual(def);
@@ -44,10 +50,10 @@ export class TwinRenderer {
     let number=0;
     for(const [id,station] of Object.entries(config.stations)){
       if(['left-ready','right-ready','pour'].includes(id))continue;
-      const pad=new THREE.Mesh(new THREE.TorusGeometry(.08,.004,8,40),new THREE.MeshStandardMaterial({color:'#b78a52',metalness:.6,roughness:.3}));
+      if(!this.workcell){const pad=new THREE.Mesh(new THREE.TorusGeometry(.08,.004,8,40),new THREE.MeshStandardMaterial({color:'#b78a52',metalness:.6,roughness:.3}));
       const table=config.obstacles.find(o=>o.id==='table');
-      pad.position.set(station.pose.position[0],station.pose.position[1],table?table.pose.position[2]+table.size[2]/2+.012:station.pose.position[2]-.1);this.root.add(pad);
-      const label=document.createElement('span');label.className='twin-label';label.textContent=`${++number} · ${station.label}`;host.append(label);
+      pad.position.set(station.pose.position[0],station.pose.position[1],table?table.pose.position[2]+table.size[2]/2+.012:station.pose.position[2]-.1);this.root.add(pad);}
+      const label=document.createElement('span');label.className='twin-label';label.textContent=`${station.number??++number} · ${station.label}`;host.append(label);
       this.labels.push({label,position:scenePosition(station.pose.position),deviceId:Object.entries(config.devices).find(([,d])=>d.station===id)?.[0]});
     }
     this.arms={};
@@ -104,7 +110,15 @@ export class TwinRenderer {
       });this.setPose(arm.gripper,pose);
     }
     for(const [id,object] of Object.entries(state.objects)){
-      const visual=this.objects[id],fill=containerFill(this.config.objects[id],object);this.setPose(visual.holder,object.pose);visual.visual.setFill(fill.fraction,fill.milkFraction);
+      const visual=this.objects[id],fill=containerFill(this.config.objects[id],object);this.setPose(visual.holder,object.pose);visual.visual.setFill(fill.fraction,fill.milkFraction);visual.visual.setSealed?.(object.sealed);
+    }
+    if(this.workcell) {
+      for(const [id,pad] of Object.entries(this.workcell.pads)) {
+        const device=Object.entries(this.config.devices).find(([,d])=>d.station===id);
+        const mode=state.devices[device?.[0]]?.mode;pad.material.color.set(mode==='fault'?'#a84032':mode==='running'?'#c79a50':'#365143');
+      }
+      const seal=state.tasks.seal,progress=seal?.status==='running'?Math.min(1,seal.elapsed/this.config.devices.lidder.duration):0;
+      this.workcell.press.position.y=1.42-Math.sin(progress*Math.PI)*.17;
     }
     this.updateDebug();
   }

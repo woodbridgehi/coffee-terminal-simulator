@@ -57,7 +57,7 @@ export function cupVisual(def){
   holder.scale.set(def.radius/.059,def.height/.176,def.radius/.059);
   holder.add(cup.group);ownMaterials(holder);
   const ready=brandCup(cup);ready.catch(()=>{});
-  return {group:holder,ready,setFill:(fraction,milk)=>{
+  return {group:holder,ready,setSealed:value=>{cup.lid.visible=!!value;},setFill:(fraction,milk)=>{
     cup.liquid.visible=fraction>.001;cup.liquid.position.y=-.074+fraction*.15;
     cup.liquid.scale.setScalar(.86+fraction*.13);
     cup.liquid.material.color.copy(M.coffee.color).lerp(new THREE.Color('#cda578'),milk*.85);

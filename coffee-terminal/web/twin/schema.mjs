@@ -27,7 +27,8 @@ export function validateWorld(w) {
     idCheck(id);assert(w.stations[d.station]&&Number.isFinite(d.warmup)&&d.warmup>=0&&Number.isFinite(d.cooldown)&&d.cooldown>=0,`${id} device`);
     assert(positive(d.duration)&&Array.isArray(d.inputs)&&d.inputs.every(i=>w.materials[i.material]&&positive(i.amount)),`${id} recipe`);
     assert(new Set(d.inputs.map(i=>i.material)).size===d.inputs.length,`${id} duplicate input`);
-    assert(positive(d.outputKg),`${id} outputKg`);
+    assert(positive(d.outputKg)||(d.effect==='seal'&&d.outputKg===0&&d.inputs.length===0),`${id} outputKg`);
+    assert(d.effect===undefined||d.effect==='seal',`${id} effect`);
     assert(d.inputs.reduce((s,i)=>s+i.amount,0)+1e-9>=d.outputKg,`${id} mass conservation`);
   }
   assert(w.objects&&Object.keys(w.objects).length>0,'objects');

@@ -2,7 +2,7 @@ import {TwinRenderer} from './renderer.mjs';
 import {validateWorld} from './schema.mjs';
 import {latteTasks} from './recipes.mjs';
 const $=id=>document.getElementById(id);
-const names={brewer:'咖啡机',foamer:'奶沫机','hot-water':'热水机',beans:'咖啡豆','water-stock':'水','milk-stock':'牛奶'};
+const names={brewer:'咖啡机',foamer:'奶沫机','hot-water':'热水机',lidder:'封盖机',beans:'咖啡豆','water-stock':'水','milk-stock':'牛奶'};
 const modes={warming:'预热',idle:'待机',running:'运行',cooldown:'清洁恢复',fault:'故障',ready:'准备就绪',completed:'制作完成',failed:'任务失败',collision:'碰撞停机',pending:'等待',done:'完成',skipped:'跳过'};
 let config,renderer,worker,state,playing=false,busy=false,replay=null,last=performance.now(),accumulator=0;
 function pause(){playing=false;$('play').textContent=state?.status==='running'?'继续':'开始';}
@@ -16,7 +16,7 @@ function draw(s,events=[]) {
   $('devices').replaceChildren(...Object.entries(s.devices).map(([id,d])=>{const row=node('div','','device');row.append(node('b',names[id]??id),node('span',`${modes[d.mode]??d.mode}${d.remaining>0?' '+d.remaining.toFixed(1)+'s':''}`,`pill ${d.mode}`));return row;}));
   $('materials').replaceChildren(...Object.entries(s.materials).map(([id,m])=>{const row=node('div','','material');row.append(node('span',names[id]??id),node('span',`${m.amount.toFixed(3)} kg${m.reserved>.0001?' · 已预留 '+m.reserved.toFixed(3):''}`));return row;}));
   $('containers').replaceChildren(...Object.entries(s.objects).map(([id,o])=>node('div',`${id} · ${(Object.values(o.contents).reduce((a,b)=>a+b,0)*1000).toFixed(1)} g · ${o.owner??'已放置'}`,'container')));
-  const taskDefs=replay?.tasks??latteTasks(),max=Math.max(80,s.time);
+  const taskDefs=replay?.tasks??latteTasks(config),max=Math.max(80,s.time);
   $('gantt').replaceChildren(...taskDefs.map(t=>{const ts=s.tasks[t.id],row=node('div','',`gantt-row ${ts.status}`),track=node('div','','gantt-track');row.title=`${t.id}: ${ts.reason??ts.status}`;row.append(node('span',t.id),track);if(ts.startedAt!==null){const bar=node('div','',`gantt-bar ${t.robot??''}`);bar.style.left=`${ts.startedAt/max*100}%`;bar.style.width=`${Math.max(.3,((ts.finishedAt??s.time)-ts.startedAt)/max*100)}%`;track.append(bar);}return row;}));
   $('events').textContent=events.slice(-15).map(e=>`${e.time.toFixed(2)}  ${e.type} ${e.task??e.reason??''}`).join('\n');
   if(s.status==='running'&&!Object.values(s.tasks).some(t=>t.status==='running')&&Object.values(s.tasks).some(t=>t.reason==='insufficient_material'))notify('等待补料 · 库存不足');
@@ -26,6 +26,9 @@ function init(next=config) {
   const validated=validateWorld(next);
   playing=false;busy=false;accumulator=0;replay=null;$('play').textContent='开始';$('seek').disabled=true;enable(false);
   config=validated;
+  const chosen=$('fault-device').value;
+  $('fault-device').replaceChildren(...Object.keys(config.devices).map(id=>{const option=node('option',names[id]??id);option.value=id;return option;}));
+  if(config.devices[chosen])$('fault-device').value=chosen;
   worker?.terminate();renderer?.dispose();renderer=new TwinRenderer($('viewport'),config);renderer.debugVisible=$('collision').checked;renderer.setView($('view').value);renderer.labelsVisible=$('labels').checked;
   worker=new Worker('digital-twin.worker.js',{type:'module'});
   worker.onmessage=({data})=>{
@@ -65,4 +68,4 @@ function frame(now) {
   if(playing&&!busy&&!replay){accumulator+=elapsed*Number($('speed').value);const ticks=Math.min(50,Math.floor(accumulator/config.dt));if(ticks){accumulator-=ticks*config.dt;send({type:'advance',ticks});}}
   renderer?.render();requestAnimationFrame(frame);
 }
-try{const response=await fetch('twin/coffee-workcell-v1.json');if(!response.ok)throw Error(`场景加载 HTTP ${response.status}`);init(await response.json());requestAnimationFrame(frame);}catch(e){notify(e.message);}
+try{const response=await fetch('twin/coffee-workcell-main-v2.json');if(!response.ok)throw Error(`场景加载 HTTP ${response.status}`);init(await response.json());requestAnimationFrame(frame);}catch(e){notify(e.message);}

@@ -177,3 +177,5 @@ npm run start:twin
 ```
 
 See the [digital twin guide](docs/digital-twin.md) for configuration, URDF import, verification, and model accuracy limits.
+
+The default twin shares the complete main workcell (cup magazine, dispensers, lid press and pickup shelf), with aligned stations, upright collision-checked transport and a 31-step capped-latte workflow. The original simplified v1 configuration remains available for historical experiments.

@@ -44,6 +44,7 @@ export class Simulation {
     if(t.type==='process') {
       const d=this.state.devices[t.device],def=this.config.devices[t.device],o=this.state.objects[t.object];
       if(d.mode!=='idle')return blocked(`device_${d.mode}`);
+      if(def.effect==='seal'&&Object.entries(this.state.robots).some(([id,r])=>vec(fk(this.config.robots[id],r.q).position).distanceTo(vec(o.pose.position))<.25))return blocked('gripper_not_clear');
       if(o.owner||vec(o.pose.position).distanceTo(vec(this.config.stations[def.station].pose.position))>.015) return blocked('container_not_at_device');
       if(Object.values(o.contents).reduce((a,b)=>a+b,0)+def.outputKg>this.config.objects[t.object].capacityKg+1e-9) {this.fail(t,'CAPACITY_EXCEEDED');return false;}
       if(def.inputs.some(i=>this.state.materials[i.material].amount-this.state.materials[i.material].reserved<i.amount-1e-9))return blocked('insufficient_material');
@@ -119,6 +120,7 @@ export class Simulation {
         this.state.objects[t.object].contents[id]=(this.state.objects[t.object].contents[id]??0)+amount;
       }
       if(a.elapsed>=a.ticks) {
+        if(t.type==='process'&&this.config.devices[t.device].effect==='seal')this.state.objects[t.object].sealed=true;
         if(t.type==='grasp') {const o=this.state.objects[t.object];o.owner=t.robot;o.attachment=relative(fk(this.config.robots[t.robot],this.state.robots[t.robot].q),o.pose);}
         if(t.type==='release') {const o=this.state.objects[t.object];o.owner=null;o.attachment=null;}
         s.status='done';s.finishedAt=this.state.time;this.release(t);this.emit('task.completed',{task:t.id});

@@ -1,5 +1,5 @@
 // Resource names are stable experiment inputs. Device processing releases the robot.
-export function latteTasks() {
+export function latteTasks(world) {
   const tasks=[];
   const add=(id,type,after,details)=>tasks.push({id,type,after,resources:[],...details});
   const move=(id,robot,station,after,object)=>add(id,'move',after,{robot,station,allowedGrasps:object?[{robot,object}]:[]});
@@ -27,7 +27,17 @@ export function latteTasks() {
   move('right-clear-pitcher','right','right-ready',['right-release-pitcher'],'milk-cup');
   move('right-get-cup','right','handoff',['right-clear-pitcher'],'cup');
   grasp('right-grasp-cup','right','cup',['right-get-cup']);
-  move('right-serve','right','pickup',['right-grasp-cup']);
+  let serveAfter='right-grasp-cup';
+  if(world?.devices.lidder) {
+    move('right-to-lid','right','lid',[serveAfter]);
+    release('right-release-lid','right','cup','lid',['right-to-lid']);
+    move('right-clear-lid','right','right-ready',['right-release-lid'],'cup');
+    add('seal','process',['right-clear-lid'],{device:'lidder',object:'cup'});
+    move('right-get-sealed','right','lid',['seal'],'cup');
+    grasp('right-grasp-sealed','right','cup',['right-get-sealed']);
+    serveAfter='right-grasp-sealed';
+  }
+  move('right-serve','right','pickup',[serveAfter]);
   release('right-release-cup','right','cup','pickup',['right-serve']);
   move('right-clear-pickup','right','right-ready',['right-release-cup'],'cup');
   return tasks;

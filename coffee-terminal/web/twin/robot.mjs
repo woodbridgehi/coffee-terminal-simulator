@@ -83,3 +83,42 @@ export function trajectory(robot,start,end,dt) {
     return {q:start.map((v,i)=>v+(end[i]-v)*s),dq:start.map((v,i)=>(end[i]-v)*ds)};
   }};
 }
+
+// C2 natural cubic joint path with a quintic clock. Analytic bounds on each
+// polynomial's derivatives give conservative v/a/jerk limits for the clock.
+export function pathTrajectory(robot,knots,dt) {
+  const n=knots.length-1;if(n<1)return trajectory(robot,knots[0],knots[0],dt);
+  const curves=Array.from({length:6},(_,j)=>{
+    const y=knots.map(q=>q[j]),m=Array(n+1).fill(0),diag=Array(n+1).fill(4),rhs=Array(n+1).fill(0);
+    for(let i=1;i<n;i++)rhs[i]=6*(y[i+1]-2*y[i]+y[i-1]);
+    for(let i=2;i<n;i++){const f=1/diag[i-1];diag[i]-=f;rhs[i]-=f*rhs[i-1];}
+    for(let i=n-1;i>0;i--)m[i]=(rhs[i]-m[i+1])/diag[i];
+    return Array.from({length:n},(_,i)=>[y[i],y[i+1]-y[i]-(2*m[i]+m[i+1])/6,m[i]/2,(m[i+1]-m[i])/6]);
+  });
+  const inverse=s=>{let lo=0,hi=1;for(let k=0;k<45;k++){const u=(lo+hi)/2;if(10*u**3-15*u**4+6*u**5<s)lo=u;else hi=u;}return (lo+hi)/2;};
+  const clocks=Array.from({length:n},(_,i)=>{
+    const lo=inverse(i/n),hi=inverse((i+1)/n);
+    const bound=(f,roots)=>Math.max(...[lo,hi,...roots.filter(u=>u>lo&&u<hi)].map(u=>Math.abs(f(u))))*n;
+    return [bound(u=>30*u*u-60*u**3+30*u**4,[.5]),bound(u=>60*u-180*u*u+120*u**3,[(3-Math.sqrt(3))/6,(3+Math.sqrt(3))/6]),bound(u=>60-360*u+360*u*u,[.5])];
+  });
+  let duration=dt;
+  curves.forEach((pieces,j)=>{
+    for(const [index,[a,b,c,d]] of pieces.entries()){
+      let b1=0,b2=0,b3=0;
+      const extrema=[0,1];if(d&&-c/(3*d)>0&&-c/(3*d)<1)extrema.push(-c/(3*d));
+      b1=Math.max(b1,...extrema.map(t=>Math.abs(b+2*c*t+3*d*t*t)));
+      b2=Math.max(b2,Math.abs(2*c),Math.abs(2*c+6*d));b3=Math.max(b3,Math.abs(6*d));
+      // Include stationary points to reject spline overshoot outside joint limits.
+      const disc=4*c*c-12*d*b,roots=d&&disc>=0?[(-2*c+Math.sqrt(disc))/(6*d),(-2*c-Math.sqrt(disc))/(6*d)]:c?[-b/(2*c)]:[];
+      for(const t of [0,1,...roots.filter(t=>t>0&&t<1)]){const q=a+b*t+c*t*t+d*t*t*t;if(q<robot.limits[j].min||q>robot.limits[j].max)throw Error(`JOINT_LIMIT: ${robot.id}/${j}`);}
+      const l=robot.limits[j],[v,acc,k]=clocks[index];
+      duration=Math.max(duration,b1*v/l.velocity,Math.sqrt((b2*v*v+b1*acc)/l.acceleration),Math.cbrt((b3*v**3+3*b2*v*acc+b1*k)/l.jerk));
+    }
+  });
+  const ticks=Math.ceil(duration/dt),T=ticks*dt;
+  return {ticks,duration:T,sample(tick){
+    const u=Math.max(0,Math.min(1,tick/ticks)),s=n*(10*u**3-15*u**4+6*u**5),ds=n*(30*u*u-60*u**3+30*u**4)/T;
+    const i=Math.min(n-1,Math.floor(s)),t=s-i;
+    return {q:curves.map(p=>{const [a,b,c,d]=p[i];return a+b*t+c*t*t+d*t*t*t;}),dq:curves.map(p=>{const [,b,c,d]=p[i];return (b+2*c*t+3*d*t*t)*ds;})};
+  }};
+}
