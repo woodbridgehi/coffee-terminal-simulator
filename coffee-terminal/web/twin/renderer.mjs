@@ -91,6 +91,16 @@ export class TwinRenderer {
     const target=this.controls.target;this.camera.position.set(target.x+p[0]*scale*radius,target.y+(p[1]-1)*scale*radius,target.z+p[2]*scale*radius);
     this.camera.lookAt(target);this.controls.update();
   }
+  selectDevice(id){
+    this.selectedDevice=id;
+    for(const entry of this.labels)entry.label.dataset.selected=entry.deviceId===id;
+  }
+  focusDevice(id){
+    const device=this.config.devices[id],robot=this.config.robots[id];
+    const pose=device?this.config.stations[device.station].pose:robot?.base;if(!pose)return;
+    const target=scenePosition(pose.position);this.controls.target.copy(target);
+    this.camera.position.copy(target).add(new THREE.Vector3(.9,1.2,2.2));this.camera.lookAt(target);this.controls.update();
+  }
   resize(){
     const w=this.host.clientWidth,h=this.host.clientHeight;if(!w||!h)return;
     this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.renderer.setSize(w,h);
