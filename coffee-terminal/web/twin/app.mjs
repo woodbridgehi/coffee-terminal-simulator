@@ -26,7 +26,7 @@ function init(next=config) {
   const validated=validateWorld(next);
   playing=false;busy=false;accumulator=0;replay=null;$('play').textContent='开始';$('seek').disabled=true;enable(false);
   config=validated;
-  worker?.terminate();renderer?.dispose();renderer=new TwinRenderer($('viewport'),config);renderer.debugVisible=$('collision').checked;
+  worker?.terminate();renderer?.dispose();renderer=new TwinRenderer($('viewport'),config);renderer.debugVisible=$('collision').checked;renderer.setView($('view').value);renderer.labelsVisible=$('labels').checked;
   worker=new Worker('digital-twin.worker.js',{type:'module'});
   worker.onmessage=({data})=>{
     busy=false;
@@ -45,7 +45,9 @@ function download(data,name){const url=URL.createObjectURL(new Blob([JSON.string
 $('play').onclick=()=>{if(replay)return;playing=!playing;$('play').textContent=playing?'暂停':'继续';last=performance.now();};
 $('step').onclick=()=>{if(!busy&&!replay)send({type:'advance',ticks:1});};
 $('reset').onclick=()=>init();$('policy').onchange=()=>init();
-$('collision').onchange=()=>{renderer.debugVisible=$('collision').checked;renderer.updateDebug();};
+$('view').onchange=()=>renderer?.setView($('view').value);
+$('labels').onchange=()=>{if(renderer)renderer.labelsVisible=$('labels').checked;};
+$('collision').onchange=()=>{renderer.debugVisible=$('collision').checked;renderer.setView($('view').value);renderer.labelsVisible=$('labels').checked;renderer.updateDebug();};
 $('export').onclick=()=>{pause();if(replay)download(replay,'coffee-twin-replay.json');else send({type:'export'});};
 $('compare').onclick=()=>{pause();enable(false);$('comparison').textContent='正在执行串行与并行实验…';send({type:'compare',config});};
 for(const type of ['fault','repair'])$(type).onclick=()=>send({type:'command',command:{type,device:$('fault-device').value}});
@@ -54,7 +56,7 @@ $('world-file').onchange=async e=>{try{const file=e.target.files[0];if(file)init
 $('replay-file').onchange=async e=>{try{
   const file=e.target.files[0];if(!file)return;const data=JSON.parse(await file.text());validateWorld(data.config);
   if(data.schemaVersion!==1||!Array.isArray(data.trace)||!data.trace.length||!Array.isArray(data.tasks))throw Error('实验文件缺少有效回放轨迹');
-  playing=false;worker?.terminate();worker=null;busy=false;replay=data;config=data.config;renderer?.dispose();renderer=new TwinRenderer($('viewport'),config);renderer.debugVisible=$('collision').checked;
+  playing=false;worker?.terminate();worker=null;busy=false;replay=data;config=data.config;renderer?.dispose();renderer=new TwinRenderer($('viewport'),config);renderer.debugVisible=$('collision').checked;renderer.setView($('view').value);renderer.labelsVisible=$('labels').checked;
   enable(false);$('reset').disabled=false;$('export').disabled=false;$('seek').disabled=false;$('seek').max=data.trace.length-1;$('seek').value=0;draw(data.trace[0],[]);
 }catch(e){notify(`回放导入失败：${e.message}`);}};
 $('seek').oninput=()=>{const s=replay.trace[Number($('seek').value)];draw(s,replay.events.filter(e=>e.time<=s.time));};

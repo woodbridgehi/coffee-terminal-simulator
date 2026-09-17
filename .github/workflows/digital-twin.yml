@@ -1,9 +1,9 @@
 name: Digital twin
 on:
   push:
-    paths: ['coffee-terminal/web/twin/**', 'coffee-terminal/web/digital-twin.*', 'scripts/serve_scene.py', 'config/twin/**', 'scripts/*twin*', 'tests/**', 'package*.json', '.github/workflows/digital-twin.yml']
+    paths: ['coffee-terminal/web/twin/**', 'coffee-terminal/web/robot/**', 'coffee-terminal/web/assets/**', 'coffee-terminal/web/digital-twin.*', 'scripts/serve_scene.py', 'config/twin/**', 'scripts/*twin*', 'tests/**', 'package*.json', '.github/workflows/digital-twin.yml']
   pull_request:
-    paths: ['coffee-terminal/web/twin/**', 'coffee-terminal/web/digital-twin.*', 'scripts/serve_scene.py', 'config/twin/**', 'scripts/*twin*', 'tests/**', 'package*.json', '.github/workflows/digital-twin.yml']
+    paths: ['coffee-terminal/web/twin/**', 'coffee-terminal/web/robot/**', 'coffee-terminal/web/assets/**', 'coffee-terminal/web/digital-twin.*', 'scripts/serve_scene.py', 'config/twin/**', 'scripts/*twin*', 'tests/**', 'package*.json', '.github/workflows/digital-twin.yml']
 permissions:
   contents: read
 jobs:

@@ -121,7 +121,7 @@ export function createCup({ miniature = false } = {}) {
   } };
 }
 
-export function createWorkcell() {
+export function createWorkcell({ cabinetOnly = false } = {}) {
   const group = new THREE.Group(); group.name = 'coffee-workcell';
   // Floor cabinet, open side detailing, adjustable feet and brushed worktop.
   box(group, [4.35, 0.12, 2.45], [0, 0.88, 0.05], M.lightSteel, 0.045);
@@ -140,6 +140,7 @@ export function createWorkcell() {
   for (let i = 0; i < 11; i++) box(group, [0.52, 0.012, 0.014], [1.40, 0.28 + i * 0.025, 1.20], M.dark, 0.003);
   // Low rear rail leaves the machinery visible from all inspection angles.
   box(group, [4.2, 0.10, 0.04], [0, 1.0, -1.16], M.steel);
+  if (cabinetOnly) return { group, pads: {}, press: null };
   const pads = {};
   for (const [id, station] of Object.entries(STATIONS)) {
     const [x, , z] = station.position;
