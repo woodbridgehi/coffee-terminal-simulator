@@ -166,3 +166,14 @@ This repository is currently an internal project. Add a license before distribut
 Stock, jobs, pickup occupancy and outgoing events share SQLite. Completed cups keep the pickup slot occupied until a matching local confirmation; remote interrupted tasks require on-site review. Historical recipe versions can be loaded from recipe-archive when validated. Customer cloud pages default to an available 3D view, whereas the terminal opens 3D on demand.
 
 See [the complete index](docs/README.md) for recovery, customization, UR arms, sound, content packages, Windows packaging and the documentation audit. Dated test counts describe their original releases, not a new run.
+
+## Digital twin simulation lab
+
+An independent Three.js + Rapier workcell simulation supports dual-arm motion, collision queries, device states, material consumption, scheduling, and experiment replay. It does not control production orders or physical robots.
+
+```bash
+npm ci
+npm run start:twin
+```
+
+See the [digital twin guide](docs/digital-twin.md) for configuration, URDF import, verification, and model accuracy limits.

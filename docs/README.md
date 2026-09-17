@@ -9,6 +9,7 @@
 | 实例、配方、材料、历史版本 | [配置参考](../config/README.md) |
 | 激活、软件配对、凭据轮换 | [ACTIVATION.md](../ACTIVATION.md) |
 | 制作中断与现场核验 | [restart-recovery.md](restart-recovery.md) |
+| 独立数字孪生、任务调度与实验回放 | [digital-twin.md](digital-twin.md) |
 | Three.js工作站与构建 | [robot-scene.md](robot-scene.md) |
 | UR10e双臂、夹持与拉花边界 | [ur-dual-arm-latte-art.md](ur-dual-arm-latte-art.md) |
 | 工序音效 | [sound-effects.md](sound-effects.md) |

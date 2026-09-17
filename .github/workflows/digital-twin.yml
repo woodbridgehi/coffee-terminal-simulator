@@ -1,0 +1,27 @@
+name: Digital twin
+on:
+  push:
+    paths: ['coffee-terminal/web/twin/**', 'coffee-terminal/web/digital-twin.*', 'scripts/serve_scene.py', 'config/twin/**', 'scripts/*twin*', 'tests/**', 'package*.json', '.github/workflows/digital-twin.yml']
+  pull_request:
+    paths: ['coffee-terminal/web/twin/**', 'coffee-terminal/web/digital-twin.*', 'scripts/serve_scene.py', 'config/twin/**', 'scripts/*twin*', 'tests/**', 'package*.json', '.github/workflows/digital-twin.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: npm run build:twin
+      - run: npm test
+      - run: npm run twin:run -- --compare
+      - run: npm run twin:run -- --output /tmp/coffee-experiment.json
+      - run: npm run twin:run -- --replay /tmp/coffee-experiment.json
+      - run: git diff --exit-code -- coffee-terminal/web/digital-twin.bundle.js coffee-terminal/web/digital-twin.worker.js coffee-terminal/web/twin/coffee-workcell-v1.json coffee-terminal/web/twin/RAPIER-LICENSE.txt
