@@ -16,7 +16,7 @@ Coffee Terminal Simulator 是一个基于 Python、pywebview 的桌面终端模�
 - 提供本地设备 API、开发控制台、HTTP remote 和 MQTT 5 remote 模式。
 - 支持模拟器配对、一次性激活和凭证轮换。
 
-模拟器不模拟真实机械动作，不处理正式支付和退款。手机端始终访问云端菜单和订单 API，不直接访问模拟器本地 API。
+模拟器有Three.js运动学示意，但不做刚体接触物理仿真或真实机械控制，不处理正式支付和退款。手机端始终访问云端菜单和订单 API，不直接访问模拟器本地 API。
 
 ## 快速开始
 
@@ -46,12 +46,12 @@ uv pip install --python .venv/bin/python -r requirements.lock
 ### 三维双臂工作站
 
 双击 `start-robot-scene.command`，或执行 `./start-robot-scene.command`，打开本地 Three.js 三维场景。
-包含双六轴机械臂、八个工位、三种饮品流程、时间轴及关节调试；无需连接云端。
+包含UR10e简化双臂、饮品工位、螺旋拉花、时间轴及关节调试；独立演示无需连接云端。
 模拟器默认二维，点击“查看三维制作”可跟随当前任务、配方和库存；手机订单状态页也可观看同一任务。上述独立页面用于自由演示。操作与接入说明见 [三维工作站](docs/robot-scene.md)。
 
 | 实例 | 城市 | 饮品数 | 本地 API |
 | --- | --- | ---: | ---: |
-| `coffee-bot-003` | 北京 | 5 | `9103` |
+| `coffee-bot-003` | 北京 | 10 | `9103` |
 | `coffee-bot-004` | 上海 | 4 | `9104` |
 | `coffee-bot-005` | 深圳 | 4 | `9105` |
 
@@ -73,6 +73,8 @@ uv pip install --python .venv/bin/python -r requirements.lock
 
 完整流程见 [ACTIVATION.md](ACTIVATION.md)。设备 Token、私钥、激活码和 MQTT 凭证只应保存在被 Git 忽略的 `.secrets/`、`.identity/` 文件中，禁止提交到仓库。
 
+运行依赖锁未包含Python测试工具，开发环境需另装 `pytest`、`pytest-subtests`。仅运行 `unittest discover` 会漏掉pytest风格用例；`npm test` 需要Node.js。
+
 ## 文档
 
 - [文档索引](docs/README.md)
@@ -84,5 +86,12 @@ uv pip install --python .venv/bin/python -r requirements.lock
 ## 测试
 
 ```bash
-uv run pytest -q
+.venv/bin/python -m pytest -q
+npm test
 ```
+
+## 当前文档基线
+
+2026-09-17已按源码重整运行时、协议、配置、配对及云端说明；完整入口见 [文档索引](docs/README.md)。实例表仅描述仓库示例，运行身份、门店、端口和云地址以本地配置及环境覆盖为准。带凭据的remote实例可能操作所连接后台的任务，测试请用隔离实例。
+
+当前支持recipe-archive历史配方、糖/冰/奶定制、现场恢复核验、持久取杯占位、轮播内容包与联合交付导出；CoppeliaSim/PyBullet/Gazebo和真实硬件执行接口仍属规划。

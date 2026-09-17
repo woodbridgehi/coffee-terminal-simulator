@@ -1,5 +1,7 @@
 # Changelog
 
+> 历史变更记录，未逐次覆盖所有后续功能。2026-09-17当前文档入口见 [文档索引](docs/README.md)。
+
 ## Unreleased — VPS 在线验证
 
 - `coffee-bot-002` 默认连接 `https://coffee-api.woodbridge.top`，心跳周期调整为 10 秒。

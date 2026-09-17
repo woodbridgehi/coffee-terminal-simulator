@@ -17,7 +17,7 @@ Coffee Terminal Simulator is a Python and pywebview application for end-to-end i
 - Provides a local device API and a developer console for integration testing.
 - Supports local mode, HTTP remote mode, MQTT 5 remote mode, simulator pairing, and credential rotation.
 
-The simulator does not model physical motion, process real payments, create production payment transactions, or decide refunds. Customer-facing clients use the cloud menu and order APIs; they never connect directly to the simulator's local API.
+The simulator includes a Three.js kinematic illustration, but no rigid-body/contact simulation or real hardware control. It does not process real payments or decide refunds. Customer-facing clients use the cloud menu and order APIs; they never connect directly to the simulator's local API.
 
 ## Architecture
 
@@ -96,11 +96,11 @@ For headless remote integration tests:
 
 | Instance | City | Store | Drinks | Local API |
 | --- | --- | --- | ---: | ---: |
-| `coffee-bot-003` | Beijing | Beijing Chaoyang Demo Store | 5 | `9103` |
+| `coffee-bot-003` | Beijing | See instance configuration | 10 | `9103` |
 | `coffee-bot-004` | Shanghai | Shanghai Jing'an Demo Store | 4 | `9104` |
 | `coffee-bot-005` | Shenzhen | Shenzhen Nanshan Demo Store | 4 | `9105` |
 
-The demo configurations are safe, non-production examples. Remote instances require valid local credentials in `.secrets/`.
+These are repository examples, not a statement about the current running deployment. Remote instances with credentials can connect to the configured cloud and affect its tasks and simulated inventory; use isolated instances for testing.
 
 ## Local and remote modes
 
@@ -141,10 +141,11 @@ Recipes and material definitions are device-local JSON files. The runtime valida
 ## Testing
 
 ```bash
-uv run pytest -q
+.venv/bin/python -m pytest -q
+npm test
 ```
 
-Browser-oriented tests can be run with the repository's Node.js test commands when Node is available. See the [documentation index](docs/README.md) for the protocol and test references.
+The runtime dependency lock does not include the Python test tools; install `pytest` and `pytest-subtests` into the development environment separately. `unittest discover` alone misses the pytest-style cases. Node.js is required for `npm test`. See the [documentation index](docs/README.md) for the protocol and test references.
 
 ## Documentation
 
@@ -159,3 +160,9 @@ Browser-oriented tests can be run with the repository's Node.js test commands wh
 ## License
 
 This repository is currently an internal project. Add a license before distributing it outside the project team.
+
+## Current behavior (2026-09-17 audit)
+
+Stock, jobs, pickup occupancy and outgoing events share SQLite. Completed cups keep the pickup slot occupied until a matching local confirmation; remote interrupted tasks require on-site review. Historical recipe versions can be loaded from recipe-archive when validated. Customer cloud pages default to an available 3D view, whereas the terminal opens 3D on demand.
+
+See [the complete index](docs/README.md) for recovery, customization, UR arms, sound, content packages, Windows packaging and the documentation audit. Dated test counts describe their original releases, not a new run.

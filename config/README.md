@@ -1,5 +1,7 @@
 # 设备实例配置说明
 
+核对日期：2026-09-17。实现依据：`configuration.py`、`catalog.py`、`inventory.py`、`backend.py`；示例不是当前线上配置。
+
 ## 1. 目录规则
 
 每台模拟设备使用一个独立目录：
@@ -11,16 +13,16 @@ config/instances/{deviceId}/
 ├── materials.json
 ├── failures.json
 └── state/
-    ├── inventory.json
-    └── runtime.db
+    ├── runtime.db         # 当前状态主存储
+    └── inventory.json     # 可选旧格式，仅首次导入
 ```
 
 - `device.json` 是启动入口，它的父目录就是完整实例目录。
 - `recipes/` 中一个 JSON 文件代表一种饮品能力。
 - `materials.json` 定义整台设备共享的物料，不为每种饮品单独创建库存。
 - `failures.json` 定义设备和步骤故障概率。
-- `state/inventory.json` 由程序自动创建和更新，不建议手工编辑。
-- `state/runtime.db` 由程序自动维护命令 Inbox、任务、游标、ACK/命令结果和事件 Outbox，不得复制到另一台设备。
+- `state/inventory.json` 仅在SQLite尚无库存时导入一次，之后不再作为实时库存写回。
+- `state/runtime.db` 统一维护库存、取杯位、命令 Inbox、任务、游标、ACK/命令结果和事件 Outbox，不得复制到另一台设备。
 
 同一台电脑同时运行多个实例时，`instanceId`、`deviceId` 和 `localApi.port` 必须不同。
 
@@ -88,7 +90,6 @@ config/instances/{deviceId}/
 | `backend.headers` | 否 | 附加到所有后台请求的自定义请求头 |
 | `backend.mqtt` | `mqtt5` 时必填 | Broker 地址、TLS 端口、会话和每设备凭证；密码只从 `.env` 注入 |
 
-MQTT 模式下心跳和普通制作进度允许丢失；离线 SQLite outbox 会按 taskId 合并待发进度。步骤/任务生命周期与命令结果不合并，命令在进入本地队列后才确认 QoS 1。
 | `localApi.enabled` | 否 | 是否启动本地调试 API，默认 `true` |
 | `localApi.host` | 否 | 默认 `127.0.0.1` |
 | `localApi.port` | 否 | 本地 API 端口，多实例不能重复 |
@@ -96,6 +97,8 @@ MQTT 模式下心跳和普通制作进度允许丢失；离线 SQLite outbox 会
 | `localApi.maxBodyBytes` | 否 | 本地写接口请求体上限，默认 65536 |
 | `localApi.allowedOrigins` | 否 | 允许访问写接口的浏览器 Origin；默认拒绝所有带 Origin 的请求 |
 | `enableConsole` | 否 | 预留开关；当前界面仍会显示控制台 |
+
+MQTT心跳与普通进度允许缺失；待发进度按taskId合并。生命周期与结果不合并。下行进入内存队列后PUBACK，之后才写SQLite，仍有进程崩溃窗口。
 
 remote 模式推荐通过 `COFFEE_DEVICE_TOKEN` 环境变量或 `.secrets/{instance}.env` 注入凭证。生产式联调使用首次安装向导或 `scripts/activate_instance.py` 和 `scripts/rotate_instance_credential.py` 管理凭证，不要把 `authToken` 写进 JSON。
 
@@ -111,16 +114,12 @@ cp config/device.bootstrap.template.json config/instances/new-terminal/device.js
 ./start-instance.command new-terminal
 ```
 
-不要填入设备 Token；保持 `registration.status` 为 `UNPROVISIONED` 并启动实例，模拟器只会在**首次且尚未激活**时显示安装向导。向导会限制设备编号为 3–6 位数字，并生成：
+不要在新实例JSON中填写Token。remote、registration未COMPLETED且没有已加载authToken时进入安装界面。当前有两条路径：
 
-```text
-deviceId:     coffee-bot-{编号}
-serialNumber: CB-{年份}-{编号}
-instanceId:   instance-coffee-bot-{编号}
-storeId:      store-{城市代码小写}-{门店编号}
-```
+- 软件配对：云端显式开启SIMULATOR_BOOTSTRAP_ENABLED，终端本地生成软件身份，商户认领配对码，终端完成provision并保存云端分配的身份和凭据。
+- 兼容预登记激活：使用平台登记的deviceId/序列号和一次性激活码，旧安装入口按设备编号、年份与门店资料生成候选字段，必须匹配云端。
 
-设备必须先在后台按相同的 `deviceId` 和 `serialNumber` 预登记并取得一次性激活码。安装完成后，设备凭证自动保存至 `.secrets/{实例目录名}.env`（权限 `0600`）；`start-instance.command` 未传 `--env-file` 时会自动加载该文件。后端已有的门店资料不会被设备覆盖，只有空字段会由首次安装资料补齐。
+两者不要混用；软件配对不是工厂硬件证书。详见 [激活与配对](../ACTIVATION.md)。启动脚本未传--env-file时自动查找对应实例秘密文件。
 
 运行模式：
 
@@ -189,6 +188,8 @@ storeId:      store-{城市代码小写}-{门店编号}
 | `display` | 否 | 描述、排序及运营扩展字段，会随能力快照上报 |
 | `visual` | 否 | 饮品形象配置 |
 | `steps` | 是 | 非空的有序制作步骤数组 |
+| `priceMinor` | 否 | 最小货币单位正整数；云端还可能应用商户价格 |
+| `optionSchema` | 否 | 定制选项、规则版本、温度与加价；不得自行推断未声明的选项 |
 
 ### 3.3 步骤字段
 
@@ -201,6 +202,9 @@ storeId:      store-{城市代码小写}-{门店编号}
 | `failureProfile` | 否 | 引用 `failures.json` 中的故障档案 |
 | `consumes` | 否 | 本步骤实际消耗的共享物料数组 |
 | `animationCue` | 否 | 本步骤使用的表现提示 |
+| `robotActions` | 否 | 三维语义动作白名单，不是硬件命令 |
+| `customizationRole` / `dispenseChannel` | 定制出料时 | 独立出料角色与模拟通道 |
+| `latteArt` | 拉花时 | 花型ID/版本，另受热饮、剂量与最小时长约束 |
 
 随机时长规则：
 
@@ -247,10 +251,11 @@ storeId:      store-{城市代码小写}-{门店编号}
 修改后调用本实例的配置重载接口，或重启程序：
 
 ```bash
-curl -X POST http://127.0.0.1:9101/device/v1/config/reload
+curl -X POST http://127.0.0.1:9101/device/v1/config/reload \
+  -H 'Content-Type: application/json' -d '{}'
 ```
 
-活动任务期间不能重载。重载成功后会重新计算能力版本、可制作杯数和时间范围。
+活动任务期间不能重载。重载先校验候选材料、全部配方与故障配置，失败保留上一有效配置；启动时则隔离无效配方。成功后重新计算能力版本、可制作杯数和时间范围。配置了localApi.authToken的所有写请求还需 `X-Local-Token`。
 
 ## 4. materials.json
 
@@ -290,7 +295,7 @@ curl -X POST http://127.0.0.1:9101/device/v1/config/reload
 0 <= initialOnHand <= capacity
 ```
 
-当前数量保存在 `state/inventory.json`。修改 `initialOnHand` 不会覆盖已存在的实时库存；它只在首次创建该物料状态时使用。
+当前数量保存在 `state/runtime.db` 的 `terminal_meta.inventory_state`。修改 `initialOnHand` 不会覆盖已存在的实时库存；它只在首次创建该物料状态时使用。
 
 新增物料后重载配置即可建立状态。已经存在的物料不能直接修改 `unit`，否则重载失败。若业务上需要换单位，应新增新的 `materialId` 并迁移配方。
 
@@ -304,19 +309,11 @@ curl -X POST http://127.0.0.1:9101/device/v1/inventory/adjustments \
 
 `mode=SET` 设置绝对量；`mode=ADD` 在当前数量上增减。结果必须位于 0 到 `capacity` 之间。
 
-## 5. state/inventory.json
+## 5. 运行时状态与旧inventory.json
 
-这是运行时文件，主要字段包括：
+SQLite中的库存对象包含version、updatedAt、items、reservations及consumedKeys（最近最多1000个消耗键）。与任务、Outbox共用本地事务；旧JSON仅首次导入。启动有活动任务时保留预占，否则清理遗留预占。
 
-- `version`：库存变化版本。
-- `updatedAt`：最后写入时间。
-- `items`：每种物料的 `onHand` 和 `reserved`。
-- `reservations`：按 `taskId` 保存的整杯预占。
-- `consumedKeys`：最近的 `taskId:stepId:attempt` 消耗幂等键，最多保留 1000 个。
-
-程序使用临时文件替换方式写入。若 `runtime.db` 中存在可恢复的活动任务，启动时保留对应预占；否则清理没有活动任务支撑的遗留预占。
-
-`state/runtime.db` 使用 SQLite WAL，保存 `command_inbox`、`production_job`、`event_outbox` 和同步游标。需要完全重置测试实例时，应先关闭该实例，再同时删除它自己的 `state/inventory.json`、`state/runtime.db`、`state/runtime.db-wal` 和 `state/runtime.db-shm`。只删除其中一种状态可能破坏任务与库存对应关系；不要删除其他设备实例的状态目录。
+备份先停止实例再复制整个state目录。完全重置仅适用于已确认可丢弃的测试实例：保留备份后移走整个state目录，让程序重新初始化；不要只删JSON或运行中只删db/WAL。生产式未决任务应走现场核验，不能用删库恢复待机。
 
 ## 6. failures.json
 
@@ -384,10 +381,10 @@ effectiveRate = 1 - (1 - globalRate) × (1 - profile.failureRate)
 ### 复制一台设备
 
 ```bash
-cp -R config/instances/coffee-bot-001 config/instances/coffee-bot-003
+cp -R config/instances/coffee-bot-001 config/instances/new-terminal
 ```
 
-修改设备身份、门店信息和本地端口。若要使用初始库存，在首次启动前删除复制目录中的 `state/inventory.json`。
+目标目录必须尚不存在。复制后在首次启动前移除新副本的整个state目录，重置新副本的注册/身份字段并设置独立端口；不要复制或复用源实例的.secrets/.identity。使用初始库存不能只删除inventory.json。
 
 ### 查询配置是否生效
 
@@ -409,3 +406,11 @@ curl http://127.0.0.1:9101/device/v1/status
 - 严重阈值不高于低库存阈值，初始数量不超过容量。
 - 故障率在 0 到 1 之间，重试次数为非负整数。
 - 制作任务结束后再重载配置。
+
+## 9. 定制、历史版本与主动同步
+
+选项语义与编译摘要见 [云端定制契约](../../coffee-cloud-mvp/docs/drink-customization.md)，拉花见 [UR双臂说明](../docs/ur-dual-arm-latte-art.md)。`robotActions` 允许cups/brew/water/milk/ice/syrup/lid/pickup/wait/latte-art。
+
+控制台保存变更配方时会归档旧版本，未提升版本的内容修改会自动生成新版本。手工修改须自行保留 `recipe-archive/<recipeId>/<version>.json`。旧订单显式请求版本时可以读取验证后的归档，但当前饮品禁用/删除或缺少有效归档仍会拒绝。
+
+“同步菜单到后台”重新加载已保存文件并上传products及完整recipes；不上传编辑框中未保存文字。云端确认前不算同步完成。详见 [北京菜单与运营交付](../docs/beijing-city-menu-and-sync.md)。

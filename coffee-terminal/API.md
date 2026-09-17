@@ -1,5 +1,7 @@
 # 咖啡终端模拟器 API
 
+核对日期：2026-09-17。字段示例为说明性子集；云端模型见相邻项目 `app/protocol.py`、运行时 `/openapi.json`。本地接口以 `local_api.py` 为准。
+
 接口分为两组：设备主动访问的云端 API，以及本机测试程序访问的设备本地 API。手机端不直接连接终端，应通过后台的销售服务下单。
 
 ## 1. 约定
@@ -45,7 +47,7 @@ Authorization: Bearer <token>
 }
 ```
 
-后台应按 `eventId` 幂等处理，并可使用 `(deviceId, bootId, sequence)` 检测单次启动期间的重复或乱序。设备进程重启后 `bootId` 会变化，`sequence` 从头计数。
+生命周期事件由后台按 `eventId` 幂等处理；`task.progress` 走Redis瞬时通道而非持久事件历史。`(deviceId, bootId, sequence)` 可用于诊断单次启动期间的重复或乱序。设备进程重启后 `bootId` 会变化，`sequence` 从头计数。
 
 ## 2. 云端接口总览
 
@@ -108,9 +110,10 @@ Idempotency-Key: rotate-uuid
 管理端创建命令也必须携带 `Idempotency-Key`。命令状态由云端统一约束：
 
 ```text
-CREATED -> DELIVERING -> ACKED -> EXECUTING -> SUCCEEDED
-                                          \-> FAILED / CANCELLED
-DELIVERING -> REJECTED / EXPIRED
+CREATED -> DELIVERING/PUBLISHED -> ACKED -> EXECUTING -> SUCCEEDED
+                                         \-> FAILED / CANCELLED
+投递结果不明 -> UNKNOWN；关联订单/任务进入 HOLD
+确认未送达且过期 -> EXPIRED
 ```
 
 轮询只表示 `DELIVERING`，不能当作已接单；ACK 才进入 `ACKED`。实际终端用 `payload.taskId` 关联 `task.started`、`task.succeeded`、`task.failed` 和 `task.cancelled`。重复事件和迟到 ACK 不允许让终态倒退。服务启动时会重放已入库的关键事件，补偿“事件已保存但投影尚未推进”的崩溃窗口。
@@ -202,8 +205,11 @@ POST /api/v1/tasks/{taskId}/ack
 | `DEVICE_BUSY` | 当前已有活动任务 | `currentTaskId` |
 | `RECIPE_NOT_FOUND` | 本机没有该配方 | `recipeId` |
 | `RECIPE_DISABLED` | 配方存在但已禁用 | `recipeId` |
-| `RECIPE_VERSION_MISMATCH` | 后台指定版本与本机不一致 | `requested`、`installed` |
+| `RECIPE_VERSION_MISMATCH` | 指定版本既非当前版本，也没有有效本地归档 | `requested`、`installed` |
 | `MATERIAL_INSUFFICIENT` | 整杯所需共享库存不足 | 物料、需求量和可用量 |
+| `PICKUP_OCCUPIED` | 取杯位尚未释放 | `pickupSlot` |
+| `INVALID_CUSTOMIZATION` | 选项编译失败 | `message` |
+| `COMPILED_RECIPE_MISMATCH` | 定制摘要缺失或不匹配 | 配方版本、摘要 |
 | `TASK_ID_CONFLICT` | 已存在的 taskId 对应另一订单或配方 | 原值和请求值 |
 
 HTTP ACK 只表达接单结果。本杯随机抽取并冻结的步骤时长通过随后发送的 `task.acknowledged` 事件上报。
@@ -274,7 +280,7 @@ POST /api/v1/devices/{deviceId}/heartbeat
 }
 ```
 
-`deviceStatus` 当前可能为 `IDLE`、`RESERVED`、`BUSY`、`READY` 或 `FAILED`。连接状态不在心跳体中；后台可根据最后心跳时间判断设备在线情况。
+`deviceStatus` 当前可能为 `IDLE`、`RESERVED`、`BUSY`、`READY`、`FAILED` 或 `RECOVERING`。当前心跳还带 `recovery` 摘要；取杯位 `pickupSlot` 通过生命周期事件及MQTT retained state同步，不在当前HTTP心跳体中。连接状态不在心跳体中；后台可根据最后心跳时间判断设备在线情况。
 
 ## 6. 同步饮品能力
 
@@ -376,7 +382,7 @@ POST /api/v1/devices/{deviceId}/events
 | 分类 | 事件类型 |
 | --- | --- |
 | 生命周期/连接 | `device.online`、`device.connection`、`cloud.connection.failed`、`cloud.worker.error` |
-| 任务 | `task.recovered`、`task.acknowledged`、`task.started`、`task.progress`、`task.paused`、`task.resumed`、`task.retry`、`task.succeeded`、`task.failed`、`task.rejected`、`task.cancelled`、`task.cleared` |
+| 任务 | `task.recovered`、`task.acknowledged`、`task.started`、`task.progress`、`task.paused`、`task.resumed`、`task.retry_wait`、`task.retry`、`task.succeeded`、`task.failed`、`task.rejected`、`task.cancelled`、`task.cleared` |
 | 步骤 | `step.started`、`step.completed`、`step.skipped` |
 | 库存 | `inventory.reserved`、`inventory.consumed`、`inventory.adjusted`、`inventory.low`、`inventory.critical`、`inventory.recovered` |
 | 配置/调试/诊断 | `capability.changed`、`debug.config-updated`、`debug.failure-armed`、`command.malformed`、`command.id-conflict`、`command.processing-failed`、`outbox.event.dead`、`outbox.command.dead` |
@@ -545,18 +551,24 @@ PATCH /api/v1/devices/{deviceId}/debug/overrides
 
 `globalFailureRate` 必须在 0 到 1 之间。当前终端会保存并展示 `eventDelayMs`，但尚未使用它延迟事件发送。
 
-## 11. 后台面向手机和运营端的建议接口
+## 11. 已实现的顾客与平台接口
 
-以下接口属于后台业务系统，不由 pywebview 程序提供：
+以下在云端提供，不在终端localhost提供：
 
-```http
-GET /api/v1/stores/{storeId}/available-products
-GET /api/v1/devices/{deviceId}/capabilities
-GET /api/v1/devices/{deviceId}/inventory
-GET /api/v1/devices/{deviceId}/alerts
-```
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| GET | `/api/v1/public/devices/{identifier}/menu` | 菜单 |
+| POST | `/api/v1/public/devices/{identifier}/quotes` | 定制报价 |
+| POST | `/api/v1/public/devices/{identifier}/orders` | 幂等下单 |
+| GET | `/api/v1/public/orders/{order_id}` | 订单状态 |
+| GET | `/api/v1/public/orders/{order_id}/events` | 订单SSE |
+| GET | `/api/v1/public/orders/{order_id}/scene` | 同机匿名旁观 |
+| POST | `/api/v1/public/orders/{order_id}/cancel` | 派单前取消 |
+| POST | `/api/v1/orders/{order_id}/payments` | 创建支付 |
+| GET | `/api/v1/admin/devices/{identifier}/capabilities` | 平台查询能力 |
+| GET | `/api/v1/admin/devices/{identifier}/inventory` | 平台查询库存 |
 
-推荐流程：设备同步能力与共享库存，后台按门店汇总可售结果，手机端从 `available-products` 获取商品并创建订单，订单服务再向选定设备投递 `MAKE_DRINK`。
+订单读写/SSE需订单访问令牌，平台接口需Bearer权限。旧文档的 `/stores/{storeId}/available-products` 是早期建议接口，当前未实现。商户独立使用 `/api/v1/merchant/*` 和Cookie/CSRF。
 
 ## 12. 设备本地 API
 
@@ -686,190 +698,48 @@ Content-Type: application/json
 
 本地接口业务失败返回 HTTP 400，未知路径返回 HTTP 404 和 `{"ok": false, "error": "NOT_FOUND"}`。
 
+### 12.7 确认取杯
+
+```http
+POST /device/v1/pickup/confirm
+Content-Type: application/json
+X-Local-Token: <配置时必填>
+
+{"taskId":"当前待取杯任务ID"}
+```
+
+只能确认匹配且已成功任务的占位，释放后上报pickup.collected。没有顾客远程释放按钮。现场重启核验使用原生 `confirm_recovery(task_id, revision, checks)`，不在这个HTTP接口中处理。
+
 ## 13. 联调时序
 
-> 本节 13.1～13.3 同时保留正式支付接入后的目标时序。当前已部署云端 `0.3.0` 采用 `TEST_FREE`，不会调用支付服务；实际可执行接口和差异见 13.4。正式支付接入后必须先确认支付成功，再创建制作任务。
+### 13.1 订单与执行
 
-一次正常制作的建议后台观察顺序：
+设备上传能力/库存 → 云端菜单与报价 → 幂等订单 → TEST_FREE排队或ONLINE支付确认 → Worker检查设备与杯位并派单 → 终端校验并冻结计划 → ACK与task.acknowledged → task.started → step.started / progress / step.completed → 最终事件 → READY待取杯 → 现场取杯确认 → 下一杯。
 
-```text
-设备 -> 后台：heartbeat / capabilities / inventory
-顾客 -> 后台：扫码、下单、支付
-后台 -> 命令队列：MAKE_DRINK
-设备 -> 后台：轮询并领取命令
-设备 -> 后台：ACK accepted=true
-设备 -> 后台：inventory.reserved
-设备 -> 后台：task.acknowledged（本杯计划时长）
-设备 -> 后台：task.started / step.started / task.progress
-设备 -> 后台：inventory.consumed / step.completed
-设备 -> 后台：task.succeeded
-设备 -> 后台：最新 inventory / capabilities
-```
+顾客取消只允许CREATED、AWAITING_PAYMENT、QUEUED。退款由云端独立处理，设备不直接调用支付渠道。终端计时完成后才扣正常步骤的料，失败按consumeOnFailure处理。
 
-### 13.1 逐步操作与双方职责
+### 13.2 传输与关联
 
-下表沿用上面的观察顺序。这里的“后台”可以由多个服务组成；为了便于联调，将其概括为销售/订单服务、支付服务、设备接入服务和命令队列。
+HTTP使用上文API；MQTT下行 `v1/devices/{deviceId}/down`，事件/ACK/结果使用 `/up` 信封，heartbeat也通过 `/up` 信封发送（QoS 0）；state/presence使用各自topic（QoS 1、retain）。`messageId`关联命令，`taskId`关联任务，`orderId`关联订单，`eventId`与摘要用于事实去重，`taskRevision`约束状态顺序，`attempt`区分真实模拟重试。
 
-| 顺序 | 发起方 | 发起指令或操作 | 关键字段 | 接收方及处理方式 |
-| --- | --- | --- | --- | --- |
-| 1 | 咖啡终端 | `POST /api/v1/devices/{deviceId}/heartbeat` | `deviceId`、`storeId`、`deviceStatus`、`currentTaskId`、`capabilityVersion`、`inventoryVersion` | 设备接入服务更新设备最后在线时间、运行状态和当前版本；可在响应中返回新的 `qrUrl`。 |
-| 2 | 咖啡终端 | `PUT /api/v1/devices/{deviceId}/capabilities` | `capabilityVersion`、`products[].recipeId`、`skuCode`、`version`、`available`、`maxServings` | 设备/商品服务覆盖该设备的能力快照，并据此刷新门店可售商品投影。 |
-| 3 | 咖啡终端 | `PUT /api/v1/devices/{deviceId}/inventory` | `inventoryVersion`、`materials[].materialId`、`onHand`、`reserved`、`available`、`status` | 库存/运营服务按更高版本覆盖设备库存，计算缺料提示和运营告警。 |
-| 4 | 咖啡终端 | `GET /api/v1/devices/{deviceId}/display-config` | 路径中的 `deviceId` | 设备接入服务返回 `qrUrl`、`qrExpiresAt`；终端只负责展示二维码。 |
-| 5 | 顾客与手机下单页 | 扫码后请求门店可售商品，例如 `GET /api/v1/stores/{storeId}/available-products` | 二维码中的设备/门店或短期会话标识 | 销售服务读取后台保存的能力和库存投影，返回当前可售 SKU；手机端不直接连接设备。 |
-| 6 | 手机下单页 | 创建订单并发起支付 | `storeId`、`deviceId`、`skuCode`、数量、顾客或会话标识 | 订单服务生成 `orderId` 并固定目标设备、配方和版本；支付服务完成支付并回告支付结果。具体下单与支付接口由销售系统定义。 |
-| 7 | 订单服务 | 向设备命令队列写入 `MAKE_DRINK` | `messageId`、`taskId`、`orderId`、`recipeId`、`recipeVersion`、`expiresAt` | 命令队列持久化命令，等待目标设备领取；订单此时只能进入“待设备确认”，不能直接标记为制作中。 |
-| 8 | 咖啡终端 | `GET /api/v1/devices/{deviceId}/commands?after={cursor}&limit=10` | `deviceId`、`after`、`limit` | 设备接入服务返回 `commands` 和 `nextCursor`；终端按 `messageId` 去重，再处理 `MAKE_DRINK`。 |
-| 9 | 咖啡终端内部 | 校验命令并准备任务 | `taskId`、`recipeId`、`recipeVersion`、`expiresAt` | 终端检查命令格式、有效期、设备是否忙碌、配方版本和共享物料；通过后汇总整杯耗材、预占库存，并为本杯随机生成且冻结步骤时长。 |
-| 10 | 咖啡终端 | `POST /api/v1/tasks/{taskId}/ack` | `messageId`、`deviceId`、`accepted`、`acceptedAt`；拒绝时增加 `reasonCode`、`details` | 设备接入/订单服务记录设备是否接单。只有 `accepted=true` 才能把订单推进到“设备已接单”；`accepted=false` 时按拒绝原因执行换机、取消或退款。 |
-| 11 | 咖啡终端 | `POST /api/v1/devices/{deviceId}/events`，`type=inventory.reserved` | `eventId`、`taskId`、`orderId`、`payload.materials` | 后台记录整杯物料已经预占。该事件用于追踪，库存最终值仍以库存快照为准。 |
-| 12 | 咖啡终端 | `POST /api/v1/devices/{deviceId}/events`，`type=task.acknowledged` | `taskId`、`plannedDurationSeconds`、`stepPlan[].stepId/stepName/stepIndex/durationSeconds` | 订单服务保存本杯冻结后的权威执行计划，可用于预计完成时间和顾客端等待提示。`stepDurations` 在兼容期保留为同内容别名。 |
-| 13 | 咖啡终端 | 向同一事件接口依次发送 `task.started`、`step.started`、`task.progress` | `taskId`、`taskRevision`、`recipeId`、`stepId`、`stepName`、`stepIndex`、`stepCount`、`stepProgress`、`overallProgress`、`remainingSeconds` | `task.started` 立即可靠处理；进度满足整杯变化至少 5% 或最长 5 秒时上报，云端只保存 Redis 最新进度并通过 Pub/Sub 驱动 SSE，不再写 PostgreSQL 任务进度。步骤/任务生命周期仍持久化。订单服务不得自行推导步骤或重新计算随机时长。 |
-| 14 | 咖啡终端 | 向同一事件接口发送 `inventory.consumed`、`step.completed` | `taskId`、`stepId`、`materialId`、`amount`、`unit`、`remaining` | 库存服务记录耗材事实，订单服务记录步骤完成；同一步骤可能消耗多种物料，因此会产生多条 `inventory.consumed`。 |
-| 15 | 咖啡终端 | 向同一事件接口发送 `task.succeeded` | `taskId`、`orderId`、`recipeId` | 订单服务将任务标记为制作成功，并通知顾客取杯。终端状态进入 `READY`，等待清理后回到 `IDLE`。 |
-| 16 | 咖啡终端 | 再次 `PUT inventory` 和 `PUT capabilities` | 新的 `inventoryVersion`；能力中的 `available`、`maxServings` | 后台用最终快照校正事件投影，并重新计算该设备和门店的可售商品。共享物料下降可能同时影响多个 SKU。 |
+MQTT命令目前先入内存队列后PUBACK，再由运行循环写SQLite；持久接收仍有崩溃窗口。事件Outbox、任务与库存事务不能反向消除此窗口。
 
-步骤 1～4 在设备运行期间会周期执行，不只发生一次。能力和库存快照也会在对应版本变化后重新同步。
+### 13.3 配方版本、视觉计划与定制
 
-### 13.2 完整时序图
+MAKE_DRINK可携带customization、compiledRecipeDigest、optionSchemaVersion；定制剂量在终端编译，任务保存冻结配方。显式旧版本可读取有效recipe-archive；缺少归档或摘要错误拒绝。严格限定的旧默认指令兼容规则见 [失败诊断](../../coffee-cloud-mvp/docs/order-failure-diagnostics.md)。
 
-图中的 `POST event` 均表示 `POST /api/v1/devices/{deviceId}/events`；后面的名称是事件信封中的 `type`。
+stepPlan[].visual包含白名单动作、材料及可选latteArt/liquidReferenceMl；dispenseChannel是模拟通道。二维/三维和声音使用同一任务计划，不通过动画生成订单成功。配方升级、当前版本与历史归档说明见 [配置参考](../config/README.md)。
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor C as 顾客
-    participant M as 手机下单页
-    participant O as 销售/订单服务
-    participant P as 支付服务
-    participant G as 设备接入服务/命令队列
-    participant D as 咖啡终端模拟器
+### 13.4 当前云端扫码流程
 
-    rect rgb(245, 248, 252)
-        Note over D,G: 设备上线及后台投影初始化
-        D->>G: POST heartbeat<br/>deviceStatus, capabilityVersion, inventoryVersion
-        G-->>D: 2xx，可选 qrUrl
-        D->>G: PUT capabilities<br/>products[], capabilityVersion
-        G-->>D: 2xx，保存设备能力快照
-        D->>G: PUT inventory<br/>materials[], inventoryVersion
-        G-->>D: 2xx，保存共享库存快照
-        D->>G: GET display-config
-        G-->>D: qrUrl, qrExpiresAt
-    end
-
-    rect rgb(252, 249, 243)
-        Note over C,O: 扫码、选品、下单与支付均在后台完成
-        C->>M: 扫描终端二维码
-        M->>O: GET available-products<br/>storeId / deviceId / session
-        O-->>M: skuCode, recipeId, available, maxServings
-        C->>M: 选择饮品并确认下单
-        M->>O: 创建订单<br/>deviceId, skuCode, quantity
-        O->>P: 发起支付<br/>orderId, amount
-        P-->>O: 支付成功<br/>orderId, paymentStatus=PAID
-        O->>G: 写入 MAKE_DRINK<br/>messageId, taskId, orderId,<br/>recipeId, recipeVersion, expiresAt
-        O-->>M: 订单已支付，等待设备确认
-    end
-
-    loop 每 commandPollSeconds 轮询
-        D->>G: GET commands?after=cursor&limit=10
-        G-->>D: commands[], nextCursor
-    end
-
-    Note over D: 按 messageId 去重；校验有效期、忙碌状态、<br/>配方版本和共享库存
-
-    alt 校验失败，设备拒单
-        D->>G: POST task ACK<br/>accepted=false, reasonCode, details
-        D->>G: POST event task.rejected<br/>eventId, taskId, orderId, reasonCode
-        G->>O: 更新任务为设备拒绝
-        O-->>M: 换机、取消或进入退款流程
-    else 校验通过，设备接单
-        Note over D: 汇总整杯耗材并预占；<br/>随机生成并冻结本杯步骤时长
-        D->>G: POST task ACK<br/>accepted=true, acceptedAt
-        D->>G: POST event inventory.reserved<br/>taskId, materials
-        D->>G: POST event task.acknowledged<br/>plannedDurationSeconds, stepPlan[]
-        G->>O: 更新订单为设备已接单
-        O-->>M: 展示预计完成时间
-
-        D->>G: POST event task.started<br/>taskId, orderId, recipeId
-
-        alt 制作过程无故障
-            loop 配方中的每一个步骤
-                D->>G: POST event step.started<br/>stepId
-                loop 当前步骤约每跨越 10% 进度
-                    D->>G: POST event task.progress<br/>stepName, stepProgress, overallProgress
-                    G->>O: 更新制作进度投影
-                    O-->>M: 刷新当前步骤和进度
-                end
-                D->>G: POST event inventory.consumed<br/>stepId, materialId, amount, remaining
-                D->>G: POST event step.completed<br/>stepId
-            end
-            D->>G: POST event task.succeeded<br/>taskId, orderId, recipeId
-            G->>O: 更新订单为制作成功
-            O-->>M: 通知顾客取杯
-        else 某步骤故障
-            Note over D: 失败前可能已有若干步骤完成并消耗物料
-            D->>G: POST event step.started / task.progress<br/>stepName, stepProgress, overallProgress
-            opt consumeOnFailure=true
-                D->>G: POST event inventory.consumed<br/>stepId, materialId, amount, remaining
-            end
-            D->>G: POST event task.failed<br/>failure.code, stepId, retryable
-            G->>O: 更新任务为制作失败
-            O-->>M: 显示处理中、重试或售后结果
-        end
-
-        D->>G: PUT inventory<br/>最新 inventoryVersion, materials[]
-        D->>G: PUT capabilities<br/>最新 available, maxServings
-        G->>O: 刷新门店可售商品投影
-    end
-```
-
-### 13.3 联调时必须保持的关联键
-
-| 字段 | 由谁生成 | 主要用途 |
-| --- | --- | --- |
-| `deviceId` | 设备管理系统 | 确定命令目标、能力和库存归属 |
-| `orderId` | 订单服务 | 关联顾客订单、支付和售后 |
-| `taskId` | 订单或任务服务 | 关联一次设备制作任务、ACK 和全部制作事件 |
-| `messageId` | 命令服务 | 命令投递幂等；同一命令重发时保持不变 |
-| `eventId` | 咖啡终端 | 后台事件去重 |
-| `bootId` + `sequence` | 咖啡终端 | 检查单次设备启动期间的事件顺序和缺口 |
-| `recipeId` + `recipeVersion` | 设备配方与商品系统共同约定 | 确认下单时使用的配方与设备实际安装版本一致 |
-| `capabilityVersion` | 咖啡终端 | 判断饮品能力内容是否变化 |
-| `inventoryVersion` | 咖啡终端 | 判断库存快照新旧，避免旧快照覆盖新状态 |
-| `cursor` / `nextCursor` | 命令服务 | 推进设备命令轮询位置 |
-
-事件与 ACK 的到达顺序可能因网络重试发生变化。订单服务应以 `taskId` 关联，以 `eventId` 去重，不应依赖 HTTP 到达顺序推进状态；同时要对长时间未 ACK、设备离线、命令过期和任务失败建立明确的超时补偿策略。
-
-### 13.4 当前云端 0.3.0 的真实扫码流程
-
-当前手机端只访问云端，不直连终端：
-
-```text
-GET  /api/v1/public/devices/{deviceId}/menu
-POST /api/v1/public/devices/{deviceId}/orders
-GET  /api/v1/public/orders/{orderId}
-```
-
-1. 终端从心跳或 `display-config` 得到 `https://coffee-api.woodbridge.top/order?device_id={deviceId}` 并生成二维码。
-2. 手机页面按二维码中的协议 `deviceId` 请求 `menu`。云端合并最近心跳、capabilities 和 inventory；设备离线、未激活、配方不可用或 `maxServings=0` 时返回 `available=false`。
-3. 手机创建订单时必须发送 `Idempotency-Key`，正文固定本次的 `recipeId + recipeVersion + quantity=1 + paymentMode=TEST_FREE`。
-4. 云端同一事务写入 `sales_order`、`production_job` 和初始迁移记录；若设备没有活动制作任务，立即创建 `MAKE_DRINK`，否则保持 `QUEUED`。
-5. 创建响应返回 `orderId`、`orderNo` 和只用于该状态页的 `accessToken`。网页把令牌放在 URL fragment，并在查询时改用 `X-Order-Access-Token` 请求头。
-6. 设备 ACK 接受后，订单进入 `ACCEPTED`；`task.started` 推进 `MAKING`；进度事件更新当前步骤；`task.succeeded` 推进 `READY`；拒绝或失败推进 `FAILED`。
-7. 终端按步骤扣减共享物料并上传新 inventory/capabilities，手机菜单和运营后台随后看到新的杯数及逐项余量。
-
-当前订单状态：
-
-```text
-QUEUED → DISPATCHED → ACCEPTED → MAKING → READY
-   └──────────────→ CANCELLED / EXPIRED / FAILED
-```
-
-同一设备只派发一个活动任务。客户只能取消仍在 `QUEUED` 的订单；命令已经交给设备后，网页不能越过终端安全状态机强制取消。在线支付的退款由云端独立 payment/refund 状态机处理；设备不直接调用支付渠道。`TEST_FREE` 不产生真实退款。
+云端服务版本标识0.4.0，但版本号不表示全部部署状态。在线支付支持mock/alipay/alipay_mock实现，实际是否可用取决于配置；没有微信Provider。手机订单默认展示可用的三维计划，可切二维；排队时可主动旁观同机匿名场景。见 [云端当前实现](../../coffee-cloud-mvp/docs/current-state.md)。
 
 ### 暂停、重试与重启恢复（2026-08-30）
 
-- 可重试且未耗尽次数：设备 `RETRY_WAIT`、`deviceStatus=BUSY`，发送 `task.retry_wait`。云端任务同为 `RETRY_WAIT`，订单仍 `MAKING`，不退款、不派下一杯。`retry` 仅允许此状态，增加 attempt 后发送 `task.retry`；耗尽或不可重试才发送最终 `task.failed`。
-- 普通 `task.paused` / `task.resumed` 对应暂停/恢复；`FAILED`、`SUCCEEDED`、`CANCELLED` 不允许 retry/resume 复活。`clear` 不允许删除暂停或等待重试中的任务。`task.cancelled` 是最终放弃，云端幂等创建必要的退款意图。
-- 远程模式重启时，未完成任务变为 `PAUSED`、`recoveryHold=true`、设备 `RECOVERING`，发送带新 `taskRevision` 的 `task.recovered`。云端进入 `HOLD`；普通 resume/retry/skip 被拒绝，需核对实际结果，并通过受控取消释放旧任务。云端业务裁决不等于硬件已经停止。
-- 生命周期事件携带 `taskId`、`orderId`、`taskRevision`；云端统一检查订单、任务和制作命令关联。旧 revision、相同 revision 的冲突及终态后的事件不会倒退状态。进度仍按 5% 增量或最长 5 秒上报，云端仅缓存最新进度，不由此更新 SQL 制作状态。
+本节保留旧标题锚点，内容按2026-09-17代码修订。
+
+- RETRY_WAIT仍忙碌，云端订单MAKING，不退款或派下一杯；retry增加attempt并重新检查预占。拉花不允许重试倾倒。
+- 普通PAUSED可以resume；终态不能复活。clear不能清除活动任务或绕过取杯位。
+- remote重启活动任务设置PAUSED/recoveryHold与RECOVERING，发送task.recovered；云端HOLD。普通cancel/resume/retry/skip均被保护；现场核验通过后取消旧任务，不自动续做。
+- 生命周期按关联及revision更新；普通进度按整体5%变化或5秒任一条件上报，只缓存最新值。
+- 完整现场流程见 [restart-recovery.md](../docs/restart-recovery.md)，云端裁决见 [production-consistency.md](../../coffee-cloud-mvp/docs/production-consistency.md)。

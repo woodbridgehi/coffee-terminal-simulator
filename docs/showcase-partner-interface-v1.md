@@ -1,5 +1,7 @@
 # Coffee Terminal 第三方轮播接口与交付技术说明书
 
+> 文档核对：2026-09-17。文中的旧日期、测试计数和截图是对应批次记录，不代表本次重跑或线上部署；当前索引见 [docs/README.md](README.md)。
+
 版本：1.0　日期：2026-09-12　适用：终端首页左侧品牌轮播。
 
 **必须、禁止**是验收要求；**建议**是设计指导。机器可读 Schema：`coffee-terminal/web/showcase/manifest.schema.json`。导入时还执行 `coffee-terminal/showcase_packages.py` 的路径、文件、版本和字段组合校验。单独通过 JSON Schema 不等于交付合格。

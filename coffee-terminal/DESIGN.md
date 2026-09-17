@@ -1,260 +1,99 @@
-# 咖啡终端模拟器设计说明
+# 终端运行时设计
 
-## 1. 定位与边界
+核对日期：2026-09-17。本文以当前代码为依据，替代旧版计时执行与JSON库存说明。协议字段见 [API.md](API.md)，配置见 [配置参考](../config/README.md)。
 
-本程序用于模拟自动贩卖咖啡机器人的终端控制软件，以便联调订单、设备、门店、运营和告警服务。它不负责用户下单，也不模拟机械臂或真实运动控制。
+## 定位和组成
 
-终端负责：
+Python + pywebview 终端模拟联网设备的软件行为。Three.js 提供UR10e简化双臂、工位和拉花示意；没有硬件运动控制、物理接触、RS-485/PLC驱动或正式支付退款执行。
 
-- 从本地 JSON 加载设备身份、饮品能力、共享物料和故障模型。
-- 与后台建立设备侧交互：轮询命令、确认任务、上报心跳、能力、库存和事件。
-- 按配方步骤和随机时长执行假的制作流程。
-- 预占、消耗和释放整台设备共享的物料。
-- 在 pywebview 界面展示二维码、当前任务、步骤进度、库存和调试控制台。
-- 提供只监听本机的调试 API，便于自动化测试和人工干预。
+| 模块 | 职责 |
+| --- | --- |
+| `app.py` / `onboarding.py` | 原生窗口、首次安装/软件配对、运行时装配 |
+| `backend.py` | CoffeeDeviceRuntime、任务状态、库存协作、执行循环与上报 |
+| `catalog.py` / `customization.py` / `latte_art.py` | 配方验证、版本归档读取、选项编译与拉花约束 |
+| `inventory.py` / `state_store.py` | 库存、任务、命令Inbox、事件Outbox与SQLite事务 |
+| `cloud.py` / `mqtt_transport.py` | HTTP和MQTT传输 |
+| `local_api.py` | 本地查询、库存调整、重载、确认取杯 |
+| `robot_view.py` / `web/robot/` | 冻结视觉计划与三维、音频渲染 |
+| `showcase_packages.py` / `web/showcase/` | 本机展示包导入、预览、启用、回退 |
 
-终端不负责：
+运行实例位于 `config/instances/<目录名>/`，身份来自device.json。同一实例状态目录不能由多个进程同时管理；不同实例不能复制共享秘密或运行状态。
 
-- 创建订单、支付、退款、商品定价或顾客身份认证。
-- 决定某门店展示哪些设备；后台应聚合设备上报的能力和库存。
-- 真实 PLC、机械臂、泵阀、传感器或安全联锁控制。
-- 真实硬件崩溃裁决、设备证书体系和端到端生产安全控制。
+## 接单和执行
 
-## 2. 工程与实例模型
+1. `_process_commands()` 记录messageId与摘要；相同ID不同内容拒绝。
+2. `_accept_task()` 校验任务结构、有效期、taskId重复、取杯位、当前活动任务、配方启用与版本。
+3. 显式旧版本可从 `recipe-archive/<recipeId>/<version>.json` 读取，经当前物料/配方校验；当前配方不存在或禁用时不能借历史版本绕过。
+4. 根据选项编译配方，校验compiledRecipeDigest；严格限定的无定制字段旧指令可走legacy-default兼容。
+5. 预占整杯物料，随机时长只生成一次，冻结recipe和stepPlan，保存任务与ACK/事件。
+6. 每约250ms增加模拟stepElapsed，达到时长后判定后置故障；正常完成才扣本步物料并推进下一步。
 
-项目主体位于 `coffee-terminal/`，所有可变配置位于根目录 `config/`。启动时通过 `--config <实例目录>` 选择一个设备实例，例如：
+因此当前不是“进入步骤就扣料”。前置失败不扣本步，后置失败按consumeOnFailure处理。计时器只模拟过程，绝不表示真实传感器确认。
 
-```text
-config/
-├── coffee-bot-001/
-│   ├── device.json
-│   ├── materials.json
-│   ├── failures.json
-│   ├── recipes/
-│   │   ├── americano.json
-│   │   └── iced_latte.json
-│   └── state/
-│       ├── inventory.json
-│       └── runtime.db
-└── coffee-bot-002/
-    └── ...
-```
-
-同一份程序可同时启动多个进程，每个进程使用独立的配置目录、`deviceId` 和本地 API 端口。实例之间不共享任务、库存或运行时覆盖值。
-
-配置的职责划分如下：
-
-| 文件 | 职责 | 是否作为运行时状态写回 |
-| --- | --- | --- |
-| `device.json` | 设备、门店、运营商和网络设置 | 否 |
-| `recipes/*.json` | 当前设备可制作的饮品及其步骤、耗材和展示属性 | 否 |
-| `materials.json` | 物料定义、初始量、阈值和容量 | 否 |
-| `failures.json` | 全局、故障类型和步骤级故障参数 | 否 |
-| `state/inventory.json` | 当前库存、预占、已执行消耗键和版本 | 是 |
-| `state/runtime.db` | 命令 Inbox、制作任务、命令游标、命令结果与事件 Outbox | 是 |
-
-## 3. 配方与设备能力
-
-每一个有效的配方 JSON 代表一种设备能力。运营商新增配方文件并重载配置后，能力目录会自动更新，不需要修改 Python 代码。
-
-配方至少包含：
-
-- `recipeId`、`skuCode`、`version`、`name`。
-- `steps`：有序制作步骤。
-- 每个步骤的 `durationSeconds`。
-- 可选的 `durationRandomization`，用于定义该步骤的时长区间。
-- 每个步骤可选的 `consumes`，用于声明该步骤实际消耗的物料。
-- 可选的 `display` 和 `visual`，用于下单页与终端界面展示。
-
-加载时会验证：
-
-- 必填字段存在，步骤时长为正数。
-- 随机时长的最小值、最大值均为正，且基准时长位于区间内。
-- 引用的物料必须存在，单位必须与物料定义一致，消耗量必须大于零。
-- `recipeId` 不得与其他有效配方重复；`skuCode` 应由后台商品契约保证唯一和稳定。
-- 展示类型和步骤表现提示必须属于终端支持的枚举。
-
-无效配方不会进入能力列表；其他有效配方仍可继续使用。加载错误会显示在控制台和本地状态接口中。
-
-能力响应中的关键派生字段包括：
-
-- `enabled`：配方是否启用。
-- `available`：配方有效、启用且当前共享库存至少能制作一杯。
-- `maxServings`：按当前可用库存估算的最大杯数。
-- `estimatedDurationSeconds`：各步骤基准时长之和。
-- `durationRangeSeconds`：所有步骤最短和最长时长之和。
-- `unavailableReasons`：不可售原因，例如配方禁用或物料不足。
-
-`capabilityVersion` 根据有效配方内容生成。库存版本也参与能力同步判断，因为库存变化会改变 `available` 和 `maxServings`。
-
-## 4. 制作时长随机化
-
-不同饮品可拥有不同步骤；同一饮品的每次制作时长也可以不同。
-
-任务通过校验并被接受时，终端会为每个步骤在其配置区间内抽取一次实际时长。抽取结果随任务冻结，不会在进度刷新或重试时反复变化。未配置随机区间的步骤使用 `durationSeconds`。
-
-该设计保证：
-
-- 后台可以获得稳定的本次任务计划。
-- 单次制作过程可复现和审计。
-- 配方能力仍可给出稳定的基准时间和预估范围。
-
-完整的本次步骤计划通过 `task.acknowledged` 事件中的 `plannedDurationSeconds` 和 `stepPlan` 上报；每项包含 `stepId`、`stepName`、顺序和本杯实际时长。执行期间由终端统一计算 `stepProgress` 和按实际时长加权的 `overallProgress`，本地界面与顾客端均直接使用这组权威字段。`stepDurations` 仅作为兼容别名保留。HTTP 接单 ACK 只表达是否接单，不承载该计划。
-
-## 5. 共享库存模型
-
-物料属于设备实例，不属于某个饮品。所有配方都从同一份 `state/inventory.json` 中预占和消耗物料。例如美式和拿铁都会减少同一个咖啡豆库存，拿铁还会减少共享牛奶库存。
-
-每种物料维护：
-
-- `onHand`：设备内实际剩余量。
-- `reserved`：已被已接单任务占用、但尚未消耗的量。
-- `available = onHand - reserved`：可继续销售的量。
-- `capacity`、`lowThreshold`、`criticalThreshold` 和 `unit`。
-
-一杯饮品的需求量等于配方所有步骤中同一物料消耗量的总和。接单前按 `available` 校验；接单时整杯预占；进入对应步骤时再从 `onHand` 和 `reserved` 中扣除该步骤用量。
-
-按整杯预占可避免两个并发订单同时看到相同库存。任务成功、失败、取消或跳过步骤时，尚未使用的预占会被释放。
-
-步骤消耗使用 `taskId:stepId:attempt` 作为幂等键，避免同一次动作回调重复扣料，并允许真正的物理重试记录新一轮消耗。库存状态采用临时文件替换方式写入，降低进程异常导致 JSON 半写入的风险。
-
-可制作杯数按以下方式估算：
+## 任务与设备状态
 
 ```text
-maxServings = min(floor(material.available / recipe.requiredAmount))
+ACKNOWLEDGED → RUNNING → SUCCEEDED
+                   ├→ PAUSED → RUNNING
+                   ├→ RETRY_WAIT → RUNNING
+                   ├→ FAILED
+                   └→ CANCELLED
 ```
 
-若配方不消耗任何物料，模拟器返回上限值 `9999`。
+终态不得retry/resume复活。普通pause可以resume；retry只针对RETRY_WAIT且检查次数与重新预占。拉花失败禁止重试倾倒。调试skip只用于模拟流程。
 
-库存状态按 `onHand` 与阈值判定：低于或等于严重阈值为 `CRITICAL`，否则低于或等于低库存阈值为 `LOW`，其余为 `OK`。状态跨越阈值时会上报 `inventory.low`、`inventory.critical` 或 `inventory.recovered`。
+设备状态有IDLE、RESERVED、BUSY、READY、FAILED及RECOVERING。一次只保留一杯活动制作；云端负责多订单排队，不是设备一次缓存多杯执行。
 
-启动时会读取持久化的 `onHand`。若 `runtime.db` 中有可恢复的活动任务，则保留该任务预占：local 模式从最近模拟检查点继续，remote 模式进入 `RECOVERING/PAUSED`，禁止普通 resume/retry/skip，等待物理结果核对与受控取消；没有活动任务时清理遗留预占。真实硬件接入后仍必须使用传感器和动作日志裁决，不能把模拟恢复直接视为安全续做。无任务遗留预占的进一步对账属于后续库存整改。
+## 库存和事务
 
-## 6. 故障模型
+`InventoryManager` 通过同一个LocalStateStore保存 `terminal_meta.inventory_state`。任务、命令、事件也在 `state/runtime.db`；SQLite采用WAL、synchronous=FULL并启动quick_check。
 
-故障配置分三层：
+`atomic_runtime` 在锁和SQLite事务内保存关键运行时变化，失败恢复相应内存快照。它提供本地软件状态原子性，不能回滚外部物理动作。
 
-- 全局故障率：模拟整台设备的额外不稳定程度。
-- 故障档案：定义故障代码、是否可重试、发生时机和默认概率。
-- 步骤覆盖：按步骤提高、降低或替换特定故障参数。
+- `onHand`：账面剩余；`reserved`：尚未消耗的预占；available为二者之差。
+- 接单整杯预占；步骤完成或失败策略要求时扣减onHand和reserved。
+- 消耗键 `taskId:stepId:attempt`；真正重试使用新attempt。
+- 最终结束释放未消耗预占，不把已经用掉的物料补回。
+- 旧 `inventory.json` 仅在SQLite无库存时导入；之后编辑它不改变运行库存。
+- 启动有活动任务时保留预占，没有活动任务则清理遗留预占。
 
-控制台设置的运行时全局故障率与配置值取较大值。它和某个故障档案概率按独立事件合并：
+备份前停止实例，复制整个state目录；不要只复制运行中的单个db文件或只删除JSON重置库存。
 
-```text
-effectiveRate = 1 - (1 - globalRate) × (1 - profileRate)
-```
+## 完成与取杯
 
-故障可发生在步骤执行前或执行后，并可通过 `consumeOnFailure` 决定该步骤失败时是否已消耗物料。失败结果包含故障代码、消息和 `retryable`。
+最后一步成功后设置取杯位OCCUPIED、任务SUCCEEDED、设备READY，等待现场取走确认；不再10秒自动待机。超过120秒转NEEDS_CHECK。占位跨重启保存，并阻止新任务。
 
-可重试故障在未超过 `maxRetries` 时可由控制台触发重试。重试前重新检查并预占配方剩余需求，避免在故障期间库存被其他任务占用后继续制作。
+现场按钮或 `POST /device/v1/pickup/confirm` 必须匹配taskId；确认后记录取杯事件，清除当前任务指针并回到IDLE。普通clear不能绕过占位。这仍是模拟传感器，不是已接实体杯位检测。
 
-运行时还支持强制下一步骤失败、跳过步骤、暂停、恢复、取消和模拟离线。这些能力只用于测试，不应替代生产后台的设备运维权限。
+## 重启与存储异常
 
-## 7. 任务与设备状态机
+- local模式：可从保存的模拟检查点继续；不能用于真实硬件恢复。
+- remote模式：活动任务重启后PAUSED + recoveryHold，设备RECOVERING，上报task.recovered。
+- 执行事务异常也会保护性暂停并要求核验。
+- `confirm_recovery(task_id, revision, checks)` 通过原生桥接完成现场核验，取消旧任务并记录recoveryReview；普通cancel/resume/retry/skip均不能替代。
 
-核心任务状态：
+核验的三个检查项、版本和任务必须匹配；不是员工登录系统，也不会驱动机械臂复位。详见 [现场核验](../docs/restart-recovery.md)。云端订单裁决不会自动清除本地物理占用。
 
-```text
-ACKNOWLEDGED -> RUNNING -> SUCCEEDED
-                     ├── PAUSED -> RUNNING
-                     ├── RETRY_WAIT -> RUNNING（限次重试）
-                     ├── FAILED（终态，不能重试）
-                     └── CANCELLED
-```
+## 网络、进度与投递保证
 
-设备状态随任务变化：
+local无云连接；remote可选HTTP或MQTT5。MQTT仍通过HTTP处理配方/库存快照、展示配置及身份管理。心跳默认30秒；进度按整体变化至少5%或经过5秒任一条件触发，不是每5秒最多一次。
 
-```text
-IDLE -> RESERVED -> BUSY -> READY
-                    ├── FAILED
-                    └── IDLE（取消或清理）
-```
+任务/步骤生命周期与命令结果持久重试；待发普通进度可合并。云端瞬时进度走Redis，订单终态走PostgreSQL。
 
-收到 `MAKE_DRINK` 后依次校验：
+MQTT使用持久会话、手动ACK、连接代际与SUBACK检查。**下行目前进入内存Queue后就PUBACK，SQLite Inbox由稍后运行循环写入；两者之间崩溃仍可能丢命令。** 队列满会断开等待重投，不能因此宣称持久接收窗口已经关闭。
 
-1. 命令结构与有效期。
-2. 设备是否空闲。
-3. 配方或 SKU 是否存在。
-4. 指定的配方版本是否匹配。
-5. 共享库存是否足够。
+单纯网络错误不暂停当前计时制作；调试“模拟离线”会暂停本地推进和云通信。恢复后上传积压。HTTP永久4xx进入死信，429/5xx/网络错误退避；当前409按重复投递确认处理，不应据此假定所有409都是同一语义。
 
-通过后才会生成随机步骤计划、预占整杯物料并发送 ACK。拒绝时返回稳定错误码，供订单服务决定取消、换机或退款流程。
+`prune_deliveries()` 默认清理7天前已发送事件与已发送结果的Inbox记录，不清除未发送/死信或所有任务历史；不是完整磁盘水位保护。
 
-制作循环约每 250 毫秒推进一次；按整杯 `overallProgress` 变化至少 5% 或距上次进度上报达到 5 秒（任一满足）发送 `task.progress`。断网积压时同一任务仅保留最新待发进度；步骤切换与任务生命周期事件不合并并始终可靠上报。MQTT 命令进入本地队列后才发送 PUBACK，队列满则重连等待 Broker 重投。
+## 配方、展示和配置更新
 
-手动“模拟离线”会暂停本地制作和云端通信。单纯的网络请求失败只会将连接状态标记为离线并缓存待发事件，不会自动暂停已经开始的制作。
+启动目录校验隔离无效配方；显式reload先暂存校验全部候选，失败保留上一有效配置。活动任务期间拒绝保存/重载。技术控制台保存配方会处理版本升级并归档旧版本；手工替换文件应自行保留历史版本。
 
-## 8. 后台通信设计
+`request_menu_sync()` 重新加载已保存配置并请求上传；只有服务端确认才显示已同步。完整recipes可随能力快照上传，云端并无配方在线编辑/审核/下发系统。
 
-远程模式下，终端执行以下周期工作：
+品牌内容包独立于配方、库存和设备凭据。运营联合包导出包含showcase.zip、配方、历史配方和材料定义；没有自动导入整包功能。见 [展示包规范](../docs/showcase-partner-interface-v1.md)。
 
-- 按 `commandPollSeconds` 轮询设备命令。
-- 按 `heartbeatIntervalSeconds` 上报心跳。
-- 在能力或库存发生变化时同步完整快照。
-- 持续发送设备、任务、步骤、库存和调试事件。
-- 获取后台下发的展示配置，包括下单二维码 URL。
+## 后续硬件与物理仿真方向（未实现）
 
-所有请求携带 `X-Device-Id`；配置 `authToken` 后额外携带 Bearer Token，也可通过 `backend.headers` 增加联调请求头。
-
-命令先以 `messageId` 写入 SQLite `command_inbox`，再进入业务处理；相同 ID、不同载荷会被拒绝。`taskId` 在 `production_job` 中形成第二层业务去重，进程重启后重复命令只返回原结果，不再次制作。命令游标也在成功保存命令后持久化。
-
-ACK/命令结果和关键事件先写 SQLite，再由云端线程至少一次发送。网络、429 和 5xx 使用带抖动的指数退避；永久 4xx 进入死信，不阻塞后续消息；HTTP 409 按幂等重复视为已确认。活动模拟任务和最近进度检查点也可跨进程恢复。
-
-上述机制提高了联调可信度，但库存 JSON 与 SQLite 任务目前仍不是一个数据库事务；它不等同于真实终端的物理 exactly-once。真实动作崩溃后必须用传感器和动作日志裁决，不能直接套用模拟计时器续做。
-
-## 9. 本地调试 API
-
-每个实例可启动独立 HTTP 服务，默认只监听 `127.0.0.1`。它用于测试脚本查询状态、修改库存和重载配置，不作为手机端下单入口。
-
-主要接口：
-
-- `GET /health`
-- `GET /device/v1/capabilities`
-- `GET /device/v1/inventory`
-- `GET /device/v1/status`
-- `POST /device/v1/inventory/adjustments`
-- `POST /device/v1/config/reload`
-
-本地 API 校验回环 Host，写请求必须为 JSON、受请求体大小限制，并拒绝未列入白名单的浏览器 Origin。可配置 `localApi.authToken`，写请求通过 `X-Local-Token` 认证；非回环绑定或 production 环境启用时 Token 强制必填。
-
-## 10. 展示配置
-
-后台展示配置负责提供二维码目标地址和可选的界面文案。二维码只是将顾客引导到后台销售服务；订单创建、支付和商品可售判断仍由后台完成。
-
-配方可使用 `visual.profile` 指定饮品形象，并为步骤设置 `animationCue`。终端只接受预定义值，未知值在配置校验时报告。具体可用字段和枚举见根目录 README 与配置说明。
-
-## 11. 一致性、幂等与持久化
-
-当前实现的保证：
-
-- 库存按设备实例共享并持久化。
-- 步骤消耗在单份库存状态内幂等。
-- 一次任务的随机时长在接单时冻结。
-- 能力与库存快照带版本，可供后台判断变化。
-- 事件包含 `eventId`、设备、门店、任务和时间信息，后台可按 `eventId` 去重。
-- 命令 Inbox、任务、游标、ACK/命令结果和事件 Outbox 跨重启持久化。
-- 同一 `taskId` 即使使用新 `messageId` 重投，也不会再次执行模拟制作。
-- `CANCEL_TASK` 必须匹配当前 `taskId`，所有非制作命令产生统一结果。
-- 云端响应或单条命令畸形不会使同步线程永久退出，健康接口暴露线程和积压状态。
-
-当前实现的限制：
-
-- 单实例假设同一时刻只制作一杯。
-- 库存仍在 JSON，任务/消息在 SQLite，二者之间没有单一原子提交边界。
-- 模拟进度按最近持久桶恢复；真实硬件动作不能据此自动续做。
-- 本地 API 有最小防护，但远程设备认证仍只提供静态 Token 和附加请求头。
-- 已发送消息和历史命令尚未实现长期归档/磁盘水位策略。
-- 配置重载尚未使用签名不可变包，真实 OTA、硬件驱动、传感器、急停和安全互锁仍不存在。
-
-## 12. 后续生产化方向
-
-2026-08-30 状态一致性整改：可重试故障采用 `RETRY_WAIT/task.retry_wait`，保持设备忙碌，不再先发最终失败再复活任务。最终失败不可 retry/resume。远程重启的未完成任务携带 `recoveryHold`，禁止普通恢复、重试和跳步，等待物理结果核对与受控取消；普通主动暂停仍可恢复。云端将此类恢复映射为 `HOLD`，不能仅凭新的 started/resume 解除。参见 [API 状态协议](API.md#暂停重试与重启恢复2026-08-30)。下列 SQLite 原子性和传输可靠性工作仍未在本批完成。
-
-若要从模拟器演进为真实终端代理，建议按顺序增加：
-
-1. 将库存余额/流水与任务、步骤、Outbox 合并到同一 SQLite 事务边界。
-2. 为命令、ACK 和事件定义正式 OpenAPI/JSON Schema 契约，并实现重连对账。
-3. 使用设备证书、签名命令和密钥安全存储。
-4. 增加时间同步、防重放、限流、消息归档和磁盘容量保护。
-5. 实现签名配置包、staged validate、原子激活和回滚。
-6. 把模拟执行器替换为受控的硬件适配层，并增加传感器、急停、安全互锁和 HIL。
+建议先抽离统一异步动作执行接口，再增加CoppeliaSim/PyBullet/Gazebo或真实硬件后端，Three.js跟随标准状态。需要动作日志、可查询结果、资源互锁、真实完成判据、受控停止、传感器与异常核对。不能把当前robotActions、浏览器IK或计时完成直接用作实机控制依据。

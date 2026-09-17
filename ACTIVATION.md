@@ -1,179 +1,79 @@
-# 设备登记、激活与启动操作手册
+# 激活、软件配对与凭证操作
 
-本文用于本地多个模拟器实例接入 `https://coffee-api.woodbridge.top`。激活码和设备 Token 都是秘密信息，不要粘贴到聊天、工单、截图或 Git。
+核对日期：2026-09-17。两条身份路径均以当前源码为依据；云端开关与运行状态必须单独检查。完整身份边界见 [云端身份说明](../coffee-cloud-mvp/docs/device-registration-pairing-design.md)。
 
-## 1. 先确认三个标识
+## 先选择路径
 
-以下标识用途不同：
-
-| 标识 | 001 当前值 | 用途 |
+| 场景 | 使用方式 | 前提 |
 | --- | --- | --- |
-| 实例目录/启动参数 | `coffee-bot-001` | 定位本地 `config/instances/coffee-bot-001/` |
-| `device.json.deviceId` | `coffee-bot` | 云端协议身份，必须与管理台登记的 `deviceId` 完全一致 |
-| 云端序列号 | `001` | 运营查询标识，可以与 `deviceId` 不同 |
+| 新软件模拟器绑定商户 | 安装界面生成配对码 → 商户认领 → 设备完成配对 | 云端SIMULATOR_BOOTSTRAP_ENABLED=true，商户功能与权限可用 |
+| 平台已预登记设备 | 一次性激活码，安装界面或activate_instance.py | deviceId/序列号匹配登记记录 |
+| 已激活实例 | 加载原秘密文件直接启动 | 不重新生成身份、不复制其他设备状态 |
 
-后台登记时不要把序列号误填成 `deviceId`。如果管理台登记的是 `coffee-bot`，本地 `deviceId` 也必须是 `coffee-bot`；否则激活返回 HTTP 404。
+本地实例目录名用于启动查找；deviceId用于协议；serialNumber用于序列标识；deviceName仅展示。不要把某个历史001实例的具体值作为所有安装的默认值。
 
-## 2. 管理台预登记设备
+## 软件配对
 
-1. 打开 `https://coffee-api.woodbridge.top/admin` 并输入管理员 Token。
-2. 点击“登记新设备”。
-3. 填写稳定且唯一的 `deviceId` 与出厂序列号；新设备必须采用受约束格式。
-4. 点击“登记并生成激活码”。
-5. 复制只展示一次的激活码。创建新激活码会取消该设备此前尚未使用的旧码。
+1. 为新实例准备配方/材料和独立端口，保留未配置注册状态；不要复制旧实例state、.identity或.secrets。
+2. 启动remote实例。无已加载Token且registration未COMPLETED时显示首次安装界面。
+3. 终端创建软件密钥并申请会话，显示短期配对码。
+4. 商户在自己的组织中创建/选择门店，使用配对码认领。
+5. 终端查询会话并完成provision，保存设备资料及HTTP/MQTT凭据；按界面提示重新启动并检查上线。
 
-建议新设备统一采用：
+它使用软件密钥证明，不是实体安全芯片证书。云端未开启开发配对时不能用反复重试绕过；使用预登记激活或由部署方明确启用对应环境。
 
-```text
-实例目录：coffee-bot-003
-deviceId：coffee-bot-003
-序列号：CB-2026-003
-instanceId：由首次安装向导生成 instance-coffee-bot-003
-```
+## 预登记激活
 
-设备身份由后台预登记；首次启动时模拟器安装向导填写城市、店铺名称、简介和设备展示名称，并在激活成功时仅补齐后端为空的部署资料。后端已有资料不会被终端覆盖。
+平台在 `/admin` 登记deviceId与serialNumber并生成一次性激活码；创建新码会使旧待用码失效。JSON中保留正确身份和backend.baseUrl，不写Token。
 
-## 3. 配置 remote 模式
-
-以 001 为例，编辑 `config/instances/coffee-bot-001/device.json`：
-
-```json
-{
-  "deviceId": "coffee-bot",
-  "backend": {
-    "mode": "remote",
-    "baseUrl": "https://coffee-api.woodbridge.top",
-    "commandPollSeconds": 2,
-    "heartbeatIntervalSeconds": 10,
-    "requestTimeoutSeconds": 8
-  }
-}
-```
-
-不要把 `authToken` 写入 JSON。设备 Token 由激活工具写入被 Git 忽略的 `.secrets/`。
-
-## 4. 安全写入激活码
-
-进入项目目录：
+在受保护文件中保存激活码，文件权限设600；不要把秘密写入命令参数、Git或文档。执行：
 
 ```bash
-cd /Users/alex/Downloads/armaster/coffee-terminal-simulator
-mkdir -p .secrets
-read -r -s ACTIVATION_CODE
+.venv/bin/python scripts/activate_instance.py <实例目录名> \
+  --activation-code-file .secrets/<实例目录名>.activation-code \
+  --secrets-file .secrets/<实例目录名>.env
 ```
 
-终端不会显示输入字符，这是正常的。粘贴激活码并按回车，然后执行：
+脚本先生成pending凭据，云端成功后提升为正式秘密文件。失败/响应丢失时保留pending并重试同一请求，不删除后另造Token。MQTT签发依赖云端EMQX配置；HTTP激活成功但MQTT结果丢失时，脚本包含对应恢复轮换路径。
+
+不把故意使用错误激活码作为正常安装步骤；默认最大尝试次数为5，超限需要新码。
+
+## 启动与核对
 
 ```bash
-printf '%s\n' "$ACTIVATION_CODE" > .secrets/coffee-bot-001.activation-code
-unset ACTIVATION_CODE
-chmod 600 .secrets/coffee-bot-001.activation-code
+./start-instance.command <实例目录名> --env-file .secrets/<实例目录名>.env
 ```
 
-只检查格式，不显示秘密：
+未指定env-file时，start_instance.py会自动查找对应实例秘密文件。无界面工具：
 
 ```bash
-wc -l .secrets/coffee-bot-001.activation-code
-stat -f '%Lp %N' .secrets/coffee-bot-001.activation-code
+.venv/bin/python scripts/run_headless.py <实例目录名> \
+  --env-file .secrets/<实例目录名>.env --duration 60
 ```
 
-预期是一行、权限 `600`。`touch` 只改变文件时间或创建空文件，不会写入、修复或替换激活码。
+headless remote会连接云端并可能接收真实联调任务，只对授权的测试实例使用。核对设备ID、配方/库存、端口、上报及后台在线状态；ONLINE只说明连接状态，不证明机器可接单或已完成物理恢复。
 
-## 5. 验证错误激活码
-
-仅测试一次，错误码至少 12 个字符：
+## 轮换
 
 ```bash
-printf '%s\n' 'wrong-activation-code-001' > .secrets/coffee-bot-001.activation-code
-
-.venv/bin/python scripts/activate_instance.py coffee-bot-001 \
-  --activation-code-file .secrets/coffee-bot-001.activation-code \
-  --secrets-file .secrets/coffee-bot-001.env
+.venv/bin/python scripts/rotate_instance_credential.py <实例目录名> \
+  --secrets-file .secrets/<实例目录名>.env
+.venv/bin/python scripts/rotate_mqtt_credential.py <实例目录名> \
+  --secrets-file .secrets/<实例目录名>.env
 ```
 
-设备标识正确时，预期返回 HTTP 401。工具会留下：
+前者轮换HTTP凭据，后者用于MQTT凭据；保留失败时的pending材料，按工具结果核对。秘密更新后运行进程需加载新配置，不能把写入文件当成正在运行的连接已经切换。
 
-```text
-.secrets/coffee-bot-001.env.activation-pending
-```
+Windows打包入口启用DPAPI，凭据和身份应由同一Windows用户使用；不要把DPAPI封装文件作为普通明文env迁移到其他机器。见 [Windows打包](packaging/windows/README.md)。
 
-pending 文件保存终端已生成但尚未激活的 Token。不要删除它；正确激活时工具会复用同一 Token，验证响应丢失/重试安全性。
+## 排障
 
-默认最多允许 5 次错误尝试。达到上限后激活码会锁定，需要在管理台生成新码。
-
-## 6. 换成正确激活码并重试
-
-再次安全输入管理台生成的正确激活码：
-
-```bash
-read -r -s ACTIVATION_CODE
-printf '%s\n' "$ACTIVATION_CODE" > .secrets/coffee-bot-001.activation-code
-unset ACTIVATION_CODE
-chmod 600 .secrets/coffee-bot-001.activation-code
-```
-
-重复同一激活命令：
-
-```bash
-.venv/bin/python scripts/activate_instance.py coffee-bot-001 \
-  --activation-code-file .secrets/coffee-bot-001.activation-code \
-  --secrets-file .secrets/coffee-bot-001.env
-```
-
-成功后 pending 文件会被原子提升为 `.secrets/coffee-bot-001.env`，工具只输出凭证版本，不输出 Token。
-
-云端 v0.5 启用 MQTT credential lifecycle 后，激活响应还会一次性返回该设备专属 MQTT username/password。脚本会把 `COFFEE_TRANSPORT=mqtt5` 与 `MQTT_HOST/PORT/USERNAME/PASSWORD` 一并安全写入同一个受限 `.env`，不会打印密钥。如果 HTTP 激活已成功但响应在本地落盘前丢失，重新运行命令会使用新 HTTP 凭证调用 MQTT rotate 接口恢复，不需要重新登记设备。
-
-安全检查环境文件，不显示内容：
-
-```bash
-stat -f '%Lp %N' .secrets/coffee-bot-001.env
-awk -F= '{print NR ": " $1}' .secrets/coffee-bot-001.env
-```
-
-## 7. 启动与验证
-
-图形界面：
-
-```bash
-./start-instance.command coffee-bot-001 \
-  --env-file .secrets/coffee-bot-001.env
-```
-
-无界面验证：
-
-```bash
-.venv/bin/python scripts/run_headless.py coffee-bot-001 \
-  --env-file .secrets/coffee-bot-001.env \
-  --duration 60
-```
-
-看到 `connection: ONLINE` 后，在管理台确认设备为在线，`instanceId`、`storeId`、软件版本和最近心跳正确。停止进程并等待心跳租约超时后，设备应保留在历史列表并变为离线。
-
-## 8. 常见错误
-
-| HTTP/现象 | 含义 | 处理 |
-| --- | --- | --- |
-| `404` | 本地 `deviceId` 在云端不存在 | 对比管理台登记的 `deviceId` 和 `device.json.deviceId`，要求完全一致 |
-| `401` | 激活码错误、过期、锁定，或设备凭证无效 | 检查是否使用当前激活码；达到尝试上限后生成新码 |
-| `409 activation code already consumed` | 已消费激活码被另一 Token 使用 | 不要删除 pending 后生成新 Token；必要时生成新激活码 |
-| 启动后离线/401 | 未加载 `.secrets/{instance}.env` | 使用 `--env-file` 启动，不把 Token 写进 JSON |
-| 只有 `.activation-pending` | 激活尚未成功或响应失败 | 保留 pending，修复原因后重跑同一命令 |
-
-## 9. 凭证泄露与轮换
-
-如果设备 Token 曾出现在聊天、日志或截图中，立即轮换：
-
-```bash
-.venv/bin/python scripts/rotate_instance_credential.py coffee-bot-001 \
-  --secrets-file .secrets/coffee-bot-001.env
-```
-
-轮换成功后新 Token 原子写入本地秘密文件，旧 Token 只在短暂宽限期内有效，之后自动过期。
-
-只升级或轮换 MQTT 凭证（保留当前 HTTP Token）：
-
-```bash
-.venv/bin/python scripts/rotate_mqtt_credential.py coffee-bot-001 \
-  --secrets-file .secrets/coffee-bot-001.env
-```
+| 现象 | 检查 |
+| --- | --- |
+| 激活404 | 云端是否登记相同deviceId，是否访问正确backend地址 |
+| 激活401 | 激活码是否过期/错误/锁定，凭据是否对应 |
+| 激活409 | 已消费码与Token是否匹配，不要删除pending另造Token |
+| 软件配对不可用 | bootstrap开关、会话有效期、商户认领和本地软件身份 |
+| 启动401或离线 | 是否加载对应秘密文件，HTTP和MQTT凭据是否分别有效 |
+| 本地端口占用 | 先确认是否已有实例在运行，不要双开同一状态目录 |
+| 重启后待核验 | 按 [现场核验](docs/restart-recovery.md) 处理，不删库绕过 |
