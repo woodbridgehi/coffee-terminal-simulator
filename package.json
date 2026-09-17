@@ -11,7 +11,9 @@
     "build:twin": "node scripts/build_twin.mjs",
     "start:twin": "npm run build:twin && python3 scripts/serve_scene.py --twin",
     "twin:run": "node scripts/run_twin.mjs",
-    "test:twin": "node --test tests/twin/*.mjs"
+    "test:twin": "node --test tests/twin/*.mjs",
+    "twin:serve": "npm run build:twin && node scripts/serve_twin_devices.mjs",
+    "twin:plan": "node scripts/plan_twin_drink.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.20.0",

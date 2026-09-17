@@ -24,6 +24,7 @@ export class CollisionChecker {
       list.push({id:`${id}/gripper`,kind:'robot',robot:id,link:7,shape:new RAPIER.Cuboid(.065,.025,.035),position:v(f.position),rotation:r(f.quaternion)});
     }
     for(const [id,o] of Object.entries(state.objects)) {
+      if(o.present===false)continue;
       const def=this.config.objects[id];
       // Rapier cylinder is Y-up; container local axis is Z-up.
       const q=new Quaternion(...o.pose.quaternion).multiply(new Quaternion().setFromAxisAngle(new Vector3(1,0,0),Math.PI/2));

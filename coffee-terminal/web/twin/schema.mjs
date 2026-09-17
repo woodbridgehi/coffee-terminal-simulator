@@ -27,10 +27,12 @@ export function validateWorld(w) {
     idCheck(id);assert(w.stations[d.station]&&Number.isFinite(d.warmup)&&d.warmup>=0&&Number.isFinite(d.cooldown)&&d.cooldown>=0,`${id} device`);
     assert(positive(d.duration)&&Array.isArray(d.inputs)&&d.inputs.every(i=>w.materials[i.material]&&positive(i.amount)),`${id} recipe`);
     assert(new Set(d.inputs.map(i=>i.material)).size===d.inputs.length,`${id} duplicate input`);
-    assert(positive(d.outputKg)||(d.effect==='seal'&&d.outputKg===0&&d.inputs.length===0),`${id} outputKg`);
-    assert(d.effect===undefined||d.effect==='seal',`${id} effect`);
+    assert(positive(d.outputKg)||(['seal','dispense'].includes(d.effect)&&d.outputKg===0&&d.inputs.length===0),`${id} outputKg`);
+    assert(d.effect===undefined||['seal','dispense'].includes(d.effect),`${id} effect`);
     assert(d.inputs.reduce((s,i)=>s+i.amount,0)+1e-9>=d.outputKg,`${id} mass conservation`);
   }
+  if(w.supplies)for(const [id,s] of Object.entries(w.supplies)){idCheck(id);assert(Number.isInteger(s.amount)&&Number.isInteger(s.capacity)&&s.amount>=0&&s.amount<=s.capacity&&s.capacity>0,`${id} supply`);}
+  for(const [id,d] of Object.entries(w.devices)){assert(!d.supply||w.supplies?.[d.supply],`${id} supply`);assert(d.effect!=='dispense'||w.objects?.[d.object],`${id} dispenser object`);}
   assert(w.objects&&Object.keys(w.objects).length>0,'objects');
   for(const [id,o] of Object.entries(w.objects)) {idCheck(id);assert(checkPose(o.pose)&&positive(o.radius)&&positive(o.height)&&positive(o.capacityKg)&&Number.isFinite(o.tareKg)&&o.tareKg>0,`${id} container`);}
   return clone(w);
@@ -40,14 +42,16 @@ export function validateGraph(tasks,world) {
   if(ids.size!==tasks.length) throw Error('TASK_SCHEMA: duplicate id');
   const done=new Set();
   for(const t of tasks) {
-    if(!['move','grasp','release','process','wait','transfer'].includes(t.type)||!Array.isArray(t.after)||!Array.isArray(t.resources)||new Set(t.resources).size!==t.resources.length||t.after.some(id=>!ids.has(id))) throw Error(`TASK_SCHEMA: ${t.id}`);
+    if(!['move','grasp','release','process','wait','transfer','dispense'].includes(t.type)||!Array.isArray(t.after)||!Array.isArray(t.resources)||new Set(t.resources).size!==t.resources.length||t.after.some(id=>!ids.has(id))) throw Error(`TASK_SCHEMA: ${t.id}`);
     if(['move','grasp','release'].includes(t.type)&&!world.robots[t.robot]) throw Error(`TASK_SCHEMA: robot ${t.id}`);
-    if(['grasp','release','process'].includes(t.type)&&!world.objects[t.object]) throw Error(`TASK_SCHEMA: object ${t.id}`);
+    if(['grasp','release','process','dispense'].includes(t.type)&&!world.objects[t.object]) throw Error(`TASK_SCHEMA: object ${t.id}`);
     if(t.target&&(!Array.isArray(t.target.position)||t.target.position.length!==3||!Array.isArray(t.target.quaternion)||t.target.quaternion.length!==4||![...t.target.position,...t.target.quaternion].every(Number.isFinite)||Math.abs(Math.hypot(...t.target.quaternion)-1)>1e-5)) throw Error(`TASK_SCHEMA: pose ${t.id}`);
     if(t.allowedGrasps&&(!Array.isArray(t.allowedGrasps)||t.allowedGrasps.some(p=>!world.robots[p.robot]||!world.objects[p.object]))) throw Error(`TASK_SCHEMA: grasp policy ${t.id}`);
     if(t.type==='move'&&!world.stations[t.station]&&!t.target) throw Error(`TASK_SCHEMA: target ${t.id}`);
     if(t.type==='release'&&!world.stations[t.station]) throw Error(`TASK_SCHEMA: station ${t.id}`);
-    if(t.type==='process'&&!world.devices[t.device]) throw Error(`TASK_SCHEMA: device ${t.id}`);
+    if(['process','dispense'].includes(t.type)&&!world.devices[t.device]) throw Error(`TASK_SCHEMA: device ${t.id}`);
+    if(t.doseKg!==undefined&&!(t.type==='process'&&Number.isFinite(t.doseKg)&&t.doseKg>0&&world.devices[t.device]?.outputKg>0))throw Error(`TASK_SCHEMA: dose ${t.id}`);
+    if(t.type==='dispense'&&world.devices[t.device]?.effect!=='dispense')throw Error(`TASK_SCHEMA: dispenser ${t.id}`);
     if(t.type==='transfer'&&(!world.objects[t.object]||!world.objects[t.source]||t.object===t.source||!world.robots[t.robot])) throw Error(`TASK_SCHEMA: transfer ${t.id}`);
     if(t.duration!==undefined&&!(Number.isFinite(t.duration)&&t.duration>=0)) throw Error(`TASK_SCHEMA: duration ${t.id}`);
     if(t.type==='wait'&&!(Number.isFinite(t.duration)&&t.duration>=0)) throw Error(`TASK_SCHEMA: duration ${t.id}`);

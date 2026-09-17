@@ -1,9 +1,9 @@
 name: Digital twin
 on:
   push:
-    paths: ['coffee-terminal/web/twin/**', 'coffee-terminal/web/robot/**', 'coffee-terminal/web/assets/**', 'coffee-terminal/web/digital-twin.*', 'scripts/serve_scene.py', 'config/twin/**', 'scripts/*twin*', 'tests/**', 'package*.json', '.github/workflows/digital-twin.yml']
+    paths: ['coffee-terminal/web/twin/**', 'coffee-terminal/web/robot/**', 'coffee-terminal/web/assets/**', 'coffee-terminal/web/digital-twin.*', 'coffee-terminal/web/device-lab.*', 'scripts/serve_scene.py', 'config/twin/**', 'scripts/*twin*', 'tests/**', 'package*.json', '.github/workflows/digital-twin.yml']
   pull_request:
-    paths: ['coffee-terminal/web/twin/**', 'coffee-terminal/web/robot/**', 'coffee-terminal/web/assets/**', 'coffee-terminal/web/digital-twin.*', 'scripts/serve_scene.py', 'config/twin/**', 'scripts/*twin*', 'tests/**', 'package*.json', '.github/workflows/digital-twin.yml']
+    paths: ['coffee-terminal/web/twin/**', 'coffee-terminal/web/robot/**', 'coffee-terminal/web/assets/**', 'coffee-terminal/web/digital-twin.*', 'coffee-terminal/web/device-lab.*', 'scripts/serve_scene.py', 'config/twin/**', 'scripts/*twin*', 'tests/**', 'package*.json', '.github/workflows/digital-twin.yml']
 permissions:
   contents: read
 jobs:
@@ -38,4 +38,4 @@ jobs:
       - run: npm run twin:run -- --compare
       - run: npm run twin:run -- --output /tmp/coffee-experiment.json
       - run: npm run twin:run -- --replay /tmp/coffee-experiment.json
-      - run: git diff --exit-code -- coffee-terminal/web/digital-twin.bundle.js coffee-terminal/web/digital-twin.worker.js coffee-terminal/web/twin/coffee-workcell-v1.json coffee-terminal/web/twin/coffee-workcell-main-v2.json coffee-terminal/web/twin/RAPIER-LICENSE.txt
+      - run: git diff --exit-code -- coffee-terminal/web/digital-twin.bundle.js coffee-terminal/web/digital-twin.worker.js coffee-terminal/web/device-lab.bundle.js coffee-terminal/web/twin/coffee-workcell-v1.json coffee-terminal/web/twin/coffee-workcell-main-v2.json coffee-terminal/web/twin/RAPIER-LICENSE.txt

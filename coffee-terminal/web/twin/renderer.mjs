@@ -110,14 +110,14 @@ export class TwinRenderer {
       });this.setPose(arm.gripper,pose);
     }
     for(const [id,object] of Object.entries(state.objects)){
-      const visual=this.objects[id],fill=containerFill(this.config.objects[id],object);this.setPose(visual.holder,object.pose);visual.visual.setFill(fill.fraction,fill.milkFraction);visual.visual.setSealed?.(object.sealed);
+      const visual=this.objects[id],fill=containerFill(this.config.objects[id],object);visual.holder.visible=object.present!==false;this.setPose(visual.holder,object.pose);visual.visual.setFill(fill.fraction,fill.milkFraction);visual.visual.setSealed?.(object.sealed);
     }
     if(this.workcell) {
       for(const [id,pad] of Object.entries(this.workcell.pads)) {
         const device=Object.entries(this.config.devices).find(([,d])=>d.station===id);
         const mode=state.devices[device?.[0]]?.mode;pad.material.color.set(mode==='fault'?'#a84032':mode==='running'?'#c79a50':'#365143');
       }
-      const seal=state.tasks.seal,progress=seal?.status==='running'?Math.min(1,seal.elapsed/this.config.devices.lidder.duration):0;
+      const lidder=state.devices.lidder,progress=lidder?.mode==='running'?Math.max(0,Math.min(1,1-lidder.remaining/this.config.devices.lidder.duration)):0;
       this.workcell.press.position.y=1.42-Math.sin(progress*Math.PI)*.17;
     }
     this.updateDebug();
@@ -136,7 +136,7 @@ export class TwinRenderer {
       }add(new THREE.BoxGeometry(.13,.05,.07),pose);
     }
     for(const [id,o] of Object.entries(this.state.objects)){
-      const def=this.config.objects[id];add(new THREE.CylinderGeometry(def.radius,def.radius,def.height,24),o.pose).rotateX(Math.PI/2);
+      if(o.present===false)continue;const def=this.config.objects[id];add(new THREE.CylinderGeometry(def.radius,def.radius,def.height,24),o.pose).rotateX(Math.PI/2);
     }
   }
   render(){

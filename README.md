@@ -179,3 +179,5 @@ npm run start:twin
 See the [digital twin guide](docs/digital-twin.md) for configuration, URDF import, verification, and model accuracy limits.
 
 The default twin shares the complete main workcell (cup magazine, dispensers, lid press and pickup shelf), with aligned stations, upright collision-checked transport and a 31-step capped-latte workflow. The original simplified v1 configuration remains available for historical experiments.
+
+For external planner integration, run `npm run twin:serve` and open `http://127.0.0.1:9131/device-lab.html`. This separate service provides nine configurable virtual devices, HTTP commands/status, SSE events, idempotent command IDs, stock/sensors and fault/communication injection. `npm run twin:plan` drives a 32-task latte through the same HTTP API. See the [device lab guide](docs/device-lab.md) for configuration, protocol and limitations.
