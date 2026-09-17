@@ -383,3 +383,63 @@ def test_close_during_reconnect_performs_no_loop_start() -> None:
     assert not closer.is_alive() and not recover.is_alive()
     assert transport.client.loop_starts == 0, "supervisor must not start a network loop after close"
     assert transport.client.disconnects >= 1, "connection restored by a racing reconnect must be torn down"
+
+
+def test_broker_redelivers_uncommitted_command_and_ack_follows_sqlite(plaintext_broker, tmp_path):
+    from state_store import LocalStateStore
+    device = device_name()
+    store = LocalStateStore(tmp_path / "runtime.db")
+    publisher = HelperPublisher()
+    transports = []
+    try:
+        first = Mqtt5Transport(device, broker_config()); transports.append(first)
+        first.start(); assert first.connected.wait(10)
+        publisher.publish_command(device, "durable-command")
+        deadline = time.monotonic() + 5
+        while first.commands.empty() and time.monotonic() < deadline: time.sleep(.02)
+        assert not first.commands.empty()
+        assert store.command("durable-command") is None
+        first.close()  # No runtime persistence, so no PUBACK.
+        second = Mqtt5Transport(device, broker_config()); transports.append(second)
+        second.start(); assert second.connected.wait(10)
+        deadline = time.monotonic() + 5
+        commands = []
+        while not commands and time.monotonic() < deadline:
+            commands = second.drain_commands(persist=store.record_command)
+            time.sleep(.02)
+        assert commands[0]["messageId"] == "durable-command"
+        assert store.command("durable-command")["state"] == "RECEIVED"
+        second.close()
+        third = Mqtt5Transport(device, broker_config()); transports.append(third)
+        third.start(); assert third.connected.wait(10)
+        time.sleep(.3)
+        assert third.drain_commands(persist=store.record_command) == []
+    finally:
+        for transport in transports: transport.close()
+        publisher.close(); store.close()
+
+
+def test_broker_discards_expired_queued_command(plaintext_broker):
+    device = device_name()
+    first = Mqtt5Transport(device, broker_config())
+    second = Mqtt5Transport(device, broker_config())
+    publisher = HelperPublisher()
+    try:
+        first.start(); assert first.connected.wait(10)
+        first.close()
+        properties = mqtt.Properties(mqtt.PacketTypes.PUBLISH)
+        properties.MessageExpiryInterval = 1
+        result = publisher.client.publish(f"v1/devices/{device}/down",
+            json.dumps({"deviceId": device, "messageId": "expired", "type": "INVENTORY_ADJUSTMENT"}),
+            qos=1, properties=properties)
+        result.wait_for_publish(5)
+        assert result.is_published()
+        # Broker expiry uses whole-second scheduling; cross that boundary
+        # comfortably rather than assuming a sub-second expiration sweep.
+        time.sleep(3)
+        second.start(); assert second.connected.wait(10)
+        publisher.publish_command(device, "fresh")
+        commands = wait_for_commands(second)
+        assert [item["messageId"] for item in commands] == ["fresh"]
+    finally:
+        first.close(); second.close(); publisher.close()

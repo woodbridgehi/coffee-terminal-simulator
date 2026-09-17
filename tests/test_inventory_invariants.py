@@ -13,7 +13,7 @@ from inventory import InventoryError, InventoryManager
 def inventory(tmp_path):
     definitions = tmp_path / "materials.json"
     definitions.write_text(json.dumps({"materials": [
-        {"materialId": name, "unit": "ml", "capacity": 1000, "initialOnHand": 500}
+        {"materialId": name, "name": name, "unit": "ml", "capacity": 1000, "initialOnHand": 500, "lowThreshold": 10, "criticalThreshold": 1}
         for name in ("milk", "water")
     ]}))
     return InventoryManager(definitions, tmp_path / "state.json")

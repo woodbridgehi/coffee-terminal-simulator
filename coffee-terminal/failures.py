@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+from config_validation import loads, number
 import random
 from pathlib import Path
 from typing import Any
@@ -15,7 +15,27 @@ class FailurePolicy:
         self.reload()
 
     def reload(self) -> None:
-        self.payload = json.loads(self.path.read_text(encoding="utf-8"))
+        candidate = loads(self.path.read_text(encoding="utf-8"))
+        if not isinstance(candidate, dict):
+            raise ValueError("failure policy must be an object")
+        number(candidate.get("globalFailureRate", 0), "globalFailureRate", maximum=1)
+        for group in ("profiles", "stepOverrides"):
+            entries = candidate.get(group, {})
+            if not isinstance(entries, dict):
+                raise ValueError(f"{group} must be an object")
+            for key, profile in entries.items():
+                if not isinstance(profile, dict):
+                    raise ValueError(f"{group}.{key} must be an object")
+                number(profile.get("failureRate", 0), f"{key}.failureRate", maximum=1)
+                retries = profile.get("maxRetries", 0)
+                if type(retries) is not int or retries < 0:
+                    raise ValueError(f"{key}.maxRetries must be a non-negative integer")
+                if profile.get("timing", "after") not in {"before", "after"}:
+                    raise ValueError(f"{key}.timing must be before or after")
+                for field in ("retryable", "consumeOnFailure"):
+                    if field in profile and not isinstance(profile[field], bool):
+                        raise ValueError(f"{key}.{field} must be boolean")
+        self.payload = candidate
 
     def profile(self, step: dict[str, Any]) -> dict[str, Any]:
         base = dict(self.payload.get("profiles", {}).get(step.get("failureProfile"), {}))

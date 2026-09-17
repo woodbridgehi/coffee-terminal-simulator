@@ -97,7 +97,7 @@ def write_config(path: Path, config: dict[str, Any]) -> None:
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-            json.dump(config, stream, ensure_ascii=False, indent=2)
+            json.dump(config, stream, ensure_ascii=False, indent=2, allow_nan=False)
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())

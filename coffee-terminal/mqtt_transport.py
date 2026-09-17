@@ -90,7 +90,7 @@ class Mqtt5Transport:
         self.connected = threading.Event()
         self.suspended = False
         self.session_present: bool | None = None
-        self.commands: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=100)
+        self.commands: queue.Queue[tuple[dict[str, Any], mqtt.MQTTMessage, int]] = queue.Queue(maxsize=100)
         self.last_error: str | None = None
         self._closed = False
         self._started = False
@@ -369,7 +369,8 @@ class Mqtt5Transport:
                 raise ValueError("command payload must be an object")
             if command.get("deviceId") not in {None, self.device_id}:
                 raise ValueError("command target does not match device")
-            self.commands.put_nowait(command)
+            self.commands.put_nowait((command, message, generation))
+            return  # The runtime ACKs only after the durable Inbox commit.
         except queue.Full:
             self.last_error = "command queue full; reconnecting for QoS1 redelivery"
             self._disconnect()
@@ -402,13 +403,26 @@ class Mqtt5Transport:
     # ------------------------------------------------------------------
     # Publishing
     # ------------------------------------------------------------------
-    def drain_commands(self, limit: int = 20) -> list[dict[str, Any]]:
-        result: list[dict[str, Any]] = []
+    def drain_commands(self, limit: int = 20, *, persist: Callable[[dict[str, Any]], Any] | None = None) -> list[dict[str, Any]]:
+        """Drain on the runtime thread; never block the network callback on disk.
+
+        Without a persistence callback this is an unacknowledged transport read.
+        Production callers must supply their durable Inbox writer.
+        """
+        result = []
         while len(result) < limit:
             try:
-                result.append(self.commands.get_nowait())
+                command, message, generation = self.commands.get_nowait()
             except queue.Empty:
                 break
+            if persist is not None:
+                try:
+                    persist(command)
+                except Exception:
+                    self._disconnect()  # Leave unacknowledged for session redelivery.
+                    raise
+                self._ack_if_current(message, generation)
+            result.append(command)
         return result
 
     def publish(self, kind: str, payload: dict[str, Any], *, qos: int = 1) -> None:
@@ -421,7 +435,7 @@ class Mqtt5Transport:
             "messageId": payload.get("eventId") or payload.get("messageId"),
             "deviceId": self.device_id,
             "type": kind,
-            "sentAt": utc_now(),
+            "sentAt": payload.get("occurredAt") or payload.get("completedAt") or payload.get("sentAt") or utc_now(),
             "payload": payload,
         }
         info = self.client.publish(self.topic("up"), json.dumps(envelope, ensure_ascii=False), qos=qos)

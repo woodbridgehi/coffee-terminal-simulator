@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from config_validation import loads
 import math
 import random
 import re
@@ -31,7 +32,7 @@ class RecipeCatalog:
         invalid = []
         for path in sorted(self.recipes_dir.glob("*.json")):
             try:
-                recipe = json.loads(path.read_text(encoding="utf-8"))
+                recipe = loads(path.read_text(encoding="utf-8"))
                 errors = self._validate(recipe)
                 errors.extend(self.inventory.validate_recipe(recipe))
                 if errors:
@@ -60,6 +61,9 @@ class RecipeCatalog:
             errors.append(f"不支持的 visual.profile: {visual_profile}")
         if "priceMinor" in recipe and (not isinstance(recipe["priceMinor"], int) or recipe["priceMinor"] <= 0):
             errors.append("priceMinor 必须是正整数（最小货币单位）")
+        for field in ("recipeId", "skuCode", "version", "name"):
+            if not isinstance(recipe.get(field), str) or not recipe[field].strip():
+                errors.append(f"{field} 必须是非空字符串")
         step_ids: set[str] = set()
         for step in recipe.get("steps", []):
             if not isinstance(step, dict):
@@ -135,7 +139,7 @@ class RecipeCatalog:
             return None
         path = self.recipes_dir.parent / 'recipe-archive' / recipe_id / (version + '.json')
         try:
-            recipe = json.loads(path.read_text(encoding='utf-8'))
+            recipe = loads(path.read_text(encoding='utf-8'))
             if recipe.get('recipeId') != recipe_id or recipe.get('version') != version:
                 return None
             if self._validate(recipe) or self.inventory.validate_recipe(recipe):

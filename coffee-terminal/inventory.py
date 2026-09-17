@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from config_validation import loads, number
 import math
 import threading
 from datetime import datetime, timezone
@@ -28,7 +29,18 @@ class InventoryManager:
 
     def reload(self, clear_reservations: bool = False) -> None:
         with self.lock:
-            payload = json.loads(self.definitions_path.read_text(encoding="utf-8"))
+            payload = loads(self.definitions_path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict) or not isinstance(payload.get("materials"), list):
+                raise InventoryError("materials must be an array")
+            for definition in payload["materials"]:
+                if not isinstance(definition, dict) or any(not isinstance(definition.get(k), str) or not definition[k].strip() for k in ("materialId", "unit", "name")):
+                    raise InventoryError("materialId, name and unit are required")
+                capacity = number(definition.get("capacity"), "capacity")
+                if capacity <= 0:
+                    raise InventoryError("capacity must be positive")
+                low = number(definition.get("lowThreshold"), "lowThreshold", maximum=capacity)
+                number(definition.get("criticalThreshold"), "criticalThreshold", maximum=low)
+                number(definition.get("initialOnHand", 0), "initialOnHand", maximum=capacity)
             definitions = {item["materialId"]: item for item in payload.get("materials", [])}
             if len(definitions) != len(payload.get("materials", [])):
                 raise InventoryError("materials.json 中存在重复 materialId")
@@ -97,7 +109,7 @@ class InventoryManager:
                     errors.append(f"未知物料 {item.get('materialId')}")
                 elif definition["unit"] != item.get("unit"):
                     errors.append(f"物料 {item['materialId']} 单位应为 {definition['unit']}")
-                elif float(item.get("amount", 0)) <= 0:
+                elif isinstance(item.get("amount"), bool) or not math.isfinite(float(item.get("amount", 0))) or float(item.get("amount", 0)) <= 0:
                     errors.append(f"物料 {item['materialId']} 消耗量必须大于 0")
         return errors
 
@@ -166,7 +178,9 @@ class InventoryManager:
     def release(self, task_id: str, amounts: dict[str, float] | None = None) -> list[dict[str, Any]]:
         with self.lock:
             reservation = self.state["reservations"].get(task_id, {})
-            targets = amounts or dict(reservation)
+            targets = dict(reservation) if amounts is None else amounts
+            if not targets:
+                return []
             changes = []
             for material_id, requested in targets.items():
                 released = min(float(reservation.get(material_id, 0)), float(requested))
@@ -177,7 +191,8 @@ class InventoryManager:
                 changes.append({"materialId": material_id, "amount": released, "unit": self.state["items"][material_id]["unit"]})
             if not any(float(value) > 0 for value in reservation.values()):
                 self.state["reservations"].pop(task_id, None)
-            self._bump()
+            if changes:
+                self._bump()
             return changes
 
     def adjust(self, material_id: str, mode: str, amount: float) -> dict[str, Any]:

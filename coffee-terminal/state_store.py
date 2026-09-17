@@ -70,6 +70,8 @@ class LocalStateStore:
 
                 CREATE INDEX IF NOT EXISTS idx_command_delivery
                     ON command_inbox(delivery_state, next_attempt_at, received_at);
+                CREATE INDEX IF NOT EXISTS idx_command_received
+                    ON command_inbox(received_at, message_id) WHERE state = 'RECEIVED';
                 CREATE INDEX IF NOT EXISTS idx_command_task
                     ON command_inbox(task_id, received_at);
 
@@ -198,6 +200,20 @@ class LocalStateStore:
                        last_error = NULL, updated_at = ?
                    WHERE message_id = ?""",
                 (state, canonical_json(result), "PENDING" if queue_delivery else "SENT", timestamp, message_id),
+            )
+
+    def received_commands(self) -> list[dict[str, Any]]:
+        with self.lock:
+            rows = self.connection.execute(
+                "SELECT payload_json FROM command_inbox WHERE state='RECEIVED' ORDER BY received_at, message_id"
+            ).fetchall()
+        return [json.loads(row["payload_json"]) for row in rows]
+
+    def replay_command_result(self, message_id: str) -> None:
+        with self.lock:
+            self.connection.execute(
+                "UPDATE command_inbox SET delivery_state='PENDING', next_attempt_at=0 WHERE message_id=? AND result_json IS NOT NULL",
+                (message_id,),
             )
 
     def pending_command_results(self, limit: int = 20) -> list[dict[str, Any]]:

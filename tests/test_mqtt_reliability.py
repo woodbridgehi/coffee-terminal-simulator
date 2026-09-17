@@ -46,14 +46,54 @@ def message(mid: int) -> SimpleNamespace:
     )
 
 
-def test_downlink_is_acked_only_after_it_enters_the_local_queue() -> None:
+def test_downlink_is_acked_only_after_durable_commit(tmp_path) -> None:
+    transport = transport_with_capacity()
+    store = LocalStateStore(tmp_path / "runtime.db")
+    try:
+        transport._on_message(transport.client, None, message(1))
+        assert transport.client.acks == []
+        assert store.command("message-1") is None
+        def persist(command):
+            assert transport.client.acks == []
+            store.record_command(command)
+        assert transport.drain_commands(persist=persist)[0]["messageId"] == "message-1"
+        assert store.command("message-1")["state"] == "RECEIVED"
+        assert transport.client.acks == [(1, 1)]
+    finally:
+        store.close()
+
+
+def test_full_queue_leaves_messages_unacknowledged():
     transport = transport_with_capacity()
     transport._on_message(transport.client, None, message(1))
-    assert transport.client.acks == [(1, 1)]
-
     transport._on_message(transport.client, None, message(2))
-    assert transport.client.acks == [(1, 1)]
+    assert transport.client.acks == []
     assert transport.client.disconnects == 1
+
+
+def test_disk_failure_does_not_ack():
+    import pytest
+    transport = transport_with_capacity()
+    transport._on_message(transport.client, None, message(1))
+    def fail(command):
+        raise OSError("disk full")
+    with pytest.raises(OSError):
+        transport.drain_commands(persist=fail)
+    assert transport.client.acks == []
+    assert transport.client.disconnects == 1
+
+
+def test_old_generation_persists_without_acknowledging_new_mid(tmp_path):
+    transport = transport_with_capacity()
+    transport._on_message(transport.client, None, message(1))
+    transport._generation += 1
+    store = LocalStateStore(tmp_path / "runtime.db")
+    try:
+        transport.drain_commands(persist=store.record_command)
+        assert store.command("message-1")
+        assert transport.client.acks == []
+    finally:
+        store.close()
 
 
 def test_pending_progress_is_coalesced_per_task() -> None:

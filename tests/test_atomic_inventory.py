@@ -12,7 +12,7 @@ from state_store import LocalStateStore
 def test_legacy_inventory_import_is_not_replayed(tmp_path):
     definitions = tmp_path / "materials.json"
     definitions.write_text(json.dumps({"materials": [
-        {"materialId": "cup", "unit": "count", "initialOnHand": 10}
+        {"materialId": "cup", "name": "Cup", "unit": "count", "capacity": 100, "lowThreshold": 5, "criticalThreshold": 1, "initialOnHand": 10}
     ]}))
     legacy = tmp_path / "inventory.json"
     legacy.write_text(json.dumps({"items": {"cup": {"unit": "count", "onHand": 3}}}))

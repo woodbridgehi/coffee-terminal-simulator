@@ -6,6 +6,7 @@ import json
 import random
 import re
 import tempfile
+import sqlite3
 import logging
 from copy import deepcopy
 from functools import wraps
@@ -25,6 +26,7 @@ import qrcode
 from catalog import RecipeCatalog
 from cloud import CloudClient, CloudError
 from configuration import write_config
+from config_validation import loads as config_loads
 from failures import FailurePolicy
 from inventory import InventoryError, InventoryManager
 from local_api import DeviceApiServer
@@ -46,16 +48,18 @@ def atomic_runtime(method):
     @wraps(method)
     def wrapped(self, *args, **kwargs):
         with self.lock:
+            previous_objects = self.inventory, self.catalog, self.failures
             before = deepcopy((self.runtime, self.inventory.state, self.events, self.sequence,
-                               self.material_statuses, self._progress_reports))
+                               self.material_statuses, self._progress_reports, self.failures.force_fail_next,
+                               self.last_synced_inventory, self.last_synced_capability))
             try:
                 with self.store.transaction():
                     return method(self, *args, **kwargs)
             except BaseException:
+                self.inventory, self.catalog, self.failures = previous_objects
                 (self.runtime, self.inventory.state, self.events, self.sequence,
-                 self.material_statuses, self._progress_reports) = before
-                self.last_synced_inventory = -1
-                self.last_synced_capability = None
+                 self.material_statuses, self._progress_reports, self.failures.force_fail_next,
+                 self.last_synced_inventory, self.last_synced_capability) = before
                 raise
     return wrapped
 
@@ -149,6 +153,7 @@ class CoffeeDeviceRuntime(WindowChromeBridge):
                 "已从本地事务状态恢复任务",
                 {**self._task_ref(recovered_task), "state": recovered_task.get("state"), "revision": recovered_task.get("revision"), "recovery": self._recovery_summary()},
             )
+        self._process_commands(self.store.received_commands())
         self.background_threads = [threading.Thread(target=self._execution_loop, daemon=True)]
         self.background_threads[0].start()
         if self.cloud:
@@ -286,20 +291,43 @@ class CoffeeDeviceRuntime(WindowChromeBridge):
             if task and task.get("state") in ACTIVE_STATES:
                 return {"ok": False, "error": "制作任务执行期间不能刷新配置"}
             try:
+                # Read each source once into a detached candidate. Commit never
+                # re-reads mutable source files or reloads live objects in place.
                 with tempfile.TemporaryDirectory() as temporary:
-                    state_path = Path(temporary) / "inventory.json"
-                    state_path.write_text(json.dumps(self.inventory.state), encoding="utf-8")
-                    candidate_inventory = InventoryManager(self.instance_dir / "materials.json", state_path, clear_reservations=False)
-                    candidate_catalog = RecipeCatalog(self.instance_dir / "recipes", candidate_inventory)
-                    if candidate_catalog.invalid:
-                        return {"ok": False, "error": "配置校验失败，继续使用上一有效配置", "invalidRecipes": candidate_catalog.invalid}
-                    FailurePolicy(self.instance_dir / "failures.json")
-                self.inventory.reload(); self.catalog.reload(); self.failures.reload()
-                self.last_synced_capability = None; self.last_synced_inventory = -1
-                self._emit("capability.changed", "本地配置已刷新", {"capabilityVersion": self.catalog.version})
-                return {"ok": True, "capabilities": self.capabilities(), "inventory": self.inventory_snapshot()}
-            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                    candidate = Path(temporary)
+                    (candidate / "recipes").mkdir()
+                    for name in ("materials.json", "failures.json"):
+                        (candidate / name).write_bytes((self.instance_dir / name).read_bytes())
+                    for source in (self.instance_dir / "recipes").glob("*.json"):
+                        (candidate / "recipes" / source.name).write_bytes(source.read_bytes())
+                    state_path = candidate / "inventory.json"
+                    state_path.write_text(json.dumps(self.inventory.state, allow_nan=False), encoding="utf-8")
+                    inventory = InventoryManager(candidate / "materials.json", state_path, clear_reservations=False)
+                    catalog = RecipeCatalog(candidate / "recipes", inventory)
+                    if catalog.invalid:
+                        return {"ok": False, "error": "配置校验失败，继续使用上一有效配置", "invalidRecipes": catalog.invalid}
+                    failures = FailurePolicy(candidate / "failures.json")
+                    failures.runtime_failure_rate = self.failures.runtime_failure_rate
+                    failures.force_fail_next = self.failures.force_fail_next
+                    inventory.definitions_path = self.instance_dir / "materials.json"
+                    inventory.state_path = self.instance_dir / "state" / "inventory.json"
+                    inventory.state_store = self.store
+                    inventory.lock = self.store.lock
+                    catalog.recipes_dir = self.instance_dir / "recipes"
+                    failures.path = self.instance_dir / "failures.json"
+                return self._apply_configuration(inventory, catalog, failures)
+            except (OSError, sqlite3.Error, ValueError, TypeError, KeyError) as exc:
                 return {"ok": False, "error": str(exc)}
+
+    @atomic_runtime
+    def _apply_configuration(self, inventory, catalog, failures) -> dict[str, Any]:
+        self.inventory, self.catalog, self.failures = inventory, catalog, failures
+        self.inventory._save()
+        self.material_statuses = {item["materialId"]: item["status"] for item in inventory.snapshot()["materials"]}
+        self.last_synced_capability = None
+        self.last_synced_inventory = -1
+        self._emit("capability.changed", "本地配置已刷新", {"capabilityVersion": catalog.version})
+        return {"ok": True, "capabilities": self.capabilities(), "inventory": self.inventory_snapshot()}
 
     def save_recipe(self, raw_json: str) -> dict[str, Any]:
         try:
@@ -307,7 +335,7 @@ class CoffeeDeviceRuntime(WindowChromeBridge):
                 task = self.runtime.get("task")
                 if task and task.get("state") in ACTIVE_STATES:
                     return {"ok": False, "error": "制作任务执行期间不能修改配方"}
-                recipe = json.loads(raw_json)
+                recipe = config_loads(raw_json)
                 if not isinstance(recipe, dict) or not isinstance(recipe.get("recipeId"), str):
                     raise ValueError("无效配方对象或 recipeId")
                 safe_name = "".join(char for char in recipe["recipeId"] if char.isalnum() or char in "-_")
@@ -365,6 +393,8 @@ class CoffeeDeviceRuntime(WindowChromeBridge):
     @atomic_runtime
     def adjust_inventory(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:
+            if not isinstance(payload, dict) or not isinstance(payload.get("materialId"), str) or not isinstance(payload.get("mode", "ADD"), str):
+                raise InventoryError("无效库存调整参数")
             change = self.inventory.adjust(payload["materialId"], payload.get("mode", "ADD"), float(payload["amount"]))
             change.update({"reason": payload.get("reason", "OPERATOR_ADJUSTMENT"), "operatorId": payload.get("operatorId")})
             self._emit("inventory.adjusted", f"物料 {change['materialId']} 已调整", change)
@@ -673,7 +703,7 @@ class CoffeeDeviceRuntime(WindowChromeBridge):
             if (datetime.now(timezone.utc) - occupied_at).total_seconds() >= 120:
                 self._set_pickup('NEEDS_CHECK', task)
                 self._emit('pickup.overdue', '取杯等待超过两分钟，请现场核查', self._task_ref(task))
-        if not task or self.runtime["override"]["offline"]:
+        if not task:
             return
         if task["state"] == "ACKNOWLEDGED":
             task["state"] = "RUNNING"; self.runtime["deviceStatus"] = "BUSY"
@@ -874,7 +904,8 @@ class CoffeeDeviceRuntime(WindowChromeBridge):
                     continue
                 try:
                     self.mqtt.resume()
-                    commands = self.mqtt.drain_commands()
+                    self._process_commands(self.store.received_commands())
+                    commands = self.mqtt.drain_commands(persist=self._persist_mqtt_command)
                     if commands:
                         self._process_commands(commands)
                     clock = time.monotonic()
@@ -924,6 +955,7 @@ class CoffeeDeviceRuntime(WindowChromeBridge):
         return random.uniform(0.0, ceiling)
 
     def _poll_commands(self) -> None:
+        self._process_commands(self.store.received_commands())
         response = self.cloud.commands(self.command_cursor)
         if not isinstance(response, dict):
             raise CloudError("命令响应必须是 JSON 对象", retryable=False)
@@ -951,32 +983,78 @@ class CoffeeDeviceRuntime(WindowChromeBridge):
                 self._emit("command.id-conflict", "相同 messageId 的命令载荷不一致", {"messageId": command.get("messageId")}, queue=False)
                 continue
             if disposition == "EXISTING" and existing and existing["state"] != "RECEIVED":
+                if self.cloud:
+                    self.store.replay_command_result(command["messageId"])
                 continue
-            command_type = command.get("type")
+            # A failed local transaction remains RECEIVED. Do not convert storage
+            # failure into a business rejection or advance the HTTP cursor.
+            self._execute_received_command(command)
+
+    def _persist_mqtt_command(self, command: dict[str, Any]) -> None:
+        try:
+            disposition, _ = self.store.record_command(command)
+        except StateStoreError as exc:
+            # Permanently malformed input has no executable identity.
+            self._emit("command.malformed", str(exc), queue=False)
+            return
+        if disposition == "CONFLICT":
+            self._emit("command.id-conflict", "相同 messageId 的命令载荷不一致",
+                       {"messageId": command.get("messageId")}, queue=False)
+
+    @atomic_runtime
+    def _execute_received_command(self, command: dict[str, Any]) -> None:
+        command_type = command.get("type")
+        if (not isinstance(command_type, str)
+                or (command_type == "DEBUG_COMMAND" and not isinstance(command.get("action"), str))
+                or (command_type == "INVENTORY_ADJUSTMENT" and not isinstance(command.get("payload"), dict))
+                or (command.get("taskId") is not None and not isinstance(command["taskId"], str))):
+            self._finish_rejected_command(command, "INVALID_COMMAND")
+            return
+        if command.get("expiresAt") is not None:
             try:
-                if command_type == "MAKE_DRINK":
-                    self._accept_task(command)
-                elif command_type == "DEBUG_COMMAND":
-                    result = self._apply_command(command.get("action", ""), command.get("taskId"))
-                    self._complete_control_command(command, result)
-                elif command_type == "RELOAD_CONFIG":
-                    self._complete_control_command(command, self.reload_config())
-                elif command_type == "INVENTORY_ADJUSTMENT":
-                    self._complete_control_command(command, self.adjust_inventory(command.get("payload", {})))
-                elif command_type == "CANCEL_TASK":
-                    if not command.get("taskId"):
-                        result = {"ok": False, "reasonCode": "INVALID_COMMAND", "error": "CANCEL_TASK 必须包含 taskId"}
-                    else:
-                        result = self._apply_command("cancel", str(command["taskId"]))
-                    self._complete_control_command(command, result)
-                else:
-                    self._complete_control_command(command, {"ok": False, "reasonCode": "COMMAND_TYPE_UNSUPPORTED", "error": f"不支持的命令类型：{command_type}"})
-            except Exception as exc:
-                if command_type == "MAKE_DRINK":
-                    self._ack(command, False, "COMMAND_PROCESSING_ERROR", {"exceptionType": type(exc).__name__})
-                else:
-                    self._complete_control_command(command, {"ok": False, "reasonCode": "COMMAND_PROCESSING_ERROR", "error": str(exc), "exceptionType": type(exc).__name__})
-                self._emit("command.processing-failed", f"命令处理失败：{exc}", {"messageId": command.get("messageId"), "commandType": command_type}, queue=False)
+                expiry = datetime.fromisoformat(command["expiresAt"].replace("Z", "+00:00"))
+                if expiry.tzinfo is None:
+                    raise ValueError("expiresAt requires timezone")
+                expired = expiry <= datetime.now(timezone.utc)
+            except (AttributeError, TypeError, ValueError):
+                self._finish_rejected_command(command, "INVALID_COMMAND")
+                return
+            if expired:
+                self._finish_rejected_command(command, "COMMAND_EXPIRED")
+                return
+        # Legacy commands without a deadline remain supported, but task controls
+        # must name their target: never let a delayed command act on a new cup.
+        task_actions = {"pause", "resume", "skip", "retry", "cancel", "clear", "collect"}
+        if command_type == "CANCEL_TASK" or (command_type == "DEBUG_COMMAND" and command.get("action") in task_actions):
+            if not command.get("taskId"):
+                self._finish_rejected_command(command, "TASK_TARGET_REQUIRED")
+                return
+        if "expectedRevision" in command:
+            task = self.runtime.get("task") or {}
+            if command.get("taskId") != task.get("taskId") or command["expectedRevision"] != task.get("revision"):
+                self._finish_rejected_command(command, "TASK_REVISION_MISMATCH")
+                return
+        if command_type == "MAKE_DRINK":
+            self._accept_task(command)
+            return
+        if command_type == "DEBUG_COMMAND":
+            result = self._apply_command(command.get("action", ""), command.get("taskId"))
+        elif command_type == "RELOAD_CONFIG":
+            result = self.reload_config()
+        elif command_type == "INVENTORY_ADJUSTMENT":
+            result = self.adjust_inventory(command.get("payload", {}))
+        elif command_type == "CANCEL_TASK":
+            result = self._apply_command("cancel", str(command["taskId"]))
+        else:
+            result = {"ok": False, "reasonCode": "COMMAND_TYPE_UNSUPPORTED"}
+        self._complete_control_command(command, result)
+
+    def _finish_rejected_command(self, command: dict[str, Any], reason: str) -> None:
+        if command.get("type") == "MAKE_DRINK":
+            self._reject(command, reason, {})
+        else:
+            self._complete_control_command(command, {"ok": False, "reasonCode": reason})
+
     def _heartbeat_payload(self) -> dict[str, Any]:
         local_api = self.config.get("localApi", {})
         task = self.runtime.get("task") or {}
