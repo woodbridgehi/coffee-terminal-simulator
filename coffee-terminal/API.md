@@ -157,7 +157,9 @@ GET /api/v1/devices/{deviceId}/commands?after={cursor}&limit=10
 
 `DEBUG_COMMAND.action` 支持 `pause`、`resume`、`skip`、`retry`、`cancel`、`clear`、`force-fail` 和 `toggle-offline`，但动作是否成功取决于当前任务状态。
 
-`INVENTORY_ADJUSTMENT.payload` 与本地库存调整接口的请求体相同。
+`INVENTORY_ADJUSTMENT.payload` 与本地库存调整接口的请求体相同。非法数值（含超大整数溢出）拒绝为 INVALID_COMMAND，不阻塞后续恢复；存储错误仍保留 RECEIVED 重试。
+
+任务控制 pause/resume/skip/retry/cancel/clear/collect 必须绑定目标 taskId；提供 expectedRevision 时还会检查版本。未执行命令检查 expiresAt，旧版缺少期限的命令暂时兼容；已完成的同 ID 命令优先返回原结果，不因重投时已过期而改写事实。新云端调试/原始命令默认有效期为 5 分钟。
 
 ## 4. 制作任务校验与 ACK
 
@@ -722,7 +724,7 @@ X-Local-Token: <配置时必填>
 
 HTTP使用上文API；MQTT下行 `v1/devices/{deviceId}/down`，事件/ACK/结果使用 `/up` 信封，heartbeat也通过 `/up` 信封发送（QoS 0）；state/presence使用各自topic（QoS 1、retain）。`messageId`关联命令，`taskId`关联任务，`orderId`关联订单，`eventId`与摘要用于事实去重，`taskRevision`约束状态顺序，`attempt`区分真实模拟重试。
 
-MQTT命令目前先入内存队列后PUBACK，再由运行循环写SQLite；持久接收仍有崩溃窗口。事件Outbox、任务与库存事务不能反向消除此窗口。
+MQTT命令先入内存队列，运行循环提交 SQLite Inbox 后才 PUBACK；失败不 ACK 并断开等待重投。RECEIVED 命令可跨重启恢复，已完成命令只重发原结果。业务状态、库存副作用与命令结果同事务提交；此保证不等于真实硬件动作 exactly-once。
 
 ### 13.3 配方版本、视觉计划与定制
 

@@ -98,7 +98,7 @@ config/instances/{deviceId}/
 | `localApi.allowedOrigins` | 否 | 允许访问写接口的浏览器 Origin；默认拒绝所有带 Origin 的请求 |
 | `enableConsole` | 否 | 预留开关；当前界面仍会显示控制台 |
 
-MQTT心跳与普通进度允许缺失；待发进度按taskId合并。生命周期与结果不合并。下行进入内存队列后PUBACK，之后才写SQLite，仍有进程崩溃窗口。
+MQTT心跳与普通进度允许缺失；待发进度按taskId合并。生命周期与结果不合并。下行由运行循环提交 SQLite Inbox 后才 PUBACK；持久化失败等待 Broker 重投，启动与同步循环恢复 RECEIVED 命令。
 
 remote 模式推荐通过 `COFFEE_DEVICE_TOKEN` 环境变量或 `.secrets/{instance}.env` 注入凭证。生产式联调使用首次安装向导或 `scripts/activate_instance.py` 和 `scripts/rotate_instance_credential.py` 管理凭证，不要把 `authToken` 写进 JSON。
 
@@ -129,6 +129,8 @@ cp config/device.bootstrap.template.json config/instances/new-terminal/device.js
 - `remote + http`：兼容模式，使用 HTTP 轮询命令并上报设备数据，适合故障恢复和旧部署。
 
 ## 3. recipes/*.json
+
+`display.sortOrder` 必须为有限数字，不接受字符串、布尔值或无法表示的超大整数。保存配方时先用候选配置完整生成能力快照，再提交；校验、能力生成或提交失败保留旧文件和旧运行时。配置刷新也先验证候选配置再切换。普通异常回滚不等于文件与 SQLite 跨介质断电事务。
 
 ### 3.1 示例
 

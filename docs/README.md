@@ -26,3 +26,8 @@
 - [CHANGELOG](../CHANGELOG.md) 是历史变更，不是完整当前功能目录。
 
 当前终端是计时执行＋运动学展示，没有CoppeliaSim、PyBullet、Gazebo或真实硬件驱动。迁移与硬件分层属于后续设计，不能当现有接口使用。旧专题中的测试计数、临时截图和部署结论只适用于各自日期。
+
+## 2026-09-17 可靠性修复与发布
+
+- [整改与回归证据](business-reliability-2026-09-17.md)
+- [云端上线及终端源码同步记录](../../coffee-cloud-mvp/docs/releases/2026-09-17-business-reliability.md)：现场终端安装与重启不包含在 VPS 源码同步中。

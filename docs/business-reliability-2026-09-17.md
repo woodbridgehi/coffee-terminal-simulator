@@ -44,3 +44,7 @@
 新增验收覆盖候选能力生成失败、文件替换后提交失败（现有/新建配方）、合法排序值、无期限超大整数旧命令的独立子进程启动，以及存储 OSError/ValueError 仍可重试。普通异常回滚不等于文件与 SQLite 具有跨介质断电事务；本次不宣称新增了这种保证。
 
 复审修复后的全量验证：Python 140 passed，另有 6 subtests passed；Node 69 passed，无失败、无跳过。使用临时 PostgreSQL/Redis 及两个仓库各自独立的本机 Broker；未访问生产服务。
+
+## 合并与部署状态
+
+修复已合并 main（4763be1），VPS 隔离全套 Python 140 通过及 6 subtests 通过、Node 69 通过。VPS 仅同步终端源码，保留实例配置和凭据，未启动桌面程序或升级其他现场设备。配套云端已部署，详见[发布记录](../../coffee-cloud-mvp/docs/releases/2026-09-17-business-reliability.md)。
