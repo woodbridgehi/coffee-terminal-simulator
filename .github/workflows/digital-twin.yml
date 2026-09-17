@@ -9,12 +9,26 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: coffee-terminal-simulator
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: coffee-terminal-simulator
+          persist-credentials: false
+      # Existing asset/sound parity tests compare the two adjacent repositories.
+      - uses: actions/checkout@v4
+        with:
+          repository: woodbridgehi/coffee-cloud-mvp
+          ref: 8e45d435fdcb627c8d031c1e0e1659c07ba6166f
+          path: coffee-cloud-mvp
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
+          cache-dependency-path: coffee-terminal-simulator/package-lock.json
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
