@@ -328,6 +328,56 @@
           }
         ]
       }
+    },
+    "left-gripper": {
+      "kind": "gripper",
+      "model": "Parallel jaw 85 mm (nominal)",
+      "timing": {
+        "ackDelayMs": 0,
+        "startDelaySeconds": 0.1,
+        "sensorDelaySeconds": 0.04,
+        "warmupSeconds": 0,
+        "durationSeconds": 1,
+        "cooldownSeconds": 0,
+        "cleanSeconds": 5,
+        "resetSeconds": 0.5,
+        "graspSeconds": 0.3,
+        "releaseSeconds": 0.3
+      },
+      "gripper": {
+        "robot": "left",
+        "maxOpeningMm": 85,
+        "initialOpeningMm": 85,
+        "openingSpeedMmS": 42.5,
+        "closingSpeedMmS": 42.5,
+        "massKg": 0.7,
+        "maxPayloadKg": 2
+      }
+    },
+    "right-gripper": {
+      "kind": "gripper",
+      "model": "Parallel jaw 85 mm (nominal)",
+      "timing": {
+        "ackDelayMs": 0,
+        "startDelaySeconds": 0.1,
+        "sensorDelaySeconds": 0.04,
+        "warmupSeconds": 0,
+        "durationSeconds": 1,
+        "cooldownSeconds": 0,
+        "cleanSeconds": 5,
+        "resetSeconds": 0.5,
+        "graspSeconds": 0.3,
+        "releaseSeconds": 0.3
+      },
+      "gripper": {
+        "robot": "right",
+        "maxOpeningMm": 85,
+        "initialOpeningMm": 85,
+        "openingSpeedMmS": 42.5,
+        "closingSpeedMmS": 42.5,
+        "massKg": 0.7,
+        "maxPayloadKg": 2
+      }
     }
   }
 }

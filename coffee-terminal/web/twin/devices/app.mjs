@@ -1,18 +1,18 @@
 import {TwinRenderer} from '../renderer.mjs';
 import {request,submitCommand,runLatte} from './client.mjs';
 const $=id=>document.getElementById(id),base=location.origin;
-const names={left:'左机械臂',right:'右机械臂',brewer:'咖啡机',foamer:'奶泡机','hot-water':'热水机',lidder:'封盖机','cup-dispenser':'落杯器','ice-maker':'制冰机','syrup-pump':'糖浆机'};
-const words={idle:'待机',ready:'就绪',running:'运行',waiting:'等待',warming:'预热',cooldown:'恢复',fault:'故障',offline:'离线',cleaning:'清洗',resetting:'复位',move:'移动',grasp:'抓取',release:'释放',transfer:'倒奶',process:'加工',seal:'封盖',dispense:'落杯',clean:'清洗',reset:'复位',stop:'停止',ACCEPTED:'已接收',RUNNING:'执行中',SUCCEEDED:'成功',FAILED:'失败',REJECTED:'拒绝',CANCELLED:'已取消',EXPIRED:'启动过期'};
-const sensorNames={ready:'就绪信号',cupPresent:'杯到位',gripperHasObject:'夹爪持物',headPosition:'压头位置',stockRemaining:'剩余库存'};
+const names={'left-gripper':'左末端夹爪','right-gripper':'右末端夹爪',left:'左机械臂',right:'右机械臂',brewer:'咖啡机',foamer:'奶泡机','hot-water':'热水机',lidder:'封盖机','cup-dispenser':'落杯器','ice-maker':'制冰机','syrup-pump':'糖浆机'};
+const words={open:'张开',close:'闭合',setOpening:'指定开口',idle:'待机',ready:'就绪',running:'运行',waiting:'等待',warming:'预热',cooldown:'恢复',fault:'故障',offline:'离线',cleaning:'清洗',resetting:'复位',move:'移动',grasp:'抓取',release:'释放',transfer:'倒奶',process:'加工',seal:'封盖',dispense:'落杯',clean:'清洗',reset:'复位',stop:'停止',ACCEPTED:'已接收',RUNNING:'执行中',SUCCEEDED:'成功',FAILED:'失败',REJECTED:'拒绝',CANCELLED:'已取消',EXPIRED:'启动过期'};
+const sensorNames={openingMm:'实际开口',targetOpeningMm:'目标开口',moving:'开合中',atTarget:'到达目标',robotHoldingObject:'机械臂持物',heldObjectWidthMm:'持物直径',openingCompatible:'开口尺寸兼容',payloadKg:'持物重量 kg',payloadWithinLimit:'负载未超限',ready:'就绪信号',cupPresent:'杯到位',gripperHasObject:'夹爪持物',headPosition:'压头位置',stockRemaining:'剩余库存'};
 let snapshot,renderer,selected='cup-dispenser',records=new Map(),events=[],plannerRunning=false,selectedCommandId=null,polling=false,loading=null;
 const text=(tag,value)=>{const e=document.createElement(tag);e.textContent=value;return e;};
 function notice(message,error=false){$('notice').textContent=message;$('notice').dataset.error=error;}
 async function action(fn){try{await fn();}catch(error){const c=error.data?.command;if(c){records.set(c.commandId,c);renderRecords();showRecord(c);}notice(c?describe(c):error.message,true);}}
 const post=(path,body={})=>request(base,path,{method:'POST',body:{sessionId:snapshot.sessionId,...body}});
-function defaults(action){if(action==='move')return {station:selected==='left'?'cups':'right-ready',...(selected==='left'?{approachObject:'cup'}:{})};if(action==='release')return {object:'cup',station:'handoff'};if(action==='grasp')return {object:'cup'};if(action==='process')return {object:selected==='foamer'?'milk-cup':'cup'};if(action==='seal')return {object:'cup'};if(action==='transfer')return {source:'milk-cup',object:'cup',durationSeconds:6};return {};}
+function defaults(action){if(action==='setOpening')return {openingMm:40,speedMmS:42.5};if(['open','close'].includes(action))return {};if(action==='move')return {station:selected==='left'?'cups':'right-ready',...(selected==='left'?{approachObject:'cup'}:{})};if(action==='release')return {object:'cup',station:'handoff'};if(action==='grasp')return {object:'cup'};if(action==='process')return {object:selected==='foamer'?'milk-cup':'cup'};if(action==='seal')return {object:'cup'};if(action==='transfer')return {source:'milk-cup',object:'cup',durationSeconds:6};return {};}
 function newId(){ $('command-id').value=`ui-${crypto.randomUUID()}`; }
 const finished=c=>['SUCCEEDED','FAILED','REJECTED','CANCELLED','EXPIRED'].includes(c.status);
-const reasons={outlet_or_cup_slot_occupied:'单杯槽位已占用：先取走成品台上的杯子；制作中的杯子需先完成流程。',outlet_not_clear:'机械臂靠近落杯出口，请先移开机械臂。',insufficient_supply:'杯或盖不足，请在「库存 / 会话」中补充。',insufficient_material:'原料不足，补料后可继续等待中的命令。',container_not_at_device:'容器未放到设备工位，或仍被机械臂握住。',gripper_not_clear:'机械臂尚未退出封盖区域。',device_warming:'设备正在预热，请等待。',device_cooldown:'设备正在恢复，请等待。',resource_busy:'所需设备或容器正在被其他动作使用。',DEVICE_BUSY:'该设备已有未结束命令。',START_DEADLINE_EXCEEDED:'启动等待已过期，本条命令不会执行。排除原因后用新 ID 发送。',INJECTED_ACTION_FAILURE:'已触发模拟故障；先复位设备，再用新 ID 重试。',CONTAINER_ABSENT:'没有可用的杯子，请先落杯。',CONTAINER_ALREADY_SEALED:'杯子已封盖，不能再次加工。'};
+const reasons={ROBOT_HOLDING_OBJECT:'机械臂正在持物。请先通过机械臂释放，再独立开合夹爪。',TOOL_BUSY:'夹爪与安装它的机械臂不能同时接受运动命令，请等待当前动作结束。',outlet_or_cup_slot_occupied:'单杯槽位已占用：先取走成品台上的杯子；制作中的杯子需先完成流程。',outlet_not_clear:'机械臂靠近落杯出口，请先移开机械臂。',insufficient_supply:'杯或盖不足，请在「库存 / 会话」中补充。',insufficient_material:'原料不足，补料后可继续等待中的命令。',container_not_at_device:'容器未放到设备工位，或仍被机械臂握住。',gripper_not_clear:'机械臂尚未退出封盖区域。',device_warming:'设备正在预热，请等待。',device_cooldown:'设备正在恢复，请等待。',resource_busy:'所需设备或容器正在被其他动作使用。',DEVICE_BUSY:'该设备已有未结束命令。',START_DEADLINE_EXCEEDED:'启动等待已过期，本条命令不会执行。排除原因后用新 ID 发送。',INJECTED_ACTION_FAILURE:'已触发模拟故障；先复位设备，再用新 ID 重试。',CONTAINER_ABSENT:'没有可用的杯子，请先落杯。',CONTAINER_ALREADY_SEALED:'杯子已封盖，不能再次加工。'};
 function describe(c){
  const head=`${names[c.deviceId]??c.deviceId} · ${words[c.action]??c.action} · ${words[c.status]??c.status}`;
  const detail=c.reason?(reasons[c.reason]??`原因：${c.reason}`):c.status==='SUCCEEDED'?(c.action==='dispense'?'杯子已出现在落杯器出口，库存减 1。相同 ID 重发不会再次落杯。':'本条动作已完成；这不一定表示整杯咖啡已完成。'):c.status==='ACCEPTED'?'命令已接收，尚未执行。':c.status==='RUNNING'?'设备正在执行；查看工作台与设备状态。':c.status==='CANCELLED'?'命令已取消；已执行的动作或已消耗物料不会回退。':'查看原始结果获取详细信息。';
@@ -44,14 +44,16 @@ for(const tab of document.querySelectorAll('[data-tab]')){
  tab.onkeydown=e=>{const tabs=[...document.querySelectorAll('[data-tab]')],i=tabs.indexOf(tab);let n;if(e.key==='ArrowRight')n=(i+1)%tabs.length;else if(e.key==='ArrowLeft')n=(i+tabs.length-1)%tabs.length;else if(e.key==='Home')n=0;else if(e.key==='End')n=tabs.length-1;else return;e.preventDefault();selectTab(tabs[n].dataset.tab);tabs[n].focus();};
 }
 function deviceButtons(){
+ $('device-count').textContent=`${snapshot.devices.length} 台虚拟设备`;
  $('device-list').replaceChildren(...snapshot.devices.map(d=>{const b=text('button',names[d.id]??d.id);b.dataset.device=d.id;b.setAttribute('aria-pressed',d.id===selected);b.append(text('small',''));b.onclick=()=>{selected=d.id;selectedState();configuration();draw(snapshot);};return b;}));
 }
-function actionHelp(){const a=$('action').value;$('action-help').textContent=a==='dispense'?'成功后出口出现一只杯子，库存减 1。已有杯子时须先完成制作并取走成品。':a==='process'?'先把容器放到该设备工位，再加工；未到位会等待，不会凭空出料。':a==='seal'?'杯子须在封盖工位，机械臂退出后才能封盖。':'动作按设备状态与联锁执行；展开参数，核对目标工位与容器。';$('command-parameters').open=!['dispense','reset','clean','stop'].includes(a);}
+function actionHelp(){const a=$('action').value,p=snapshot.devices.find(d=>d.id===selected).configuration,isJaw=p.kind==='gripper';$('gripper-controls').hidden=!isJaw||!['open','close','setOpening'].includes(a);if(isJaw){$('jaw-target').max=p.gripper.maxOpeningMm;$('jaw-target').disabled=a!=='setOpening';$('jaw-target').value=a==='open'?p.gripper.maxOpeningMm:a==='close'?0:Math.min(40,p.gripper.maxOpeningMm);$('jaw-speed').value=p.gripper[a==='open'?'openingSpeedMmS':'closingSpeedMmS'];syncJawParameters();$('action-help').textContent='独立控制夹爪开口；不会自动抓住或释放杯子。原机械臂逻辑抓取保持兼容。';$('command-parameters').open=false;return;}$('action-help').textContent=a==='dispense'?'成功后出口出现一只杯子，库存减 1。已有杯子时须先完成制作并取走成品。':a==='process'?'先把容器放到该设备工位，再加工；未到位会等待，不会凭空出料。':a==='seal'?'杯子须在封盖工位，机械臂退出后才能封盖。':'动作按设备状态与联锁执行；展开参数，核对目标工位与容器。';$('command-parameters').open=!['dispense','reset','clean','stop'].includes(a);}
 function selectedState(){
  const d=snapshot.devices.find(x=>x.id===selected);if(!d)return;
  $('device-title').textContent=names[selected]??selected;
  $('device-state').textContent=`${words[d.mode]??d.mode} · ${d.online?'在线':'离线'}${d.fault?' · '+d.fault:''}${d.state.remaining>0?' · 剩余 '+d.state.remaining.toFixed(2)+' s':''}`;
- $('sensors').replaceChildren(...Object.entries(d.sensors).map(([k,v])=>{const row=document.createElement('div');row.append(text('span',sensorNames[k]??k),text('b',typeof v==='boolean'?(v?'是':'否'):String(v)));return row;}));
+ $('sensors').replaceChildren(...Object.entries(d.sensors).map(([k,v])=>{const row=document.createElement('div');row.append(text('span',sensorNames[k]??k),text('b',typeof v==='boolean'?(v?'是':'否'):(typeof v==='number'?String(Number(v.toFixed(3))):String(v))+(k.endsWith('Mm')?' mm':'')));return row;}));
+ $('gripper-notes').hidden=d.kind!=='gripper';if(d.kind==='gripper')$('gripper-notes').textContent=`额定开口 85 mm · 自重约 0.7 kg · 最大负载 2 kg。当前杯模型直径 100 mm，超出额定开口；原流程仍为逻辑抓取。RS485 / Modbus RTU / I/O 仅为能力描述，未接实机。`;
  $('stock-state').textContent=d.stock?`库存 ${d.stock.amount} / ${d.stock.capacity}，预留 ${d.stock.reserved}`:`传感器更新时间 ${d.observedAt.toFixed(2)} s`;
 }
 function configuration(){
@@ -59,9 +61,10 @@ function configuration(){
  $('configuration').value=JSON.stringify(p,null,2);$('config-fields').replaceChildren();
  const fields=[['durationSeconds','加工时间 s'],['warmupSeconds','预热时间 s'],['cooldownSeconds','恢复时间 s'],['startDelaySeconds','启动延迟 s'],['ackDelayMs','确认延迟 ms'],['sensorDelaySeconds','传感器延迟 s']];
  if(p.kind==='robot')fields.splice(0,3,['graspSeconds','抓取时间 s'],['releaseSeconds','释放时间 s'],['resetSeconds','复位时间 s']);
- for(const [key,label] of fields){const row=text('label',label),input=document.createElement('input');input.type='number';input.min='0';input.step='any';input.value=p.timing[key];input.dataset.field=key;
-  input.oninput=()=>{try{const current=JSON.parse($('configuration').value);current.timing[key]=Number(input.value);$('configuration').value=JSON.stringify(current,null,2);}catch{notice('请先修正完整属性 JSON',true);}};row.append(input);$('config-fields').append(row);}
- $('action').replaceChildren(...d.capabilities.map(c=>{const o=text('option',words[c.action]??c.action);o.value=c.action;return o;}));$('parameters').value=JSON.stringify(defaults($('action').value),null,2);newId();actionHelp();
+ if(p.kind==='gripper'){fields.splice(0,fields.length,['initialOpeningMm','初始开口 mm'],['openingSpeedMmS','张开速度 mm/s'],['closingSpeedMmS','闭合速度 mm/s'],['maxOpeningMm','开口上限 mm'],['maxPayloadKg','负载上限 kg']);}
+ for(const [key,label] of fields){const row=text('label',label),input=document.createElement('input');input.type='number';input.min='0';input.step='any';const section=p.kind==='gripper'?'gripper':'timing';input.value=p[section][key];input.dataset.field=key;if(p.kind==='gripper'){input.min=key==='initialOpeningMm'?'0':'0.1';input.max=key.includes('Speed')?'42.5':key==='maxPayloadKg'?'2':'85';}
+  input.oninput=()=>{try{const current=JSON.parse($('configuration').value);current[section][key]=Number(input.value);$('configuration').value=JSON.stringify(current,null,2);}catch{notice('请先修正完整属性 JSON',true);}};row.append(input);$('config-fields').append(row);}
+ $('action').replaceChildren(...d.capabilities.map(c=>{const o=text('option',words[c.action]??c.action);o.value=c.action;return o;}));if(p.kind==='gripper')$('action').value='setOpening';$('parameters').value=JSON.stringify(defaults($('action').value),null,2);newId();actionHelp();
 }
 function draw(update){
  snapshot={...snapshot,...update};$('clock').textContent=`${snapshot.state.time.toFixed(2)} s`;if($('clock-mode').value!==snapshot.clock.mode)$('clock-mode').value=snapshot.clock.mode;$('advance').disabled=snapshot.clock.mode!=='manual'||plannerRunning;
@@ -82,6 +85,8 @@ async function load(){
  })();
  try{return await loading;}finally{loading=null;}
 }
+function syncJawParameters(){const a=$('action').value;if(!['open','close','setOpening'].includes(a))return;const p={speedMmS:Number($('jaw-speed').value)};if(a==='setOpening')p.openingMm=Number($('jaw-target').value);$('parameters').value=JSON.stringify(p,null,2);}
+$('jaw-target').oninput=syncJawParameters;$('jaw-speed').oninput=syncJawParameters;
 $('action').onchange=()=>{$('parameters').value=JSON.stringify(defaults($('action').value),null,2);newId();actionHelp();};$('new-id').onclick=newId;
 $('send').onclick=()=>action(async()=>{
  const c={sessionId:snapshot.sessionId,commandId:$('command-id').value,deviceId:selected,action:$('action').value,parameters:JSON.parse($('parameters').value),startWithinSeconds:Number($('deadline').value)};

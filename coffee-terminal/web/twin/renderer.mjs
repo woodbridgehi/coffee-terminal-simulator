@@ -58,7 +58,7 @@ export class TwinRenderer {
     }
     this.arms={};
     for(const [id,robot] of Object.entries(config.robots)){
-      const arm=armVisual(robot.linkRadius);this.root.add(arm.group);this.arms[id]=arm;
+      const arm=armVisual(robot.linkRadius,{independentGripper:Object.values(config.grippers??{}).some(g=>g.robot===id)});if(arm.actuator)arm.actuator.group.quaternion.fromArray(robot.tool.quaternion).invert();this.root.add(arm.group);this.arms[id]=arm;
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.105,.12,.025,32),new THREE.MeshStandardMaterial({color:'#273230',metalness:.5,roughness:.3}));
       const group=new THREE.Group();this.setPose(group,robot.base);base.rotation.x=Math.PI/2;group.add(base);this.root.add(group);
     }
@@ -82,7 +82,7 @@ export class TwinRenderer {
   }
   setPose(mesh,pose){mesh.position.fromArray(pose.position);mesh.quaternion.fromArray(pose.quaternion);}
   setView(view){
-    this.view=view;const aspect=this.host.clientWidth/Math.max(1,this.host.clientHeight),scale=Math.max(1,1.25/Math.max(.6,aspect));
+    this.focusedTool=false;this.controls.minDistance=2;this.view=view;const aspect=this.host.clientWidth/Math.max(1,this.host.clientHeight),scale=Math.max(1,1.25/Math.max(.6,aspect));
     const table=this.config.obstacles.find(o=>o.id==='table'),centre=table?scenePosition(table.pose.position):new THREE.Vector3(0,.88,0);
     const radius=table?Math.max(1,table.size[0]/4.35,table.size[1]/2.45):1;
     const positions={shop:[3.3,5.1,11.8],workcell:[3.3,3.5,5.8],top:[0,7.5,.01]};
@@ -96,7 +96,11 @@ export class TwinRenderer {
     for(const entry of this.labels)entry.label.dataset.selected=entry.deviceId===id;
   }
   focusDevice(id){
-    const device=this.config.devices[id],robot=this.config.robots[id];
+    const tool=this.config.grippers?.[id];
+    if(tool&&this.state){
+      this.scene.updateMatrixWorld(true);const target=this.arms[tool.robot].gripper.getWorldPosition(new THREE.Vector3());this.controls.minDistance=.18;this.controls.target.copy(target);this.focusedTool=true;const orientation=this.arms[tool.robot].actuator.group.getWorldQuaternion(new THREE.Quaternion());this.camera.position.copy(target).add(new THREE.Vector3(.20,.12,.26).applyQuaternion(orientation));this.camera.lookAt(target);this.controls.update();return;
+    }
+    this.focusedTool=false;const device=this.config.devices[id],robot=this.config.robots[id];
     const pose=device?this.config.stations[device.station].pose:robot?.base;if(!pose)return;
     const target=scenePosition(pose.position);this.controls.target.copy(target);
     this.camera.position.copy(target).add(new THREE.Vector3(.9,1.2,2.2));this.camera.lookAt(target);this.controls.update();
@@ -115,10 +119,11 @@ export class TwinRenderer {
       const {pose,points}=armVisualState(this.config.robots[id],rs),arm=this.arms[id];
       arm.links.forEach((mesh,i)=>{
         const a=new THREE.Vector3(...points[i]),b=new THREE.Vector3(...points[i+1]),d=b.clone().sub(a);mesh.position.copy(a.add(b).multiplyScalar(.5));
-        mesh.scale.y=d.length();mesh.visible=d.length()>1e-8;if(mesh.visible)mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());
+        mesh.scale.y=d.length();mesh.visible=d.length()>1e-8&&!(arm.actuator&&i===arm.links.length-1);if(mesh.visible)mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());
         this.setPose(arm.joints[i],pose.frames[i]);
       });this.setPose(arm.gripper,pose);
     }
+    for(const [id,g] of Object.entries(state.grippers??{}))this.arms[g.robot]?.actuator?.setState(g);
     for(const [id,object] of Object.entries(state.objects)){
       const visual=this.objects[id],fill=containerFill(this.config.objects[id],object);visual.holder.visible=object.present!==false;this.setPose(visual.holder,object.pose);visual.visual.setFill(fill.fraction,fill.milkFraction);visual.visual.setSealed?.(object.sealed);
     }
@@ -154,7 +159,7 @@ export class TwinRenderer {
     const occupied=[];
     for(const {label,position,deviceId} of this.labels){
       const p=position.clone().project(this.camera),x=(p.x+1)*this.host.clientWidth/2,y=(1-p.y)*this.host.clientHeight/2;
-      const hidden=!this.labelsVisible||p.z>1||p.z< -1||x<30||x>this.host.clientWidth-30||y<0||y>this.host.clientHeight-25||occupied.some(([px,py])=>Math.abs(px-x)<85&&Math.abs(py-y)<26);
+      const hidden=this.focusedTool||!this.labelsVisible||p.z>1||p.z< -1||x<30||x>this.host.clientWidth-30||y<0||y>this.host.clientHeight-25||occupied.some(([px,py])=>Math.abs(px-x)<85&&Math.abs(py-y)<26);
       label.hidden=hidden;if(hidden)continue;occupied.push([x,y]);label.style.left=`${x}px`;label.style.top=`${y}px`;
       label.dataset.mode=this.state?.devices[deviceId]?.mode??'';
     }

@@ -1,3 +1,4 @@
+import {validateGripper,gripperActions} from './gripper.mjs';
 import {validateWorld,clone} from '../schema.mjs';
 export class DeviceError extends Error {
   constructor(code,message,status=400){super(message??code);this.code=code;this.status=status;}
@@ -8,13 +9,15 @@ const keys=(obj,allowed)=>plain(obj)&&Object.keys(obj).every(k=>allowed.includes
 const number=(v,min=0,max=3600)=>Number.isFinite(v)&&v>=min&&v<=max;
 const timingKeys=['ackDelayMs','startDelaySeconds','sensorDelaySeconds','warmupSeconds','durationSeconds','cooldownSeconds','cleanSeconds','resetSeconds','graspSeconds','releaseSeconds'];
 export function actionsFor(p){
-  return p.kind==='robot'?['move','grasp','release','transfer','stop','reset']:p.kind==='dispenser'?['dispense','reset']:p.kind==='lidder'?['seal','reset']:['process','clean','reset'];
+  return p.kind==='gripper'?gripperActions:p.kind==='robot'?['move','grasp','release','transfer','stop','reset']:p.kind==='dispenser'?['dispense','reset']:p.kind==='lidder'?['seal','reset']:['process','clean','reset'];
 }
 export function cancellable(p,action){return action==='reset'||action==='clean'||(p.kind!=='lidder'&&action!=='dispense');}
 export function validateProfile(id,p,world){
-  ensure(keys(p,['kind','model','timing','motion','process','stock']),'INVALID_CONFIG',`${id}: unknown profile fields`);
-  ensure(['robot','processor','dispenser','lidder'].includes(p.kind)&&typeof p.model==='string'&&p.model.length>0&&p.model.length<=120,'INVALID_CONFIG',`${id}: kind/model`);
+  ensure(keys(p,['kind','model','timing','motion','process','stock','gripper']),'INVALID_CONFIG',`${id}: unknown profile fields`);
+  ensure(['robot','processor','dispenser','lidder','gripper'].includes(p.kind)&&typeof p.model==='string'&&p.model.length>0&&p.model.length<=120,'INVALID_CONFIG',`${id}: kind/model`);
   ensure(keys(p.timing,timingKeys)&&timingKeys.every(k=>number(p.timing[k],['durationSeconds','cleanSeconds','resetSeconds','graspSeconds','releaseSeconds'].includes(k)?.02:0,k==='ackDelayMs'?30000:3600)),'INVALID_CONFIG',`${id}: timing`);
+  if(p.kind==='gripper'){validateGripper(p,world);return clone(p);}
+  ensure(!p.gripper,'INVALID_CONFIG',`${id}: unexpected gripper configuration`);
   if(p.kind==='robot'){
     ensure(world.robots[id]&&keys(p.motion,['limits'])&&p.motion.limits?.length===6,'INVALID_CONFIG',`${id}: robot limits`);
     ensure(p.motion.limits.every(l=>keys(l,['min','max','velocity','acceleration','jerk'])&&number(l.min,-100,100)&&number(l.max,-100,100)&&l.min<l.max&&number(l.velocity,.01,12)&&number(l.acceleration,.01,100)&&number(l.jerk,.01,1000)),'INVALID_CONFIG',`${id}: limits`);
@@ -39,8 +42,10 @@ export function prepareWorld(base,config){
   ensure(plain(config.devices)&&Object.keys(config.devices).length<=32,'INVALID_CONFIG','devices');
   for(const id of ['left','right','brewer','foamer','hot-water','lidder','cup-dispenser','ice-maker','syrup-pump'])ensure(config.devices[id],'INVALID_CONFIG',`missing device ${id}`);
   world.devices={};world.supplies={};
+  const mounted=new Set();
   for(const [id,p] of Object.entries(config.devices)){
     ensure(/^[a-z][a-z0-9_-]*$/i.test(id),'INVALID_CONFIG','device ID');validateProfile(id,p,world);
+    if(p.kind==='gripper'){ensure(!mounted.has(p.gripper.robot),'INVALID_CONFIG','Only one gripper per robot');mounted.add(p.gripper.robot);world.grippers??={};world.grippers[id]=clone(p.gripper);continue;}
     if(p.kind==='robot'){world.robots[id].limits=clone(p.motion.limits);continue;}
     const t=p.timing;
     world.devices[id]={station:p.process.station,warmup:t.warmupSeconds,duration:t.durationSeconds,cooldown:t.cooldownSeconds,outputKg:p.process.outputKg??0,inputs:clone(p.process.inputs??[])};

@@ -1,3 +1,4 @@
+import {createGripperVisual} from './gripper-visual.mjs';
 import * as THREE from 'three';
 import {box,cylinder,textPlate,M,createWorkcell,createCup} from '../robot/models.mjs';
 import {brandCup} from '../robot/cup-brand.mjs';
@@ -36,7 +37,7 @@ export function deviceVisual(def,label){
   for(let i=0;i<5;i++)box(group,[w*.65,.009,.006],[0,-h*.36+i*h*.035,d/2+.011],M.steel,.002);
   ownMaterials(group);return {group,indicator};
 }
-export function armVisual(radius){
+export function armVisual(radius,{independentGripper=false}={}){
   const group=new THREE.Group(),steel=M.lightSteel.clone(),blue=new THREE.MeshStandardMaterial({color:'#73aaca',metalness:.38,roughness:.32});
   const links=Array.from({length:7},()=>cylinder(group,radius*.86,1,[0,0,0],steel));
   const joints=Array.from({length:7},()=>{
@@ -47,10 +48,13 @@ export function armVisual(radius){
     return joint;
   });
   const gripper=new THREE.Group();group.add(gripper);
-  box(gripper,[.13,.05,.07],[0,0,0],M.dark,.008);
-  // Cosmetic jaw plates fit the existing gripper proxy; they do not solve grasping.
-  for(const sign of [-1,1])box(gripper,[.014,.046,.055],[sign*.057,0,0],M.steel,.003);
-  ownMaterials(group);return {group,links,joints,gripper};
+  let actuator;
+  if(independentGripper){actuator=createGripperVisual();gripper.add(actuator.group);}
+  else{
+    box(gripper,[.13,.05,.07],[0,0,0],M.dark,.008);
+    for(const sign of [-1,1])box(gripper,[.014,.046,.055],[sign*.057,0,0],M.steel,.003);
+  }
+  ownMaterials(group);return {group,links,joints,gripper,actuator};
 }
 export function cupVisual(def){
   const cup=createCup(),holder=new THREE.Group();holder.rotation.x=Math.PI/2;

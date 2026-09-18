@@ -42,6 +42,8 @@ npm run twin:plan -- --scenario lost-notification
 
 页面配色、字体栈与品牌层级参照 `coffee-terminal-qarm-brand-v1.1.html`：奶油白/奶油底、森林绿、黄铜局部强调、深色技术日志、标准 Coffee Terminal 符号及次级 QARM 背书。无网络字体、额外品牌动效或体系外蓝紫配色。不同屏宽采用相同品牌令牌，窄屏纵向排列。
 
+末端夹爪：新增左右独立工具设备，规格、开合接口与尺寸兼容边界见 [gripper.md](gripper.md)。
+
 ## 设备能力
 
 | ID | 类型 | 动作 | 主要状态 |

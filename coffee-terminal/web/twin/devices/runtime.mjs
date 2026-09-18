@@ -1,3 +1,4 @@
+import {initialGripper,gripperSensors,gripperTask,advanceGrippers,stopGripper} from './gripper.mjs';
 import {Simulation} from '../kernel.mjs';
 import {fk,vec} from '../robot.mjs';
 import {clone} from '../schema.mjs';
@@ -11,6 +12,7 @@ export class DeviceRuntime {
   async reset(config=this.config){
     const world=prepareWorld(this.base,config),sim=await Simulation.create(world,[],{record:false,external:true});
     this.config=clone(config);this.sim=sim;this.sessionId=crypto.randomUUID();this.records=new Map();this.events=[];this.outbox=[];this.sequence=0;this.links={};this.sensors={};
+    this.sim.state.grippers=Object.fromEntries(Object.entries(config.devices).filter(([,p])=>p.kind==='gripper').map(([id,p])=>[id,initialGripper(p)]));
     for(const id of Object.keys(config.devices)){
       this.links[id]={online:true,fault:null,dropNextAck:false,dropNextCompletion:false,faultAfterSeconds:null,forcedSensors:{}};
       this.sensors[id]={values:this.actualSensors(id),observedAt:0,pending:[],lastActual:this.actualSensors(id)};
@@ -25,7 +27,7 @@ export class DeviceRuntime {
     if(record.status===status&&record.reason===reason)return;
     record.status=status;record.reason=reason;
     if(status==='RUNNING')record.startedAt=this.sim.state.tasks[record.commandId]?.startedAt??this.sim.state.time;
-    if(terminal(status))record.finishedAt=this.sim.state.time;
+    if(terminal(status)){record.finishedAt=this.sim.state.time;if(status!=='REJECTED')stopGripper(this,record.deviceId);}
     const link=this.links[record.deviceId],drop=terminal(status)&&link.dropNextCompletion;
     if(drop)link.dropNextCompletion=false;
     this.emit('command.updated',{command:this.publicRecord(record)},link.online&&!drop);
@@ -33,6 +35,7 @@ export class DeviceRuntime {
   }
   actualSensors(id){
     const p=this.config.devices[id],s=this.sim.state;
+    if(p.kind==='gripper')return gripperSensors(this,id);
     if(p.kind==='robot')return {ready:!this.links?.[id]?.fault,gripperHasObject:Object.values(s.objects).some(o=>o.owner===id)};
     const d=s.devices[id],station=this.sim.config.stations[p.process.station].pose.position;
     const cupPresent=Object.values(s.objects).some(o=>o.present!==false&&!o.owner&&vec(o.pose.position).distanceTo(vec(station))<.02);
@@ -48,9 +51,11 @@ export class DeviceRuntime {
   device(id){
     const p=this.profile(id),s=this.sim.state,link=this.links[id];
     const active=[...this.records.values()].find(r=>r.deviceId===id&&!terminal(r.status));
-    const state=p.kind==='robot'?{...s.robots[id],tcp:fk(this.sim.config.robots[id],s.robots[id].q)}:clone(s.devices[id]);
+    const state=p.kind==='gripper'?clone(s.grippers[id]):p.kind==='robot'?{...s.robots[id],tcp:fk(this.sim.config.robots[id],s.robots[id].q)}:clone(s.devices[id]);
+    if(p.kind==='gripper'&&active?.status==='RUNNING'&&active.action==='reset')state.mode='resetting';
     if(state.tcp)delete state.tcp.frames;
     const view={id,kind:p.kind,model:p.model,online:link.online,mode:link.fault?'fault':active?.status==='ACCEPTED'?'waiting':state.mode,fault:link.fault??state.fault??null,currentCommandId:active?.commandId??null,
+      ...(p.kind==='gripper'?{hardwareInterface:{connector:'6-pin aviation',electrical:'RS485',supportedProtocols:['serial','Modbus RTU','I/O'],transportImplemented:'HTTP simulation only'},compatibility:'Legacy robot grasp/release remain logical; jaw aperture does not attach objects'}:{}),
       capabilities:actionsFor(p).map(action=>({action,cancellable:cancellable(p,action)})),state,
       sensors:{...clone(this.sensors[id].values),...link.forcedSensors},observedAt:this.sensors[id].observedAt,
       stock:p.stock?{...s.supplies[`${id}-stock`],capacity:p.stock.capacity}:null,configuration:clone(p)};
@@ -59,6 +64,7 @@ export class DeviceRuntime {
   }
   taskFor(r){
     const p=this.profile(r.deviceId),v=r.parameters,t={id:r.commandId,type:'wait',after:[],resources:[]};
+    if(p.kind==='gripper')return gripperTask(this,r);
     const allowed={move:['station','approachObject'],grasp:['object'],release:['object','station'],transfer:['source','object','durationSeconds'],process:['object','amountKg'],seal:['object'],dispense:[],clean:[],reset:[],stop:[]}[r.action];
     ensure(allowed&&Object.keys(v).every(k=>allowed.includes(k)),'INVALID_PARAMETERS','Unsupported parameters');
     if(p.kind==='robot'){
@@ -101,6 +107,10 @@ export class DeviceRuntime {
       ensure(this.sim.state.status!=='collision','COLLISION_STOP','Reset the experiment after a collision',409);
       if(r.action!=='reset'&&r.action!=='stop')ensure(!this.links[r.deviceId].fault,'DEVICE_FAULT',this.links[r.deviceId].fault,409);
       ensure(r.action==='stop'||![...this.records.values()].some(c=>c.deviceId===r.deviceId&&!terminal(c.status)),'DEVICE_BUSY','Device already has a command',409);
+      if(p.kind==='gripper'||p.kind==='robot'){
+        const robot=p.kind==='robot'?r.deviceId:p.gripper.robot;
+        ensure(![...this.records.values()].some(c=>!terminal(c.status)&&c.deviceId!==r.deviceId&&(c.deviceId===robot||this.profile(c.deviceId).gripper?.robot===robot)),'TOOL_BUSY','Mounted gripper and robot commands cannot overlap',409);
+      }
       r.task=this.taskFor(r);
     }catch(e){if(!(e instanceof DeviceError))throw e;error=e;}
     this.records.set(r.commandId,r);
@@ -114,7 +124,7 @@ export class DeviceRuntime {
     return {command:this.publicRecord(r),duplicate:false,ackDelayMs:p.timing.ackDelayMs,dropAck};
   }
   publicRecord(r){
-    const {fingerprint,task,...record}=r,s=this.sim.state.tasks[r.commandId],active=this.sim.active.get(r.commandId);
+    const {fingerprint,task,jawMotion,...record}=r,s=this.sim.state.tasks[r.commandId],active=this.sim.active.get(r.commandId);
     const elapsedSeconds=s?.elapsed??0,estimatedDurationSeconds=active?active.ticks*this.sim.config.dt:r.estimatedDurationSeconds??null;
     return clone({...record,elapsedSeconds,estimatedDurationSeconds,progress:r.status==='SUCCEEDED'?1:estimatedDurationSeconds?Math.min(1,elapsedSeconds/estimatedDurationSeconds):0});
   }
@@ -128,9 +138,9 @@ export class DeviceRuntime {
   }
   fault(id,reason='INJECTED_FAULT'){
     const p=this.profile(id);this.links[id].fault=reason;
-    if(p.kind!=='robot')this.sim.command({type:'fault',device:id,reason});
+    if(p.kind!=='robot'&&p.kind!=='gripper')this.sim.command({type:'fault',device:id,reason});
     for(const r of this.records.values())if(r.deviceId===id&&!terminal(r.status)){this.sim.cancel(r.commandId,reason);this.update(r,'FAILED',reason);}
-    this.emit('device.fault',{deviceId:id,reason});
+    stopGripper(this,id);this.emit('device.fault',{deviceId:id,reason});
   }
   inject(id,options,sessionId){
     this.checkSession(sessionId);this.profile(id);const link=this.links[id];
@@ -153,7 +163,7 @@ export class DeviceRuntime {
         if(this.sim.state.time-r.acceptedAt>=r.startWithinSeconds){this.sim.cancel(r.commandId);this.update(r,'EXPIRED','START_DEADLINE_EXCEEDED');continue;}
         if(!this.sim.state.tasks[r.commandId]&&this.sim.state.time-r.acceptedAt+1e-9>=this.profile(r.deviceId).timing.startDelaySeconds)this.sim.enqueue(r.task);
       }
-      this.sim.step();
+      this.sim.step();advanceGrippers(this);
       for(const r of this.records.values()){
         if(terminal(r.status))continue;const task=this.sim.state.tasks[r.commandId];if(!task)continue;
         if(task.startedAt!==null&&r.startedAt===null){r.estimatedDurationSeconds=this.sim.active.get(r.commandId)?.ticks*this.sim.config.dt||(task.finishedAt-task.startedAt);this.update(r,'RUNNING');}
@@ -163,8 +173,8 @@ export class DeviceRuntime {
             this.links[r.deviceId].faultAfterSeconds=null;this.fault(r.deviceId,'INJECTED_ACTION_FAILURE');
           }
         }else if(task.status==='done'){
-          if(r.action==='reset'){this.links[r.deviceId].fault=null;this.links[r.deviceId].forcedSensors={};if(this.sim.state.devices[r.deviceId]){const d=this.sim.state.devices[r.deviceId];d.fault=null;d.mode='warming';d.remaining=this.profile(r.deviceId).timing.warmupSeconds;}}
-          r.result={object:r.parameters.object?clone(this.sim.state.objects[r.parameters.object]):r.action==='dispense'?clone(this.sim.state.objects[this.profile(r.deviceId).process.object]):null,sensors:this.actualSensors(r.deviceId)};
+          if(r.action==='reset'){if(this.sim.state.grippers[r.deviceId])this.sim.state.grippers[r.deviceId].targetOpeningMm=this.sim.state.grippers[r.deviceId].openingMm;this.links[r.deviceId].fault=null;this.links[r.deviceId].forcedSensors={};stopGripper(this,r.deviceId);if(this.sim.state.devices[r.deviceId]){const d=this.sim.state.devices[r.deviceId];d.fault=null;d.mode='warming';d.remaining=this.profile(r.deviceId).timing.warmupSeconds;}}
+          r.result={...(this.profile(r.deviceId).kind==='gripper'?{gripper:clone(this.sim.state.grippers[r.deviceId])}:{}),object:r.parameters.object?clone(this.sim.state.objects[r.parameters.object]):r.action==='dispense'?clone(this.sim.state.objects[this.profile(r.deviceId).process.object]):null,sensors:this.actualSensors(r.deviceId)};
           this.update(r,'SUCCEEDED');
         }else if(['failed','cancelled'].includes(task.status))this.update(r,task.status==='failed'?'FAILED':'CANCELLED',task.reason);
         else r.reason=task.reason;
@@ -177,10 +187,11 @@ export class DeviceRuntime {
   configure(id,profile,sessionId){
     this.checkSession(sessionId);const old=this.profile(id);
     ensure(![...this.records.values()].some(r=>!terminal(r.status)),'DEVICE_BUSY','Change configuration when all commands are terminal',409);
-    ensure(profile.kind===old.kind&&profile.process?.station===old.process?.station&&profile.process?.object===old.process?.object,'IMMUTABLE_IDENTITY','Kind/station/object belong to the world layout');
+    ensure(profile.gripper?.robot===old.gripper?.robot&&profile.kind===old.kind&&profile.process?.station===old.process?.station&&profile.process?.object===old.process?.object,'IMMUTABLE_IDENTITY','Kind/station/object belong to the world layout');
     const next=clone(this.config);next.devices[id]=clone(profile);const world=prepareWorld(this.base,next);
     if(profile.stock)ensure(profile.stock.capacity>=this.sim.state.supplies[`${id}-stock`].amount,'INVALID_CONFIG','Capacity below current stock');
     if(profile.kind==='robot')ensure(this.sim.state.robots[id].q.every((q,i)=>q>=profile.motion.limits[i].min&&q<=profile.motion.limits[i].max),'INVALID_CONFIG','Current joints outside new limits');
+    if(profile.kind==='gripper')ensure(this.sim.state.grippers[id].openingMm<=profile.gripper.maxOpeningMm,'INVALID_CONFIG','Current opening exceeds new limit');
     this.config=next;this.sim.config=world;this.sim.checker.config=world;this.emit('device.configured',{deviceId:id});return this.device(id);
   }
   refill(target,amount,sessionId){
