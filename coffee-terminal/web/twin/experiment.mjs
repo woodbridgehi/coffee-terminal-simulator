@@ -23,7 +23,7 @@ class SharedExperiment extends Simulation {
  syncHardware(){
   if(!this.hardware)return;
   advanceGrippers(this.hardware);
-  for(const r of this.hardware.records.values())if(['done','failed','cancelled'].includes(this.state.tasks[r.commandId].status)||this.state.status==='collision'){r.status='SUCCEEDED';stopGripper(this.hardware,r.jawMotion?.toolId);}
+  for(const r of this.hardware.records.values())if(r.status==='RUNNING'&&(['done','failed','cancelled'].includes(this.state.tasks[r.commandId].status)||this.state.status==='collision')){r.status=this.state.tasks[r.commandId].status==='done'?'SUCCEEDED':'FAILED';stopGripper(this.hardware,r.jawMotion?.toolId);}
   const dispenser=Object.entries(this.config.devices).find(([,d])=>d.effect==='dispense');if(!dispenser)return;
   const [id,d]=dispenser,signal=cupOnPad(this.config,this.state,id);
   this.state.deviceSensors??={};

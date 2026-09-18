@@ -13,7 +13,7 @@ test('shared configuration copies layout, process, stock, tool and detector sett
 test('shared experiment completes real dispensing and jaw movement, exports a self-contained deterministic replay',async()=>{
  const p=structuredClone(profile);p.devices['left-gripper'].gripper.closingSpeedMmS=10;
  const w=sharedWorld(base,p),sim=await createExperiment(w);assert.equal(sim.run(600).done,32);assert.equal(sim.state.status,'completed');assert.equal(sim.state.supplies['cup-dispenser-stock'].consumed,1);
- const jaw=sim.trace.find(s=>s.tasks['left-grasp'].status==='running'&&s.grippers['left-gripper'].openingMm>100&&s.grippers['left-gripper'].openingMm<120);assert.ok(jaw);assert.equal(jaw.objects.cup.owner,null);assert.ok(sim.trace.some(s=>s.deviceSensors['cup-dispenser'].cupPresent));
+ const jaw=sim.trace.find(s=>s.tasks['left-grasp'].status==='running'&&s.grippers['left-gripper'].openingMm>100&&s.grippers['left-gripper'].openingMm<120);assert.ok(jaw);assert.equal(jaw.objects.cup.owner,null);const later=sim.trace.find(s=>s.tasks['left-grasp-coffee'].status==='running');assert.ok(later);assert.equal(later.grippers['left-gripper'].mode,'running');assert.ok(sim.trace.some(s=>s.deviceSensors['cup-dispenser'].cupPresent));
  const data=sim.export(),again=await createExperiment(data.config,data.tasks,{policy:data.policy,record:false});again.run(600);assert.deepEqual(again.state,data.finalState);
 });
 test('shared API is a read-only configuration snapshot, excludes live commands and changes its identifier with profile edits',async()=>{
