@@ -1,3 +1,4 @@
+import {installationPose} from './mounts.mjs';
 import {DeviceEffects} from './device-effects.mjs';
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
@@ -30,8 +31,14 @@ export class TwinRenderer {
     this.root=new THREE.Group();this.root.rotation.x=-Math.PI/2;this.scene.add(this.root);
     this.shop=createShop();ownMaterials(this.shop.group);this.scene.add(this.shop.group);
     const jobs=[this.shop.ready];this.devices={};
-    if(config.presentation==='main-workcell'&&JSON.stringify(config.obstacles)===JSON.stringify(mainLayout.obstacles)&&JSON.stringify(config.stations)===JSON.stringify(mainLayout.stations)) {
+    if(config.presentation==='main-workcell'&&(config.installation||JSON.stringify(config.obstacles)===JSON.stringify(mainLayout.obstacles)&&JSON.stringify(config.stations)===JSON.stringify(mainLayout.stations))) {
       this.workcell=createWorkcell();ownMaterials(this.workcell.group);this.scene.add(this.workcell.group);
+      for(const [id,delta] of Object.entries(config.installation?.deltas??{})){
+        const station=config.devices[id]?.station,part=this.workcell.components[station];if(!part)continue;
+        const q=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),-Math.PI/2),turn=new THREE.Matrix4().makeRotationFromQuaternion(q);
+        const matrix=new THREE.Matrix4().compose(new THREE.Vector3(...delta.position),new THREE.Quaternion(...delta.quaternion),new THREE.Vector3(1,1,1));
+        part.applyMatrix4(turn.clone().multiply(matrix).multiply(turn.clone().invert()));
+      }
     }
     for(const def of config.obstacles){
       if(this.workcell)continue;
@@ -59,7 +66,7 @@ export class TwinRenderer {
     }
     this.arms={};
     for(const [id,robot] of Object.entries(config.robots)){
-      const arm=armVisual(robot.linkRadius,{independentGripper:Object.values(config.grippers??{}).some(g=>g.robot===id),maxOpeningMm:Object.values(config.grippers??{}).find(g=>g.robot===id)?.maxOpeningMm??120});if(arm.actuator)arm.actuator.group.quaternion.fromArray(robot.tool.quaternion).invert();this.root.add(arm.group);this.arms[id]=arm;
+      const arm=armVisual(robot.linkRadius,{independentGripper:Object.values(config.grippers??{}).some(g=>g.robot===id),maxOpeningMm:Object.values(config.grippers??{}).find(g=>g.robot===id)?.maxOpeningMm??120});if(arm.actuator)arm.actuator.group.quaternion.fromArray((config.installation?.nominalTools[id]??robot.tool).quaternion).invert();this.root.add(arm.group);this.arms[id]=arm;
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.105,.12,.025,32),new THREE.MeshStandardMaterial({color:'#273230',metalness:.5,roughness:.3}));
       const group=new THREE.Group();this.setPose(group,robot.base);base.rotation.x=Math.PI/2;group.add(base);this.root.add(group);
     }
@@ -68,6 +75,7 @@ export class TwinRenderer {
       const visual=id==='cup'?cupVisual(def):milkVesselVisual(def),holder=new THREE.Group();holder.name=`twin-object:${id}`;
       holder.add(visual.group);this.root.add(holder);this.objects[id]={holder,visual};jobs.push(visual.ready);
     }
+    this.originAxes=new THREE.AxesHelper(.22);this.originAxes.material.depthTest=false;this.originAxes.renderOrder=20;this.originAxes.visible=false;this.root.add(this.originAxes);
     this.effects=new DeviceEffects(this.root,config);jobs.push(this.effects.ready);this.actionLabel=document.createElement('span');this.actionLabel.className='twin-action-label';host.append(this.actionLabel);
     this.debugGroup=new THREE.Group();this.root.add(this.debugGroup);this.debugVisible=false;this.labelsVisible=true;
     this.ready=Promise.all(jobs).catch(error=>{if(!this.disposed)this.assetErrors.push(error.message);});
@@ -137,6 +145,7 @@ export class TwinRenderer {
       const lidder=state.devices.lidder,progress=lidder?.mode==='running'?Math.max(0,Math.min(1,1-lidder.remaining/this.config.devices.lidder.duration)):0;
       this.workcell.press.position.y=1.42-Math.sin(progress*Math.PI)*.17;
     }
+    const origin=installationPose(this.config,state,this.selectedDevice);if(this.originAxes){this.originAxes.visible=!!this.originsVisible&&!!origin;if(origin)this.setPose(this.originAxes,origin);}
     const actions=this.effects.apply(state);this.actionLabel.textContent=actions.join(' · ');this.actionLabel.hidden=!actions.length;
     this.updateDebug();
   }

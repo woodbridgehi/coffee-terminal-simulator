@@ -1,3 +1,4 @@
+import {checkInstallation} from './installation.mjs';
 import {linkRobotGrasp,initialGripper,gripperSensors,gripperTask,advanceGrippers,stopGripper} from './gripper.mjs';
 import {Simulation} from '../kernel.mjs';
 import {fk,vec} from '../robot.mjs';
@@ -11,7 +12,8 @@ export class DeviceRuntime {
   constructor(base,config){this.base=clone(base);this.config=clone(config);prepareWorld(base,config);}
   async reset(config=this.config){
     const world=prepareWorld(this.base,config),sim=await Simulation.create(world,[],{record:false,external:true});
-    this.config=clone(config);this.sim=sim;this.sessionId=crypto.randomUUID();this.records=new Map();this.events=[];this.outbox=[];this.sequence=0;this.links={};this.sensors={};
+    if(Object.values(config.devices).some(p=>p.mounting)){const original=prepareWorld(this.base,{...config,devices:Object.fromEntries(Object.entries(config.devices).map(([id,p])=>{const c=clone(p);delete c.mounting;return [id,c];}))});const baseline=await Simulation.create(original,[],{record:false,external:true});const checked=checkInstallation(original,world,baseline.state);world.installation.validation=checked.validation;}
+    this.installationRevision=0;this.config=clone(config);this.sim=sim;this.sessionId=crypto.randomUUID();this.records=new Map();this.events=[];this.outbox=[];this.sequence=0;this.links={};this.sensors={};
     this.sim.state.grippers=Object.fromEntries(Object.entries(config.devices).filter(([,p])=>p.kind==='gripper').map(([id,p])=>[id,initialGripper(p)]));
     for(const id of Object.keys(config.devices)){
       this.links[id]={online:true,fault:null,dropNextAck:false,dropNextCompletion:false,faultAfterSeconds:null,forcedSensors:{}};
@@ -192,6 +194,7 @@ export class DeviceRuntime {
     if(profile.stock)ensure(profile.stock.capacity>=this.sim.state.supplies[`${id}-stock`].amount,'INVALID_CONFIG','Capacity below current stock');
     if(profile.kind==='robot')ensure(this.sim.state.robots[id].q.every((q,i)=>q>=profile.motion.limits[i].min&&q<=profile.motion.limits[i].max),'INVALID_CONFIG','Current joints outside new limits');
     if(profile.kind==='gripper')ensure(this.sim.state.grippers[id].openingMm<=profile.gripper.maxOpeningMm,'INVALID_CONFIG','Current opening exceeds new limit');
+    if(JSON.stringify(world.installation.mounts)!==JSON.stringify(this.sim.config.installation.mounts)){const checked=checkInstallation(this.sim.config,world,this.sim.state);this.sim.state=checked.state;world.installation.validation=checked.validation;this.installationRevision++;}
     this.config=next;this.sim.config=world;this.sim.checker.config=world;this.emit('device.configured',{deviceId:id});return this.device(id);
   }
   refill(target,amount,sessionId){
@@ -205,5 +208,5 @@ export class DeviceRuntime {
     ensure(o.present&&!o.owner&&vec(o.pose.position).distanceTo(vec(this.sim.config.stations.pickup.pose.position))<.02&&!this.sim.locks.has('object:cup'),'CUP_NOT_READY','No released cup at pickup',409);
     this.sim.state.servedKg=(this.sim.state.servedKg??0)+Object.values(o.contents).reduce((a,b)=>a+b,0);o.present=false;o.contents={};o.sealed=false;this.emit('cup.collected',{});return this.snapshot();
   }
-  snapshot(){return {sessionId:this.sessionId,clock:clone(this.config.clock),config:clone(this.config),world:clone(this.sim.config),state:clone(this.sim.state),devices:Object.keys(this.config.devices).map(id=>this.device(id)),commands:[...this.records.values()].slice(-100).map(r=>this.publicRecord(r)),events:this.events.slice(-100)};}
+  snapshot(){return {installationRevision:this.installationRevision,sessionId:this.sessionId,clock:clone(this.config.clock),config:clone(this.config),world:clone(this.sim.config),state:clone(this.sim.state),devices:Object.keys(this.config.devices).map(id=>this.device(id)),commands:[...this.records.values()].slice(-100).map(r=>this.publicRecord(r)),events:this.events.slice(-100)};}
 }

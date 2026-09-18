@@ -24,7 +24,7 @@ export async function createDeviceServer({world,config,port=9131}={}){
   for(const e of m.events){history.push(e);if(history.length>2000)history.shift();for(const c of clients)sendEvent(c,'device-event',e,`${e.sessionId}:${e.id}`);}
   // State stream is an explicit debug view; command consumers use command events
   // or GET commands/:id, not the visual world's internal state as hardware feedback.
-  for(const c of clients)sendEvent(c,'snapshot',{sessionId:snapshot.sessionId,clock:snapshot.clock,state:snapshot.state,devices:snapshot.devices});
+  for(const c of clients)sendEvent(c,'snapshot',{installationRevision:snapshot.installationRevision,sessionId:snapshot.sessionId,clock:snapshot.clock,state:snapshot.state,devices:snapshot.devices});
  });
  const rpc=(method,args={})=>new Promise((resolve,reject)=>{if(fatal){reject(fatal);return;}const id=++next;requests.set(id,{resolve,reject});worker.postMessage({id,method,args});});
  await ready;
@@ -41,7 +41,7 @@ export async function createDeviceServer({world,config,port=9131}={}){
     res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache','Connection':'keep-alive'});res.write('retry: 1000\n\n');clients.add(res);
     const cursor=req.headers['last-event-id'],prefix=`${snapshot.sessionId}:`;
     if(cursor?.startsWith(prefix)){const n=Number(cursor.slice(prefix.length));for(const e of history)if(e.id>n)sendEvent(res,'device-event',e,`${e.sessionId}:${e.id}`);}
-    sendEvent(res,'snapshot',{sessionId:snapshot.sessionId,clock:snapshot.clock,state:snapshot.state,devices:snapshot.devices});req.on('close',()=>clients.delete(res));return;
+    sendEvent(res,'snapshot',{installationRevision:snapshot.installationRevision,sessionId:snapshot.sessionId,clock:snapshot.clock,state:snapshot.state,devices:snapshot.devices});req.on('close',()=>clients.delete(res));return;
    }
    if(path.startsWith('/api/')){
     let result;

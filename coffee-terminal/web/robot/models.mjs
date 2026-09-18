@@ -141,12 +141,14 @@ export function createWorkcell({ cabinetOnly = false } = {}) {
   // Low rear rail leaves the machinery visible from all inspection angles.
   box(group, [4.2, 0.10, 0.04], [0, 1.0, -1.16], M.steel);
   if (cabinetOnly) return { group, pads: {}, press: null };
-  const pads = {};
+  const pads = {}, components = {};
+  let mark=group.children.length;
+  const collect=id=>{const children=group.children.slice(mark);const part=components[id]??new THREE.Group();if(!components[id]){part.name=`workcell:${id}`;components[id]=part;group.add(part);}for(const child of children)if(child!==part)part.add(child);mark=group.children.length;};
   for (const [id, station] of Object.entries(STATIONS)) {
     const [x, , z] = station.position;
     cylinder(group, id === 'pickup' ? 0.20 : 0.145, 0.025, [x, 0.953, z], M.dark);
     const indicator = ring(group, id === 'pickup' ? 0.18 : 0.127, 0.008, [x, 0.970, z], M.green.clone());
-    pads[id] = indicator;
+    pads[id] = indicator;collect(id);
   }
   // Cup magazine with a separate front dispensing position.
   box(group, [0.38, 0.045, 0.60], [-1.72, 0.96, -0.14], M.steel);
@@ -157,6 +159,7 @@ export function createWorkcell({ cabinetOnly = false } = {}) {
   for (const x of [-1.84, -1.6]) cylinder(group, 0.012, 0.58, [x, 1.25, -0.36], M.steel);
   textPlate(group, '01  CUPS', [-1.72, 1.55, -0.37], 0.36, 0.075);
 
+  collect('cups');
   function dispenser(id, width, name, kind) {
     const x = STATIONS[id].position[0];
     box(group, [width, 0.71, 0.27], [x, 1.34, -1.0], kind === 'coffee' ? M.green : M.shell, 0.045);
@@ -180,6 +183,7 @@ export function createWorkcell({ cabinetOnly = false } = {}) {
         bean.scale.y = 0.5;
       }
     }
+    collect(id);
   }
   dispenser('brew', 0.65, 'COFFEE', 'coffee');
   dispenser('ice', 0.36, 'ICE', 'ice');
@@ -192,6 +196,7 @@ export function createWorkcell({ cabinetOnly = false } = {}) {
     cylinder(group, 0.028, 0.06, [x, 2.02, -0.95], M.dark);
     box(group, [0.10, 0.018, 0.025], [x + 0.028, 2.056, -0.95], M.black, 0.005);
   }
+  collect('syrup');
   // Compact press; its head is animated only after the gripper leaves the tray.
   box(group, [0.075, 0.60, 0.12], [1.73, 1.24, -0.20], M.steel);
   box(group, [0.27, 0.08, 0.38], [1.73, 1.52, -0.07], M.green);
@@ -199,15 +204,17 @@ export function createWorkcell({ cabinetOnly = false } = {}) {
   cylinder(press, 0.025, 0.13, [0, 0, 0], M.steel);
   cylinder(press, 0.095, 0.06, [0, -0.085, 0], M.dark);
   textPlate(group, '07  LID', [1.73, 1.54, 0.126], 0.24, 0.058);
+  collect('lid');
   // Customer-facing illuminated shelf.
   box(group, [0.76, 0.04, 0.52], [1.08, 0.951, 0.96], M.green, 0.04);
   cylinder(group, 0.18, 0.008, [1.08, 0.976, 0.94], M.shell);
   textPlate(group, 'PICK UP / 取杯', [1.08, 0.87, 1.285], 0.57, 0.09);
+  collect('pickup');
   // Stack light and recessed emergency-stop button (visual hardware).
   cylinder(group, 0.019, 0.30, [2.01, 1.13, -1.02], M.steel);
   cylinder(group, 0.047, 0.09, [2.01, 1.33, -1.02], M.green);
   cylinder(group, 0.047, 0.075, [2.01, 1.41, -1.02], M.amber);
   cylinder(group, 0.05, 0.045, [-1.93, 0.98, 0.90], M.amber);
   cylinder(group, 0.032, 0.044, [-1.93, 1.02, 0.90], material('#a84032'));
-  return { group, pads, press };
+  return { group, pads, press, components };
 }

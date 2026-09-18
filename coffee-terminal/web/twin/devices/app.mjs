@@ -1,3 +1,5 @@
+import {mountPose,poseMount,installationPose} from '../mounts.mjs';
+import {compose,relative} from '../robot.mjs';
 import {TwinRenderer} from '../renderer.mjs';
 import {request,submitCommand,runLatte} from './client.mjs';
 const $=id=>document.getElementById(id),base=location.origin;
@@ -7,7 +9,7 @@ const sensorNames={openingMm:'实际开口',targetOpeningMm:'目标开口',movin
 let snapshot,renderer,selected='cup-dispenser',records=new Map(),events=[],plannerRunning=false,selectedCommandId=null,polling=false,loading=null;
 const text=(tag,value)=>{const e=document.createElement(tag);e.textContent=value;return e;};
 function notice(message,error=false){$('notice').textContent=message;$('notice').dataset.error=error;}
-async function action(fn){try{await fn();}catch(error){const c=error.data?.command;if(c){records.set(c.commandId,c);renderRecords();showRecord(c);}notice(c?describe(c):error.message,true);}}
+async function action(fn){try{await fn();}catch(error){const c=error.data?.command;if(c){records.set(c.commandId,c);renderRecords();showRecord(c);}notice(c?describe(c):({INVALID_MOUNT:'安装关系无效：检查父对象、循环关系及位置/角度。',INSTALLATION_COLLISION:'安装会造成碰撞，旧配置已保留。',INSTALLATION_UNREACHABLE:'改变的工位没有找到机械臂逆解，旧配置已保留。',INSTALLATION_HOLDING_OBJECT:'请先释放机械臂持有的物品，再修改安装。'}[error.code]??error.message),true);}}
 const post=(path,body={})=>request(base,path,{method:'POST',body:{sessionId:snapshot.sessionId,...body}});
 function defaults(action){if(action==='setOpening')return {openingMm:40,speedMmS:42.5};if(['open','close'].includes(action))return {};if(action==='move')return {station:selected==='left'?'cups':'right-ready',...(selected==='left'?{approachObject:'cup'}:{})};if(action==='release')return {object:'cup',station:'handoff'};if(action==='grasp')return {object:'cup'};if(action==='process')return {object:selected==='foamer'?'milk-cup':'cup'};if(action==='seal')return {object:'cup'};if(action==='transfer')return {source:'milk-cup',object:'cup',durationSeconds:6};return {};}
 function newId(){ $('command-id').value=`ui-${crypto.randomUUID()}`; }
@@ -51,11 +53,26 @@ function actionHelp(){const a=$('action').value,p=snapshot.devices.find(d=>d.id=
 function selectedState(){
  const d=snapshot.devices.find(x=>x.id===selected);if(!d)return;
  $('device-title').textContent=names[selected]??selected;
+ const origin=installationPose(snapshot.world,snapshot.state,selected);$('mount-world').textContent=origin?`原点世界坐标：${origin.position.map((v,i)=>`${['X','Y','Z'][i]} ${(v*1000).toFixed(1)}`).join(' / ')} mm`:'';
  $('device-state').textContent=`${words[d.mode]??d.mode} · ${d.online?'在线':'离线'}${d.fault?' · '+d.fault:''}${d.state.remaining>0?' · 剩余 '+d.state.remaining.toFixed(2)+' s':''}`;
  $('sensors').replaceChildren(...Object.entries(d.sensors).map(([k,v])=>{const row=document.createElement('div');row.append(text('span',sensorNames[k]??k),text('b',typeof v==='boolean'?(v?'是':'否'):(typeof v==='number'?String(Number(v.toFixed(3))):String(v))+(k.endsWith('Mm')?' mm':'')));return row;}));
  $('gripper-notes').hidden=d.kind!=='gripper';if(d.kind==='gripper')$('gripper-notes').textContent=`仿真扩展开口上限 ${d.configuration.gripper.maxOpeningMm} mm，${d.configuration.gripper.maxOpeningMm>=100?'可夹取':'不能夹取'}当前 100 mm 杯模型。原实物额定 85 mm；本扩展不代表真实硬件能力。抓取力与滑移未建模。`;
  $('stock-state').textContent=d.stock?`库存 ${d.stock.amount} / ${d.stock.capacity}，预留 ${d.stock.reserved}`:`传感器更新时间 ${d.observedAt.toFixed(2)} s`;
 }
+function mountFields(){
+ const p=JSON.parse($('configuration').value),graph=snapshot.world.installation,m=structuredClone(p.mounting??graph.mounts[selected]);
+ const parents=p.kind==='gripper'?[`${p.gripper.robot}:flange`]:['world','table:top',...snapshot.devices.filter(d=>!['robot','gripper'].includes(d.kind)&&d.id!==selected).map(d=>d.id)];
+ $('mount-parent').replaceChildren(...parents.map(id=>{const o=text('option',id==='world'?'世界原点':id==='table:top'?'工作台表面':id.endsWith(':flange')?`${names[id.split(':')[0]]} · 末端法兰`:`${names[id]??id} · 设备原点`);o.value=id;return o;}));$('mount-parent').value=m.parent;
+ $('mount-fields').replaceChildren();
+ for(const key of ['position','rotationDeg'])for(let i=0;i<3;i++){
+  const label=text('label',`${['X','Y','Z'][i]} ${key==='position'?'mm':'°'}`),input=document.createElement('input');input.type='number';input.step='any';input.value=Number((m[key][i]*(key==='position'?1000:1)).toFixed(6));input.id=`mount-${key}-${i}`;
+  input.oninput=()=>{const p=JSON.parse($('configuration').value);p.mounting??=structuredClone(m);p.mounting[key][i]=Number(input.value)/(key==='position'?1000:1);$('configuration').value=JSON.stringify(p,null,2);};label.append(input);$('mount-fields').append(label);
+ }
+ $('mount-parent').onchange=()=>{const p=JSON.parse($('configuration').value),old=p.mounting??m,parent=$('mount-parent').value;const world=compose(graph.nodes[old.parent].pose,mountPose(old));p.mounting=poseMount(parent,relative(graph.nodes[parent].pose,world));$('configuration').value=JSON.stringify(p,null,2);mountFields();};
+ $('mount-result').textContent='保存检查当前碰撞及变更工位的逆解；完整路径在执行移动时检查。新布局请重跑一键制饮验证。';
+}
+$('mount-default').onclick=()=>action(async()=>{const p=JSON.parse($('configuration').value);p.mounting=structuredClone(snapshot.world.installation.defaults[selected]);$('configuration').value=JSON.stringify(p,null,2);mountFields();notice('已恢复默认安装参数，点击保存后应用。');});
+$('show-origins').onchange=()=>{if(renderer){renderer.originsVisible=$('show-origins').checked;renderer.apply(snapshot.state);}};
 function configuration(){
  const d=snapshot.devices.find(x=>x.id===selected),p=structuredClone(d.configuration);
  $('configuration').value=JSON.stringify(p,null,2);$('config-fields').replaceChildren();
@@ -64,9 +81,11 @@ function configuration(){
  if(p.kind==='gripper'){fields.splice(0,fields.length,['initialOpeningMm','初始开口 mm'],['openingSpeedMmS','张开速度 mm/s'],['closingSpeedMmS','闭合速度 mm/s'],['maxOpeningMm','开口上限 mm'],['maxPayloadKg','负载上限 kg']);}
  for(const [key,label] of fields){const row=text('label',label),input=document.createElement('input');input.type='number';input.min='0';input.step='any';const section=p.kind==='gripper'?'gripper':'timing';input.value=p[section][key];input.dataset.field=key;if(p.kind==='gripper'){input.min=key==='initialOpeningMm'?'0':'0.1';input.max=key.includes('Speed')?'42.5':key==='maxPayloadKg'?'2':'120';}
   input.oninput=()=>{try{const current=JSON.parse($('configuration').value);current[section][key]=Number(input.value);$('configuration').value=JSON.stringify(current,null,2);}catch{notice('请先修正完整属性 JSON',true);}};row.append(input);$('config-fields').append(row);}
+ mountFields();
  $('action').replaceChildren(...d.capabilities.map(c=>{const o=text('option',words[c.action]??c.action);o.value=c.action;return o;}));if(p.kind==='gripper')$('action').value='setOpening';$('parameters').value=JSON.stringify(defaults($('action').value),null,2);newId();actionHelp();
 }
 function draw(update){
+ if(snapshot&&update.installationRevision!==undefined&&snapshot.installationRevision!==update.installationRevision){action(load);return;}
  snapshot={...snapshot,...update};$('clock').textContent=`${snapshot.state.time.toFixed(2)} s`;if($('clock-mode').value!==snapshot.clock.mode)$('clock-mode').value=snapshot.clock.mode;$('advance').disabled=snapshot.clock.mode!=='manual'||plannerRunning;
  $('clock-help').textContent=snapshot.clock.mode==='manual'?(plannerRunning?'手动时钟 · 示例规划器正在自动推进。':'手动时钟已暂停 · 发送命令不会自动走时；点击「推进 1 秒」或切换实时模式。'):snapshot.clock.mode==='accelerated'?'加速 16× · 设备自动执行，短动作可能一闪而过。':'实时 1× · 接收命令后，设备按配置耗时自动执行。';
  if(renderer){renderer.apply(snapshot.state);renderer.selectDevice(selected);}
@@ -79,7 +98,7 @@ function draw(update){
 async function load(){
  if(loading)return loading;
  loading=(async()=>{
- snapshot=await request(base,'/api/state');renderer?.dispose();renderer=new TwinRenderer($('viewport'),snapshot.world);renderer.setView($('view').value);renderer.debugVisible=$('collision').checked;
+ snapshot=await request(base,'/api/state');renderer?.dispose();renderer=new TwinRenderer($('viewport'),snapshot.world);renderer.setView($('view').value);renderer.debugVisible=$('collision').checked;renderer.originsVisible=$('show-origins').checked;
  selectedCommandId=null;records=new Map(snapshot.commands.map(c=>[c.commandId,c]));events=snapshot.events.slice(-20);commandRows.clear();$('commands').replaceChildren();deviceButtons();renderRecords();draw(snapshot);configuration();$('command-feedback').textContent='发送后会在这里显示接收、等待、执行和结果。';$('query-id').value='';$('command-result').textContent='暂无结果';$('result-summary').textContent='选择一条记录，查看它是否真正执行成功。';$('events').textContent=events.map(e=>`${e.time.toFixed(2)} ${e.type}`).join('\n');
  $('refill-target').replaceChildren(...[...Object.keys(snapshot.state.materials),...snapshot.devices.filter(d=>d.stock).map(d=>d.id)].map(id=>{const option=text('option',names[id]??id);option.value=id;return option;}));
  })();
@@ -95,7 +114,7 @@ $('send').onclick=()=>action(async()=>{
 $('query').onclick=()=>action(async()=>{const r=await request(base,`/api/commands/${encodeURIComponent($('query-id').value)}`);records.set(r.commandId,r);renderRecords();showRecord(r);notice(`查询结果：${words[r.status]??r.status}`);});
 $('cancel').onclick=()=>action(async()=>{const r=await post(`/api/commands/${encodeURIComponent($('command-id').value)}/cancel`);records.set(r.commandId,r);renderRecords();notice(`取消结果：${words[r.status]??r.status}`);});
 $('reset-device').onclick=()=>action(async()=>{await submitCommand(base,{sessionId:snapshot.sessionId,commandId:`reset-${crypto.randomUUID()}`,deviceId:selected,action:'reset',parameters:{}});notice('已提交设备复位；失败的制作任务不会自动重做。');});
-$('save-config').onclick=()=>action(async()=>{await request(base,`/api/devices/${selected}/config`,{method:'PUT',body:{sessionId:snapshot.sessionId,configuration:JSON.parse($('configuration').value)}});snapshot=await request(base,'/api/state');configuration();notice('配置已保存。初始库存与预热时间在下次重置实验时生效。');});
+$('save-config').onclick=()=>action(async()=>{await request(base,`/api/devices/${selected}/config`,{method:'PUT',body:{sessionId:snapshot.sessionId,configuration:JSON.parse($('configuration').value)}});await load();notice('配置已保存，安装与工位已同步。初始库存与预热时间在下次重置实验时生效。');});
 const inject=options=>post(`/api/devices/${selected}/injection`,{options});
 for(const [id,options] of [['fault',{fault:'OPERATOR_INJECTED'}],['disconnect',{online:false}],['reconnect',{online:true}],['drop-ack',{dropNextAck:true}],['drop-completion',{dropNextCompletion:true}]])$(id).onclick=()=>action(async()=>{await inject(options);notice('设置已应用。可发送命令或查询原命令观察结果。');});
 $('apply-sensor').onclick=()=>action(async()=>{await inject({forcedSensors:JSON.parse($('sensor-override').value)});notice('传感器异常设置已应用。');});
@@ -105,7 +124,7 @@ $('clock-mode').onchange=()=>action(async()=>{const mode=$('clock-mode').value;a
 $('advance').onclick=()=>action(async()=>{await post('/api/clock/advance',{ticks:50});});
 $('focus-device').onclick=()=>renderer?.focusDevice(selected);
 $('fault-reset').onclick=()=>$('reset-device').click();
-$('view').onchange=()=>renderer?.setView($('view').value);$('collision').onchange=()=>{renderer.debugVisible=$('collision').checked;renderer.updateDebug();};
+$('view').onchange=()=>renderer?.setView($('view').value);$('collision').onchange=()=>{renderer.debugVisible=$('collision').checked;renderer.originsVisible=$('show-origins').checked;renderer.updateDebug();};
 $('reset-session').onclick=()=>action(async()=>{await post('/api/session/reset');await load();notice('实验已重置，原会话命令 ID 不再有效。');});
 $('export-config').onclick=()=>action(async()=>{const config=await request(base,'/api/config'),url=URL.createObjectURL(new Blob([JSON.stringify(config,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='device-lab-config.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notice('已导出设备配置。');});
 $('import-config').onchange=()=>action(async()=>{const file=$('import-config').files[0];if(!file)return;await post('/api/session/reset',{config:JSON.parse(await file.text())});await load();notice('配置已导入，实验已重置。');});

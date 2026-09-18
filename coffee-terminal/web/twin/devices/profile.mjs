@@ -1,3 +1,4 @@
+import {prepareMounts} from '../mounts.mjs';
 import {validateGripper,gripperActions} from './gripper.mjs';
 import {validateWorld,clone} from '../schema.mjs';
 export class DeviceError extends Error {
@@ -13,7 +14,7 @@ export function actionsFor(p){
 }
 export function cancellable(p,action){return action==='reset'||action==='clean'||(p.kind!=='lidder'&&action!=='dispense');}
 export function validateProfile(id,p,world){
-  ensure(keys(p,['kind','model','timing','motion','process','stock','gripper']),'INVALID_CONFIG',`${id}: unknown profile fields`);
+  ensure(keys(p,['kind','model','timing','motion','process','stock','gripper','mounting']),'INVALID_CONFIG',`${id}: unknown profile fields`);
   ensure(['robot','processor','dispenser','lidder','gripper'].includes(p.kind)&&typeof p.model==='string'&&p.model.length>0&&p.model.length<=120,'INVALID_CONFIG',`${id}: kind/model`);
   ensure(keys(p.timing,timingKeys)&&timingKeys.every(k=>number(p.timing[k],['durationSeconds','cleanSeconds','resetSeconds','graspSeconds','releaseSeconds'].includes(k)?.02:0,k==='ackDelayMs'?30000:3600)),'INVALID_CONFIG',`${id}: timing`);
   if(p.kind==='gripper'){validateGripper(p,world);return clone(p);}
@@ -55,6 +56,7 @@ export function prepareWorld(base,config){
     if(p.kind==='lidder')world.devices[id].effect='seal';
     if(p.stock){const supply=`${id}-stock`;world.supplies[supply]={amount:p.stock.initial,capacity:p.stock.capacity};world.devices[id].supply=supply;}
   }
+  prepareMounts(base,world,config.devices);
   try{validateWorld(world);}catch(error){throw new DeviceError('INVALID_CONFIG',error.message);}
   return world;
 }

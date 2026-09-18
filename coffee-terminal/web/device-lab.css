@@ -9,3 +9,5 @@
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .twin-action-label{position:absolute;top:12px;left:12px;right:12px;width:fit-content;max-width:calc(100% - 24px);padding:7px 12px;border:1px solid #B78A52;border-radius:8px;background:#FFF9F0;color:#17382D;font-size:12px;pointer-events:none}.twin-action-label[hidden]{display:none}
+
+.mount-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.mount-fields input{min-width:0;width:100%;box-sizing:border-box}.mount-toggle{display:flex;align-items:center;gap:8px}.mount-toggle input{width:auto}

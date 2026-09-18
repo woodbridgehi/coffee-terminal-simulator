@@ -19,13 +19,13 @@ export class DeviceEffects {
   for(const [id,def] of Object.entries(this.config.devices)){
    const p=devicePhase(state,id),station=this.config.stations[def.station].pose;
    if(def.effect==='dispense'){
-    const drop=dispensePresentation(state,id);if(drop&&state.objects[def.object].present===false){this.cup.visible=true;this.cup.position.fromArray(station.position);this.cup.position.z+=drop.height;this.cup.quaternion.fromArray(station.quaternion);active.push(`落杯器：${drop.phase}`);}continue;
+    const drop=dispensePresentation(state,id);if(drop&&state.objects[def.object].present===false){this.cup.visible=true;this.cup.position.fromArray(station.position);this.cup.position.add(new THREE.Vector3(0,0,drop.height).applyQuaternion(new THREE.Quaternion(...station.quaternion)));this.cup.quaternion.fromArray(station.quaternion);active.push(`落杯器：${drop.phase}`);}continue;
    }
    const stream=this.streams[id],particles=this.particles[id];if(!stream)continue;stream.visible=false;particles.forEach(p=>p.visible=false);if(p===null)continue;
    const object=Object.entries(state.objects).find(([,o])=>o.present!==false&&!o.owner&&Math.hypot(...o.pose.position.map((v,i)=>v-station.position[i]))<.02);
-   if(!object)continue;const [key,o]=object,top=[...o.pose.position];top[2]+=this.config.objects[key].height/2;
-   if(id!=='ice-maker')this.line(stream,[top[0],top[1],top[2]+.19],top);
-   if(['foamer','hot-water','ice-maker'].includes(id))particles.forEach((mesh,i)=>{const phase=(state.time*(id==='ice-maker'?1.5:.55)+i/7)%1;mesh.visible=true;mesh.position.set(top[0]+Math.sin(i*2.4+state.time)*.025,top[1]+Math.cos(i*2.4)*.025,top[2]+(id==='ice-maker'?(1-phase)*.18:phase*.12));mesh.scale.setScalar(id==='ice-maker'?1:.5+phase);mesh.rotation.set(phase*3,i,phase);});
+   if(!object)continue;const [key,o]=object,q=new THREE.Quaternion(...station.quaternion),top=new THREE.Vector3(0,0,this.config.objects[key].height/2).applyQuaternion(new THREE.Quaternion(...o.pose.quaternion)).add(new THREE.Vector3(...o.pose.position)).toArray();
+   if(id!=='ice-maker')this.line(stream,new THREE.Vector3(0,0,.19).applyQuaternion(q).add(new THREE.Vector3(...top)).toArray(),top);
+   if(['foamer','hot-water','ice-maker'].includes(id))particles.forEach((mesh,i)=>{const phase=(state.time*(id==='ice-maker'?1.5:.55)+i/7)%1;mesh.visible=true;mesh.position.set(Math.sin(i*2.4+state.time)*.025,Math.cos(i*2.4)*.025,id==='ice-maker'?(1-phase)*.18:phase*.12).applyQuaternion(q).add(new THREE.Vector3(...top));mesh.scale.setScalar(id==='ice-maker'?1:.5+phase);mesh.rotation.set(phase*3,i,phase);});
    active.push(`${id==='brewer'?'咖啡萃取':id==='foamer'?'奶泡加工':id==='hot-water'?'热水出料':id==='ice-maker'?'冰块出料':'糖浆出料'} ${Math.round(p*100)}%`);
   }
   for(const [robot,r] of Object.entries(state.robots))if(r.mode==='transfer'){
