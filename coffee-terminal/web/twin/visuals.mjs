@@ -37,7 +37,7 @@ export function deviceVisual(def,label){
   for(let i=0;i<5;i++)box(group,[w*.65,.009,.006],[0,-h*.36+i*h*.035,d/2+.011],M.steel,.002);
   ownMaterials(group);return {group,indicator};
 }
-export function armVisual(radius,{independentGripper=false}={}){
+export function armVisual(radius,{independentGripper=false,maxOpeningMm=120}={}){
   const group=new THREE.Group(),steel=M.lightSteel.clone(),blue=new THREE.MeshStandardMaterial({color:'#73aaca',metalness:.38,roughness:.32});
   const links=Array.from({length:7},()=>cylinder(group,radius*.86,1,[0,0,0],steel));
   const joints=Array.from({length:7},()=>{
@@ -49,7 +49,7 @@ export function armVisual(radius,{independentGripper=false}={}){
   });
   const gripper=new THREE.Group();group.add(gripper);
   let actuator;
-  if(independentGripper){actuator=createGripperVisual();gripper.add(actuator.group);}
+  if(independentGripper){actuator=createGripperVisual(maxOpeningMm);gripper.add(actuator.group);}
   else{
     box(gripper,[.13,.05,.07],[0,0,0],M.dark,.008);
     for(const sign of [-1,1])box(gripper,[.014,.046,.055],[sign*.057,0,0],M.steel,.003);

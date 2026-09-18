@@ -331,7 +331,7 @@
     },
     "left-gripper": {
       "kind": "gripper",
-      "model": "Parallel jaw 85 mm (nominal)",
+      "model": "Parallel jaw simulated 120 mm extension (hardware rated 85 mm)",
       "timing": {
         "ackDelayMs": 0,
         "startDelaySeconds": 0.1,
@@ -346,8 +346,8 @@
       },
       "gripper": {
         "robot": "left",
-        "maxOpeningMm": 85,
-        "initialOpeningMm": 85,
+        "maxOpeningMm": 120,
+        "initialOpeningMm": 120,
         "openingSpeedMmS": 42.5,
         "closingSpeedMmS": 42.5,
         "massKg": 0.7,
@@ -356,7 +356,7 @@
     },
     "right-gripper": {
       "kind": "gripper",
-      "model": "Parallel jaw 85 mm (nominal)",
+      "model": "Parallel jaw simulated 120 mm extension (hardware rated 85 mm)",
       "timing": {
         "ackDelayMs": 0,
         "startDelaySeconds": 0.1,
@@ -371,8 +371,8 @@
       },
       "gripper": {
         "robot": "right",
-        "maxOpeningMm": 85,
-        "initialOpeningMm": 85,
+        "maxOpeningMm": 120,
+        "initialOpeningMm": 120,
         "openingSpeedMmS": 42.5,
         "closingSpeedMmS": 42.5,
         "massKg": 0.7,

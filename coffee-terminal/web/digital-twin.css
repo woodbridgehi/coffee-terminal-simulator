@@ -2,3 +2,5 @@
 
 /* Match the main storefront palette without changing experiment controls. */
 :root{background:#f6f0e5;color:#17382d}header{border-color:#dfd5c4}.badge{background:#e8dfcf;color:#365143}#viewport{height:590px;background:#e8dece;border-color:#d7cbb7}.timeline,aside section{background:#fffdf7;border-color:#e0d7c8}.twin-label{background:#fffaf0ed;color:#244d3c;border:1px solid #cbbb9e;border-radius:12px;padding:4px 9px;font-size:10px;box-shadow:0 2px 8px #17382d12}.twin-label[data-mode="running"]{border-color:#6c9e74;background:#ebf5e5}.twin-label[data-mode="fault"]{border-color:#b84f3c;color:#a43929}.twin-label[hidden]{display:none}@media(max-width:1000px){#viewport{height:500px}}@media(max-width:720px){#viewport{height:410px}.toolbar label{font-size:11px}.toolbar select{padding:7px}#clock{font-size:16px}}
+
+.twin-action-label{position:absolute;top:12px;left:12px;right:12px;width:fit-content;max-width:calc(100% - 24px);padding:7px 12px;border:1px solid #B78A52;border-radius:8px;background:#FFF9F0;color:#17382D;font-size:12px;pointer-events:none}.twin-action-label[hidden]{display:none}

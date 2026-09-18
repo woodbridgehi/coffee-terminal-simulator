@@ -6,7 +6,7 @@ import {prepareWorld} from '../../coffee-terminal/web/twin/devices/profile.mjs';
 import {createGripperVisual} from '../../coffee-terminal/web/twin/gripper-visual.mjs';
 const base=JSON.parse(await readFile(new URL('../../config/twin/coffee-workcell-main-v2.json',import.meta.url)));
 const config=JSON.parse(await readFile(new URL('../../config/twin/device-lab-v1.json',import.meta.url)));
-const make=()=>DeviceRuntime.create(base,structuredClone(config));
+const make=()=>{const c=structuredClone(config);for(const id of ['left-gripper','right-gripper'])Object.assign(c.devices[id].gripper,{maxOpeningMm:85,initialOpeningMm:85});return DeviceRuntime.create(base,c);};
 const send=(r,id,action,parameters={},deviceId='left-gripper')=>r.submit({sessionId:r.sessionId,commandId:id,deviceId,action,parameters}).command;
 
 test('gripper full stroke is 85 mm in two seconds and repeated IDs do not repeat motion',async()=>{
@@ -49,4 +49,23 @@ test('offline gripper still executes; query and sensor feedback recover after re
 test('visual jaw plates move symmetrically while the TCP group stays fixed',()=>{
  const visual=createGripperVisual(),initial=visual.group.position.toArray();visual.setState({openingMm:85});const open=visual.group.children.filter(c=>c.type==='Group').map(c=>c.position.x);
  visual.setState({openingMm:25});const closed=visual.group.children.filter(c=>c.type==='Group').map(c=>c.position.x);assert.equal(open.length,2);assert.ok(Math.abs((open[1]-open[0])-(closed[1]-closed[0])-.06)<1e-9);assert.deepEqual(visual.group.position.toArray(),initial);
+});
+
+test('120 mm simulation profile grasps a 100 mm cup only after closure, then opens before release',async()=>{
+ const r=await DeviceRuntime.create(base,structuredClone(config));
+ const run=(id,deviceId,action,parameters={})=>{send(r,id,action,parameters,deviceId);for(let i=0;i<400&&!['SUCCEEDED','FAILED','REJECTED'].includes(r.command(id).status);i++)r.advance(50);assert.equal(r.command(id).status,'SUCCEEDED',JSON.stringify(r.command(id)));};
+ run('cup','cup-dispenser','dispense');run('approach','left','move',{station:'cups',approachObject:'cup'});
+ send(r,'grasp','grasp',{object:'cup'},'left');r.advance(15);
+ assert.equal(r.sim.state.objects.cup.owner,null);assert.ok(r.device('left-gripper').state.openingMm>100&&r.device('left-gripper').state.openingMm<120);
+ r.advance(25);assert.equal(r.sim.state.objects.cup.owner,'left');assert.equal(r.device('left-gripper').state.openingMm,100);
+ send(r,'release','release',{object:'cup',station:'cups'},'left');r.advance(15);assert.equal(r.sim.state.objects.cup.owner,'left');assert.ok(r.device('left-gripper').state.openingMm>100);
+ r.advance(25);assert.equal(r.sim.state.objects.cup.owner,null);assert.equal(r.device('left-gripper').state.openingMm,120);
+ run('close','left-gripper','close');send(r,'regrasp','grasp',{object:'cup'},'left');r.advance(55);assert.equal(r.sim.state.objects.cup.owner,null);assert.ok(r.device('left-gripper').state.openingMm<100);r.advance(150);assert.equal(r.sim.state.objects.cup.owner,'left');assert.equal(r.device('left-gripper').state.openingMm,100);
+});
+
+test('tool fault during robot grasp aborts the parent before attaching the object',async()=>{
+ const r=await DeviceRuntime.create(base,structuredClone(config));
+ send(r,'cup','dispense',{},'cup-dispenser');r.advance(100);send(r,'approach','move',{station:'cups',approachObject:'cup'},'left');for(let i=0;i<20&&r.command('approach').status!=='SUCCEEDED';i++)r.advance(50);
+ send(r,'grasp','grasp',{object:'cup'},'left');r.advance(15);const opening=r.device('left-gripper').state.openingMm;r.inject('left-gripper',{fault:'JAM'},r.sessionId);r.advance(50);
+ assert.equal(r.command('grasp').status,'FAILED');assert.equal(r.sim.state.objects.cup.owner,null);assert.equal(r.device('left-gripper').state.openingMm,opening);
 });

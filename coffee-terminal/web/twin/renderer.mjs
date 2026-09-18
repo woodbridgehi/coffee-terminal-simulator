@@ -1,3 +1,4 @@
+import {DeviceEffects} from './device-effects.mjs';
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
@@ -58,7 +59,7 @@ export class TwinRenderer {
     }
     this.arms={};
     for(const [id,robot] of Object.entries(config.robots)){
-      const arm=armVisual(robot.linkRadius,{independentGripper:Object.values(config.grippers??{}).some(g=>g.robot===id)});if(arm.actuator)arm.actuator.group.quaternion.fromArray(robot.tool.quaternion).invert();this.root.add(arm.group);this.arms[id]=arm;
+      const arm=armVisual(robot.linkRadius,{independentGripper:Object.values(config.grippers??{}).some(g=>g.robot===id),maxOpeningMm:Object.values(config.grippers??{}).find(g=>g.robot===id)?.maxOpeningMm??120});if(arm.actuator)arm.actuator.group.quaternion.fromArray(robot.tool.quaternion).invert();this.root.add(arm.group);this.arms[id]=arm;
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.105,.12,.025,32),new THREE.MeshStandardMaterial({color:'#273230',metalness:.5,roughness:.3}));
       const group=new THREE.Group();this.setPose(group,robot.base);base.rotation.x=Math.PI/2;group.add(base);this.root.add(group);
     }
@@ -67,6 +68,7 @@ export class TwinRenderer {
       const visual=id==='cup'?cupVisual(def):milkVesselVisual(def),holder=new THREE.Group();holder.name=`twin-object:${id}`;
       holder.add(visual.group);this.root.add(holder);this.objects[id]={holder,visual};jobs.push(visual.ready);
     }
+    this.effects=new DeviceEffects(this.root,config);jobs.push(this.effects.ready);this.actionLabel=document.createElement('span');this.actionLabel.className='twin-action-label';host.append(this.actionLabel);
     this.debugGroup=new THREE.Group();this.root.add(this.debugGroup);this.debugVisible=false;this.labelsVisible=true;
     this.ready=Promise.all(jobs).catch(error=>{if(!this.disposed)this.assetErrors.push(error.message);});
     this.observer=new ResizeObserver(()=>this.resize());this.observer.observe(host);this.resize();this.setView('shop');
@@ -135,6 +137,7 @@ export class TwinRenderer {
       const lidder=state.devices.lidder,progress=lidder?.mode==='running'?Math.max(0,Math.min(1,1-lidder.remaining/this.config.devices.lidder.duration)):0;
       this.workcell.press.position.y=1.42-Math.sin(progress*Math.PI)*.17;
     }
+    const actions=this.effects.apply(state);this.actionLabel.textContent=actions.join(' · ');this.actionLabel.hidden=!actions.length;
     this.updateDebug();
   }
   updateDebug(){
@@ -171,7 +174,7 @@ export class TwinRenderer {
     });geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());
   }
   dispose(){
-    this.disposed=true;this.shop.dispose();this.observer.disconnect();this.controls.dispose();this.labels.forEach(x=>x.label.remove());
+    this.disposed=true;this.shop.dispose();this.observer.disconnect();this.controls.dispose();this.labels.forEach(x=>x.label.remove());this.actionLabel.remove();
     this.disposeTree(this.scene);this.environment.dispose();this.pmrem.dispose();this.renderer.dispose();this.renderer.domElement.remove();
   }
 }
