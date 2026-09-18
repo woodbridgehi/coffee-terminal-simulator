@@ -275,6 +275,11 @@
       "stock": {
         "initial": 50,
         "capacity": 100
+      },
+      "cupSensor": {
+        "enabled": true,
+        "radiusMm": 80,
+        "heightToleranceMm": 8
       }
     },
     "ice-maker": {

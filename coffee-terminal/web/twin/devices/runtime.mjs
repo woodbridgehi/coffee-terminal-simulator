@@ -1,3 +1,4 @@
+import {cupOnPad,defaultCupSensor} from '../cup-sensor.mjs';
 import {checkInstallation} from './installation.mjs';
 import {linkRobotGrasp,initialGripper,gripperSensors,gripperTask,advanceGrippers,stopGripper} from './gripper.mjs';
 import {Simulation} from '../kernel.mjs';
@@ -40,8 +41,8 @@ export class DeviceRuntime {
     if(p.kind==='gripper')return gripperSensors(this,id);
     if(p.kind==='robot')return {ready:!this.links?.[id]?.fault,gripperHasObject:Object.values(s.objects).some(o=>o.owner===id)};
     const d=s.devices[id],station=this.sim.config.stations[p.process.station].pose.position;
-    const cupPresent=Object.values(s.objects).some(o=>o.present!==false&&!o.owner&&vec(o.pose.position).distanceTo(vec(station))<.02);
-    return {ready:d.mode==='idle'&&!d.fault,cupPresent,...(p.stock?{stockRemaining:s.supplies[`${id}-stock`].amount}:{}),...(p.kind==='lidder'?{headPosition:d.mode==='running'?'working':'up'}:{})};
+    const cupPresent=p.kind==='dispenser'?cupOnPad(this.sim.config,s,id):Object.values(s.objects).some(o=>o.present!==false&&!o.owner&&vec(o.pose.position).distanceTo(vec(station))<.02);
+    return {ready:d.mode==='idle'&&!d.fault,cupPresent,...(p.kind==='dispenser'?{cupSensorEnabled:(p.cupSensor??defaultCupSensor()).enabled}:{}),...(p.stock?{stockRemaining:s.supplies[`${id}-stock`].amount}:{}),...(p.kind==='lidder'?{headPosition:d.mode==='running'?'working':'up'}:{})};
   }
   sampleSensors(){
     for(const id of Object.keys(this.config.devices)){
@@ -58,6 +59,7 @@ export class DeviceRuntime {
     if(state.tcp)delete state.tcp.frames;
     const view={id,kind:p.kind,model:p.model,online:link.online,mode:link.fault?'fault':active?.status==='ACCEPTED'?'waiting':state.mode,fault:link.fault??state.fault??null,currentCommandId:active?.commandId??null,
       ...(p.kind==='gripper'?{hardwareInterface:{ratedOpeningMm:85,simulationOpeningLimitMm:120,connector:'6-pin aviation',electrical:'RS485',supportedProtocols:['serial','Modbus RTU','I/O'],transportImplemented:'HTTP simulation only'},compatibility:'Robot grasp/release animate aperture before logical attachment/release; no force/contact physics'}:{}),
+      ...(p.kind==='dispenser'?{sensorCapabilities:{cupPresent:{type:'simulated-pad-presence',configuration:clone(p.cupSensor??defaultCupSensor()),delaySeconds:p.timing.sensorDelaySeconds}}}:{}),
       capabilities:actionsFor(p).map(action=>({action,cancellable:cancellable(p,action)})),state,
       sensors:{...clone(this.sensors[id].values),...link.forcedSensors},observedAt:this.sensors[id].observedAt,
       stock:p.stock?{...s.supplies[`${id}-stock`],capacity:p.stock.capacity}:null,configuration:clone(p)};

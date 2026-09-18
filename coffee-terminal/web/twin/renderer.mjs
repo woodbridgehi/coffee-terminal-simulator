@@ -1,3 +1,4 @@
+import {cupOnPad} from './cup-sensor.mjs';
 import {installationPose} from './mounts.mjs';
 import {DeviceEffects} from './device-effects.mjs';
 import * as THREE from 'three';
@@ -32,7 +33,7 @@ export class TwinRenderer {
     this.shop=createShop();ownMaterials(this.shop.group);this.scene.add(this.shop.group);
     const jobs=[this.shop.ready];this.devices={};
     if(config.presentation==='main-workcell'&&(config.installation||JSON.stringify(config.obstacles)===JSON.stringify(mainLayout.obstacles)&&JSON.stringify(config.stations)===JSON.stringify(mainLayout.stations))) {
-      this.workcell=createWorkcell();ownMaterials(this.workcell.group);this.scene.add(this.workcell.group);
+      this.workcell=createWorkcell({cupPadTop:mainLayout.stations.cups.pose.position[2]-config.objects.cup.height*.089/.176});ownMaterials(this.workcell.group);this.scene.add(this.workcell.group);
       for(const [id,delta] of Object.entries(config.installation?.deltas??{})){
         const station=config.devices[id]?.station,part=this.workcell.components[station];if(!part)continue;
         const q=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),-Math.PI/2),turn=new THREE.Matrix4().makeRotationFromQuaternion(q);
@@ -141,6 +142,7 @@ export class TwinRenderer {
       for(const [id,pad] of Object.entries(this.workcell.pads)) {
         const device=Object.entries(this.config.devices).find(([,d])=>d.station===id);
         const mode=state.devices[device?.[0]]?.mode;pad.material.color.set(mode==='fault'?'#a84032':mode==='running'?'#c79a50':'#365143');
+        if(id==='cups'&&device?.[1].effect==='dispense'){const view=this.sensorViews?.[device[0]],enabled=view?view.online&&view.sensors.cupSensorEnabled:(device[1].cupSensor?.enabled??true),detected=view?view.sensors.cupPresent:cupOnPad(this.config,state,device[0]);pad.material.color.set(mode==='fault'?'#a84032':!enabled?'#87918c':detected?'#36b881':'#b78a52');}
       }
       const lidder=state.devices.lidder,progress=lidder?.mode==='running'?Math.max(0,Math.min(1,1-lidder.remaining/this.config.devices.lidder.duration)):0;
       this.workcell.press.position.y=1.42-Math.sin(progress*Math.PI)*.17;

@@ -121,7 +121,7 @@ export function createCup({ miniature = false } = {}) {
   } };
 }
 
-export function createWorkcell({ cabinetOnly = false } = {}) {
+export function createWorkcell({ cabinetOnly = false, cupPadTop = null } = {}) {
   const group = new THREE.Group(); group.name = 'coffee-workcell';
   // Floor cabinet, open side detailing, adjustable feet and brushed worktop.
   box(group, [4.35, 0.12, 2.45], [0, 0.88, 0.05], M.lightSteel, 0.045);
@@ -146,12 +146,14 @@ export function createWorkcell({ cabinetOnly = false } = {}) {
   const collect=id=>{const children=group.children.slice(mark);const part=components[id]??new THREE.Group();if(!components[id]){part.name=`workcell:${id}`;components[id]=part;group.add(part);}for(const child of children)if(child!==part)part.add(child);mark=group.children.length;};
   for (const [id, station] of Object.entries(STATIONS)) {
     const [x, , z] = station.position;
-    cylinder(group, id === 'pickup' ? 0.20 : 0.145, 0.025, [x, 0.953, z], M.dark);
-    const indicator = ring(group, id === 'pickup' ? 0.18 : 0.127, 0.008, [x, 0.970, z], M.green.clone());
+    // Twin pad rests on the plate; its top matches the rendered cup bottom.
+    const sensorPad=id==='cups'&&cupPadTop!==null,thickness=sensorPad?Math.max(.001,cupPadTop-.9825):.025,tube=sensorPad?Math.min(.002,thickness/3):.008;
+    cylinder(group, id === 'pickup' ? 0.20 : 0.145, thickness, [x, sensorPad?cupPadTop-thickness/2:.953, z], M.dark);
+    const indicator = ring(group, id === 'pickup' ? 0.18 : 0.127, tube, [x, sensorPad?cupPadTop-tube:.970, z], M.green.clone());
     pads[id] = indicator;collect(id);
   }
   // Cup magazine with a separate front dispensing position.
-  box(group, [0.38, 0.045, 0.60], [-1.72, 0.96, -0.14], M.steel);
+  box(group, [0.38, 0.045, cupPadTop===null?.60:.70], [-1.72, 0.96, -0.14], M.steel);
   for (let i = 0; i < 8; i++) {
     const cup = createCup({ miniature: true });
     cup.group.position.set(-1.72, 1.072 + i * 0.036, -0.34); group.add(cup.group);

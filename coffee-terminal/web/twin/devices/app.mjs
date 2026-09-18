@@ -1,3 +1,4 @@
+import {defaultCupSensor} from '../cup-sensor.mjs';
 import {mountPose,poseMount,installationPose} from '../mounts.mjs';
 import {compose,relative} from '../robot.mjs';
 import {TwinRenderer} from '../renderer.mjs';
@@ -5,7 +6,7 @@ import {request,submitCommand,runLatte} from './client.mjs';
 const $=id=>document.getElementById(id),base=location.origin;
 const names={'left-gripper':'左末端夹爪','right-gripper':'右末端夹爪',left:'左机械臂',right:'右机械臂',brewer:'咖啡机',foamer:'奶泡机','hot-water':'热水机',lidder:'封盖机','cup-dispenser':'落杯器','ice-maker':'制冰机','syrup-pump':'糖浆机'};
 const words={open:'张开',close:'闭合',setOpening:'指定开口',idle:'待机',ready:'就绪',running:'运行',waiting:'等待',warming:'预热',cooldown:'恢复',fault:'故障',offline:'离线',cleaning:'清洗',resetting:'复位',move:'移动',grasp:'抓取',release:'释放',transfer:'倒奶',process:'加工',seal:'封盖',dispense:'落杯',clean:'清洗',reset:'复位',stop:'停止',ACCEPTED:'已接收',RUNNING:'执行中',SUCCEEDED:'成功',FAILED:'失败',REJECTED:'拒绝',CANCELLED:'已取消',EXPIRED:'启动过期'};
-const sensorNames={openingMm:'实际开口',targetOpeningMm:'目标开口',moving:'开合中',atTarget:'到达目标',robotHoldingObject:'机械臂持物',heldObjectWidthMm:'持物直径',openingCompatible:'开口尺寸兼容',payloadKg:'持物重量 kg',payloadWithinLimit:'负载未超限',ready:'就绪信号',cupPresent:'杯到位',gripperHasObject:'夹爪持物',headPosition:'压头位置',stockRemaining:'剩余库存'};
+const sensorNames={cupSensorEnabled:'杯垫传感器启用',openingMm:'实际开口',targetOpeningMm:'目标开口',moving:'开合中',atTarget:'到达目标',robotHoldingObject:'机械臂持物',heldObjectWidthMm:'持物直径',openingCompatible:'开口尺寸兼容',payloadKg:'持物重量 kg',payloadWithinLimit:'负载未超限',ready:'就绪信号',cupPresent:'杯到位',gripperHasObject:'夹爪持物',headPosition:'压头位置',stockRemaining:'剩余库存'};
 let snapshot,renderer,selected='cup-dispenser',records=new Map(),events=[],plannerRunning=false,selectedCommandId=null,polling=false,loading=null;
 const text=(tag,value)=>{const e=document.createElement(tag);e.textContent=value;return e;};
 function notice(message,error=false){$('notice').textContent=message;$('notice').dataset.error=error;}
@@ -47,7 +48,7 @@ for(const tab of document.querySelectorAll('[data-tab]')){
 }
 function deviceButtons(){
  $('device-count').textContent=`${snapshot.devices.length} 台虚拟设备`;
- $('device-list').replaceChildren(...snapshot.devices.map(d=>{const b=text('button',names[d.id]??d.id);b.dataset.device=d.id;b.setAttribute('aria-pressed',d.id===selected);b.append(text('small',''));b.onclick=()=>{selected=d.id;selectedState();configuration();draw(snapshot);};return b;}));
+ $('device-list').replaceChildren(...snapshot.devices.map(d=>{const b=text('button',names[d.id]??d.id);b.dataset.device=d.id;b.setAttribute('aria-pressed',d.id===selected);b.append(text('small',''));b.onclick=()=>{selected=d.id;selectedState();configuration();draw(snapshot);notice(`已选择${names[d.id]??d.id}。`);};return b;}));
 }
 function actionHelp(){const a=$('action').value,p=snapshot.devices.find(d=>d.id===selected).configuration,isJaw=p.kind==='gripper';$('gripper-controls').hidden=!isJaw||!['open','close','setOpening'].includes(a);if(isJaw){$('jaw-target').max=p.gripper.maxOpeningMm;$('jaw-target').disabled=a!=='setOpening';$('jaw-target').value=a==='open'?p.gripper.maxOpeningMm:a==='close'?0:Math.min(40,p.gripper.maxOpeningMm);$('jaw-speed').value=p.gripper[a==='open'?'openingSpeedMmS':'closingSpeedMmS'];syncJawParameters();$('action-help').textContent='独立命令控制开口；机械臂抓取 / 释放会自动驱动夹爪，并在开合完成后更新持物状态。';$('command-parameters').open=false;return;}$('action-help').textContent=a==='dispense'?'成功后出口出现一只杯子，库存减 1。已有杯子时须先完成制作并取走成品。':a==='process'?'先把容器放到该设备工位，再加工；未到位会等待，不会凭空出料。':a==='seal'?'杯子须在封盖工位，机械臂退出后才能封盖。':'动作按设备状态与联锁执行；展开参数，核对目标工位与容器。';$('command-parameters').open=!['dispense','reset','clean','stop'].includes(a);}
 function selectedState(){
@@ -55,7 +56,7 @@ function selectedState(){
  $('device-title').textContent=names[selected]??selected;
  const origin=installationPose(snapshot.world,snapshot.state,selected);$('mount-world').textContent=origin?`原点世界坐标：${origin.position.map((v,i)=>`${['X','Y','Z'][i]} ${(v*1000).toFixed(1)}`).join(' / ')} mm`:'';
  $('device-state').textContent=`${words[d.mode]??d.mode} · ${d.online?'在线':'离线'}${d.fault?' · '+d.fault:''}${d.state.remaining>0?' · 剩余 '+d.state.remaining.toFixed(2)+' s':''}`;
- $('sensors').replaceChildren(...Object.entries(d.sensors).map(([k,v])=>{const row=document.createElement('div');row.append(text('span',sensorNames[k]??k),text('b',typeof v==='boolean'?(v?'是':'否'):(typeof v==='number'?String(Number(v.toFixed(3))):String(v))+(k.endsWith('Mm')?' mm':'')));return row;}));
+ $('sensors').replaceChildren(...Object.entries(d.sensors).map(([k,v])=>{const row=document.createElement('div');row.append(text('span',k==='cupPresent'&&d.kind==='dispenser'?'杯垫检测到杯子':sensorNames[k]??k),text('b',typeof v==='boolean'?(v?'是':'否'):(typeof v==='number'?String(Number(v.toFixed(3))):String(v))+(k.endsWith('Mm')?' mm':'')));return row;}));
  $('gripper-notes').hidden=d.kind!=='gripper';if(d.kind==='gripper')$('gripper-notes').textContent=`仿真扩展开口上限 ${d.configuration.gripper.maxOpeningMm} mm，${d.configuration.gripper.maxOpeningMm>=100?'可夹取':'不能夹取'}当前 100 mm 杯模型。原实物额定 85 mm；本扩展不代表真实硬件能力。抓取力与滑移未建模。`;
  $('stock-state').textContent=d.stock?`库存 ${d.stock.amount} / ${d.stock.capacity}，预留 ${d.stock.reserved}`:`传感器更新时间 ${d.observedAt.toFixed(2)} s`;
 }
@@ -73,14 +74,22 @@ function mountFields(){
 }
 $('mount-default').onclick=()=>action(async()=>{const p=JSON.parse($('configuration').value);p.mounting=structuredClone(snapshot.world.installation.defaults[selected]);$('configuration').value=JSON.stringify(p,null,2);mountFields();notice('已恢复默认安装参数，点击保存后应用。');});
 $('show-origins').onchange=()=>{if(renderer){renderer.originsVisible=$('show-origins').checked;renderer.apply(snapshot.state);}};
+function configFeedback(message,status='ACCEPTED'){const el=$('config-feedback');el.textContent=message;el.dataset.status=status;}
 function configuration(){
- const d=snapshot.devices.find(x=>x.id===selected),p=structuredClone(d.configuration);
+ const d=snapshot.devices.find(x=>x.id===selected),p=structuredClone(d.configuration);configFeedback(`${names[selected]??selected}：修改后点击保存，检查结果会显示在这里。`);
  $('configuration').value=JSON.stringify(p,null,2);$('config-fields').replaceChildren();
  const fields=[['durationSeconds','加工时间 s'],['warmupSeconds','预热时间 s'],['cooldownSeconds','恢复时间 s'],['startDelaySeconds','启动延迟 s'],['ackDelayMs','确认延迟 ms'],['sensorDelaySeconds','传感器延迟 s']];
  if(p.kind==='robot')fields.splice(0,3,['graspSeconds','抓取时间 s'],['releaseSeconds','释放时间 s'],['resetSeconds','复位时间 s']);
  if(p.kind==='gripper'){fields.splice(0,fields.length,['initialOpeningMm','初始开口 mm'],['openingSpeedMmS','张开速度 mm/s'],['closingSpeedMmS','闭合速度 mm/s'],['maxOpeningMm','开口上限 mm'],['maxPayloadKg','负载上限 kg']);}
  for(const [key,label] of fields){const row=text('label',label),input=document.createElement('input');input.type='number';input.min='0';input.step='any';const section=p.kind==='gripper'?'gripper':'timing';input.value=p[section][key];input.dataset.field=key;if(p.kind==='gripper'){input.min=key==='initialOpeningMm'?'0':'0.1';input.max=key.includes('Speed')?'42.5':key==='maxPayloadKg'?'2':'120';}
   input.oninput=()=>{try{const current=JSON.parse($('configuration').value);current[section][key]=Number(input.value);$('configuration').value=JSON.stringify(current,null,2);}catch{notice('请先修正完整属性 JSON',true);}};row.append(input);$('config-fields').append(row);}
+ if(p.kind==='dispenser'){
+  const sensor=p.cupSensor??defaultCupSensor();
+  for(const [key,label] of [['enabled','杯垫传感器启用'],['radiusMm','检测半径 mm'],['heightToleranceMm','落座高度容差 mm']]){
+   const row=text('label',label),input=document.createElement('input');input.id=`cup-sensor-${key}`;input.type=key==='enabled'?'checkbox':'number';if(key==='enabled')input.checked=sensor[key];else{input.value=sensor[key];input.min=key==='radiusMm'?'1':'0.1';input.max=key==='radiusMm'?'145':'30';input.step='any';}
+   input.oninput=()=>{try{const current=JSON.parse($('configuration').value);current.cupSensor??=structuredClone(sensor);current.cupSensor[key]=key==='enabled'?input.checked:Number(input.value);$('configuration').value=JSON.stringify(current,null,2);}catch{configFeedback('完整属性 JSON 无效，请先修正。','REJECTED');}};row.append(input);$('config-fields').append(row);
+  }
+ }
  mountFields();
  $('action').replaceChildren(...d.capabilities.map(c=>{const o=text('option',words[c.action]??c.action);o.value=c.action;return o;}));if(p.kind==='gripper')$('action').value='setOpening';$('parameters').value=JSON.stringify(defaults($('action').value),null,2);newId();actionHelp();
 }
@@ -88,7 +97,7 @@ function draw(update){
  if(snapshot&&update.installationRevision!==undefined&&snapshot.installationRevision!==update.installationRevision){action(load);return;}
  snapshot={...snapshot,...update};$('clock').textContent=`${snapshot.state.time.toFixed(2)} s`;if($('clock-mode').value!==snapshot.clock.mode)$('clock-mode').value=snapshot.clock.mode;$('advance').disabled=snapshot.clock.mode!=='manual'||plannerRunning;
  $('clock-help').textContent=snapshot.clock.mode==='manual'?(plannerRunning?'手动时钟 · 示例规划器正在自动推进。':'手动时钟已暂停 · 发送命令不会自动走时；点击「推进 1 秒」或切换实时模式。'):snapshot.clock.mode==='accelerated'?'加速 16× · 设备自动执行，短动作可能一闪而过。':'实时 1× · 接收命令后，设备按配置耗时自动执行。';
- if(renderer){renderer.apply(snapshot.state);renderer.selectDevice(selected);}
+ if(renderer){renderer.sensorViews=Object.fromEntries(snapshot.devices.map(d=>[d.id,d]));renderer.apply(snapshot.state);renderer.selectDevice(selected);}
  for(const d of snapshot.devices){const b=$('device-list').querySelector(`[data-device="${d.id}"]`);if(b){b.setAttribute('aria-pressed',d.id===selected);b.querySelector('small').textContent=words[d.mode]??d.mode;}}selectedState();
  const cup=snapshot.state.objects.cup,pickup=snapshot.world.stations.pickup.pose.position,atPickup=cup.present&&!cup.owner&&Math.hypot(...cup.pose.position.map((v,i)=>v-pickup[i]))<.02;
  $('pickup').disabled=!atPickup||plannerRunning;
@@ -114,7 +123,20 @@ $('send').onclick=()=>action(async()=>{
 $('query').onclick=()=>action(async()=>{const r=await request(base,`/api/commands/${encodeURIComponent($('query-id').value)}`);records.set(r.commandId,r);renderRecords();showRecord(r);notice(`查询结果：${words[r.status]??r.status}`);});
 $('cancel').onclick=()=>action(async()=>{const r=await post(`/api/commands/${encodeURIComponent($('command-id').value)}/cancel`);records.set(r.commandId,r);renderRecords();notice(`取消结果：${words[r.status]??r.status}`);});
 $('reset-device').onclick=()=>action(async()=>{await submitCommand(base,{sessionId:snapshot.sessionId,commandId:`reset-${crypto.randomUUID()}`,deviceId:selected,action:'reset',parameters:{}});notice('已提交设备复位；失败的制作任务不会自动重做。');});
-$('save-config').onclick=()=>action(async()=>{await request(base,`/api/devices/${selected}/config`,{method:'PUT',body:{sessionId:snapshot.sessionId,configuration:JSON.parse($('configuration').value)}});await load();notice('配置已保存，安装与工位已同步。初始库存与预热时间在下次重置实验时生效。');});
+$('save-config').onclick=async()=>{
+ const button=$('save-config'),id=selected;if(button.disabled)return;button.disabled=true;button.textContent='正在检查并保存…';configFeedback('正在校验安装关系、碰撞及可达性…','RUNNING');
+ try{
+  for(const input of $('panel-config').querySelectorAll('input[type=number]'))if(input.value===''||!input.checkValidity())throw Error('请填写有效的数值；位置单位为毫米，旋转单位为度。');
+  const configuration=JSON.parse($('configuration').value);
+  if(JSON.stringify(configuration)===JSON.stringify(snapshot.devices.find(d=>d.id===id).configuration)){configFeedback('没有参数变化，无需重复保存。');return;}
+  await request(base,`/api/devices/${id}/config`,{method:'PUT',body:{sessionId:snapshot.sessionId,configuration}});await load();
+  const message=`${names[id]??id}配置已保存，场景和工位已同步。`;configFeedback(message,'SUCCEEDED');notice(message);
+ }catch(error){
+  const reason={INVALID_MOUNT:'安装关系无效，请检查父对象和循环附着。',INSTALLATION_COLLISION:'安装会造成碰撞。',INSTALLATION_UNREACHABLE:'工位没有找到机械臂逆解。',INSTALLATION_HOLDING_OBJECT:'机械臂仍在持物，请先释放。',DEVICE_BUSY:'还有未结束命令，请等待完成或取消后再保存。',SESSION_MISMATCH:'会话已改变，请刷新后重试。'}[error.code]??error.message;
+  const message=`未保存：${reason}${error.code&&error.message!==reason?' 详情：'+error.message:''} 旧配置保持不变。`;configFeedback(message,'REJECTED');notice(message,true);
+ }finally{button.disabled=false;button.textContent='保存设备配置';}
+};
+$('panel-config').addEventListener('input',e=>{if(e.target.id!=='show-origins')configFeedback('有未保存的修改。点击保存后才会更新场景。');});
 const inject=options=>post(`/api/devices/${selected}/injection`,{options});
 for(const [id,options] of [['fault',{fault:'OPERATOR_INJECTED'}],['disconnect',{online:false}],['reconnect',{online:true}],['drop-ack',{dropNextAck:true}],['drop-completion',{dropNextCompletion:true}]])$(id).onclick=()=>action(async()=>{await inject(options);notice('设置已应用。可发送命令或查询原命令观察结果。');});
 $('apply-sensor').onclick=()=>action(async()=>{await inject({forcedSensors:JSON.parse($('sensor-override').value)});notice('传感器异常设置已应用。');});
