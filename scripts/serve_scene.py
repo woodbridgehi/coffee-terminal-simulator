@@ -25,14 +25,16 @@ def main():
     parser = argparse.ArgumentParser(description="本地三维咖啡工作站（不连接云端）")
     parser.add_argument("--port", type=int, default=9120)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--twin", action="store_true", help="打开数字孪生仿真实验室")
     args = parser.parse_args()
-    if not (WEB_ROOT / "robot-scene.bundle.js").is_file():
-        raise SystemExit("缺少三维资源，请在项目目录执行 npm ci && npm run build:scene")
+    entry = "digital-twin" if args.twin else "robot-scene"
+    if not (WEB_ROOT / f"{entry}.bundle.js").is_file():
+        raise SystemExit(f"缺少三维资源，请执行 npm ci && npm run build:{'twin' if args.twin else 'scene'}")
     try:
         server = ThreadingHTTPServer(("127.0.0.1", args.port), functools.partial(SceneHandler, directory=str(WEB_ROOT)))
     except OSError as exc:
         raise SystemExit(f"启动失败：{exc}。可使用 --port 指定其他端口。") from exc
-    url = f"http://127.0.0.1:{server.server_port}/robot-scene.html"
+    url = f"http://127.0.0.1:{server.server_port}/{entry}.html"
     print(f"三维工作站：{url}\n按 Ctrl+C 停止。此服务仅提供本地演示，不连接云端。", flush=True)
     if not args.no_browser:
         webbrowser.open(url)

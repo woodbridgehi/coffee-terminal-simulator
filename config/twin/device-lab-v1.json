@@ -1,0 +1,388 @@
+{
+  "schemaVersion": 1,
+  "clock": {
+    "mode": "realtime",
+    "rate": 1
+  },
+  "materials": {
+    "beans": {
+      "amount": 1
+    },
+    "water-stock": {
+      "amount": 5
+    },
+    "milk-stock": {
+      "amount": 2
+    },
+    "ice-stock": {
+      "amount": 2
+    },
+    "syrup-stock": {
+      "amount": 1
+    }
+  },
+  "devices": {
+    "left": {
+      "kind": "robot",
+      "model": "UR10e nominal DH (uncalibrated)",
+      "timing": {
+        "ackDelayMs": 0,
+        "startDelaySeconds": 0.1,
+        "sensorDelaySeconds": 0.04,
+        "warmupSeconds": 0,
+        "durationSeconds": 1,
+        "cooldownSeconds": 0,
+        "cleanSeconds": 5,
+        "resetSeconds": 0.5,
+        "graspSeconds": 0.3,
+        "releaseSeconds": 0.3
+      },
+      "motion": {
+        "limits": [
+          {
+            "min": -6.283185307179586,
+            "max": 6.283185307179586,
+            "velocity": 1.1,
+            "acceleration": 2,
+            "jerk": 8
+          },
+          {
+            "min": -6.283185307179586,
+            "max": 6.283185307179586,
+            "velocity": 1.1,
+            "acceleration": 2,
+            "jerk": 8
+          },
+          {
+            "min": -6.283185307179586,
+            "max": 6.283185307179586,
+            "velocity": 1.1,
+            "acceleration": 2,
+            "jerk": 8
+          },
+          {
+            "min": -6.283185307179586,
+            "max": 6.283185307179586,
+            "velocity": 1.1,
+            "acceleration": 2,
+            "jerk": 8
+          },
+          {
+            "min": -6.283185307179586,
+            "max": 6.283185307179586,
+            "velocity": 1.1,
+            "acceleration": 2,
+            "jerk": 8
+          },
+          {
+            "min": -6.283185307179586,
+            "max": 6.283185307179586,
+            "velocity": 1.1,
+            "acceleration": 2,
+            "jerk": 8
+          }
+        ]
+      }
+    },
+    "right": {
+      "kind": "robot",
+      "model": "UR10e nominal DH (uncalibrated)",
+      "timing": {
+        "ackDelayMs": 0,
+        "startDelaySeconds": 0.1,
+        "sensorDelaySeconds": 0.04,
+        "warmupSeconds": 0,
+        "durationSeconds": 1,
+        "cooldownSeconds": 0,
+        "cleanSeconds": 5,
+        "resetSeconds": 0.5,
+        "graspSeconds": 0.3,
+        "releaseSeconds": 0.3
+      },
+      "motion": {
+        "limits": [
+          {
+            "min": -6.283185307179586,
+            "max": 6.283185307179586,
+            "velocity": 1.1,
+            "acceleration": 2,
+            "jerk": 8
+          },
+          {
+            "min": -6.283185307179586,
+            "max": 6.283185307179586,
+            "velocity": 1.1,
+            "acceleration": 2,
+            "jerk": 8
+          },
+          {
+            "min": -6.283185307179586,
+            "max": 6.283185307179586,
+            "velocity": 1.1,
+            "acceleration": 2,
+            "jerk": 8
+          },
+          {
+            "min": -6.283185307179586,
+            "max": 6.283185307179586,
+            "velocity": 1.1,
+            "acceleration": 2,
+            "jerk": 8
+          },
+          {
+            "min": -6.283185307179586,
+            "max": 6.283185307179586,
+            "velocity": 1.1,
+            "acceleration": 2,
+            "jerk": 8
+          },
+          {
+            "min": -6.283185307179586,
+            "max": 6.283185307179586,
+            "velocity": 1.1,
+            "acceleration": 2,
+            "jerk": 8
+          }
+        ]
+      }
+    },
+    "brewer": {
+      "kind": "processor",
+      "model": "brewer-virtual-v1",
+      "timing": {
+        "ackDelayMs": 0,
+        "startDelaySeconds": 0.1,
+        "sensorDelaySeconds": 0.04,
+        "warmupSeconds": 5,
+        "durationSeconds": 28,
+        "cooldownSeconds": 2,
+        "cleanSeconds": 5,
+        "resetSeconds": 0.5,
+        "graspSeconds": 0.3,
+        "releaseSeconds": 0.3
+      },
+      "process": {
+        "station": "brew",
+        "outputKg": 0.04,
+        "inputs": [
+          {
+            "material": "beans",
+            "amount": 0.018
+          },
+          {
+            "material": "water-stock",
+            "amount": 0.04
+          }
+        ]
+      }
+    },
+    "foamer": {
+      "kind": "processor",
+      "model": "foamer-virtual-v1",
+      "timing": {
+        "ackDelayMs": 0,
+        "startDelaySeconds": 0.1,
+        "sensorDelaySeconds": 0.04,
+        "warmupSeconds": 3,
+        "durationSeconds": 16,
+        "cooldownSeconds": 4,
+        "cleanSeconds": 5,
+        "resetSeconds": 0.5,
+        "graspSeconds": 0.3,
+        "releaseSeconds": 0.3
+      },
+      "process": {
+        "station": "milk",
+        "outputKg": 0.18,
+        "inputs": [
+          {
+            "material": "milk-stock",
+            "amount": 0.18
+          }
+        ]
+      }
+    },
+    "hot-water": {
+      "kind": "processor",
+      "model": "hot-water-virtual-v1",
+      "timing": {
+        "ackDelayMs": 0,
+        "startDelaySeconds": 0.1,
+        "sensorDelaySeconds": 0.04,
+        "warmupSeconds": 4,
+        "durationSeconds": 5,
+        "cooldownSeconds": 1,
+        "cleanSeconds": 5,
+        "resetSeconds": 0.5,
+        "graspSeconds": 0.3,
+        "releaseSeconds": 0.3
+      },
+      "process": {
+        "station": "water",
+        "outputKg": 0.12,
+        "inputs": [
+          {
+            "material": "water-stock",
+            "amount": 0.12
+          }
+        ]
+      }
+    },
+    "lidder": {
+      "kind": "lidder",
+      "model": "lidder-virtual-v1",
+      "timing": {
+        "ackDelayMs": 0,
+        "startDelaySeconds": 0.1,
+        "sensorDelaySeconds": 0.04,
+        "warmupSeconds": 0,
+        "durationSeconds": 2,
+        "cooldownSeconds": 0.5,
+        "cleanSeconds": 5,
+        "resetSeconds": 0.5,
+        "graspSeconds": 0.3,
+        "releaseSeconds": 0.3
+      },
+      "process": {
+        "station": "lid",
+        "outputKg": 0,
+        "inputs": []
+      },
+      "stock": {
+        "initial": 50,
+        "capacity": 100
+      }
+    },
+    "cup-dispenser": {
+      "kind": "dispenser",
+      "model": "cup-magazine-v1",
+      "timing": {
+        "ackDelayMs": 0,
+        "startDelaySeconds": 0.1,
+        "sensorDelaySeconds": 0.04,
+        "warmupSeconds": 0,
+        "durationSeconds": 1.2,
+        "cooldownSeconds": 0,
+        "cleanSeconds": 5,
+        "resetSeconds": 0.5,
+        "graspSeconds": 0.3,
+        "releaseSeconds": 0.3
+      },
+      "process": {
+        "station": "cups",
+        "object": "cup"
+      },
+      "stock": {
+        "initial": 50,
+        "capacity": 100
+      },
+      "cupSensor": {
+        "enabled": true,
+        "radiusMm": 80,
+        "heightToleranceMm": 8
+      }
+    },
+    "ice-maker": {
+      "kind": "processor",
+      "model": "ice-maker-virtual-v1",
+      "timing": {
+        "ackDelayMs": 0,
+        "startDelaySeconds": 0.1,
+        "sensorDelaySeconds": 0.04,
+        "warmupSeconds": 0,
+        "durationSeconds": 3,
+        "cooldownSeconds": 0,
+        "cleanSeconds": 5,
+        "resetSeconds": 0.5,
+        "graspSeconds": 0.3,
+        "releaseSeconds": 0.3
+      },
+      "process": {
+        "station": "ice",
+        "outputKg": 0.1,
+        "inputs": [
+          {
+            "material": "ice-stock",
+            "amount": 0.1
+          }
+        ]
+      }
+    },
+    "syrup-pump": {
+      "kind": "processor",
+      "model": "syrup-pump-virtual-v1",
+      "timing": {
+        "ackDelayMs": 0,
+        "startDelaySeconds": 0.1,
+        "sensorDelaySeconds": 0.04,
+        "warmupSeconds": 0,
+        "durationSeconds": 2,
+        "cooldownSeconds": 0,
+        "cleanSeconds": 5,
+        "resetSeconds": 0.5,
+        "graspSeconds": 0.3,
+        "releaseSeconds": 0.3
+      },
+      "process": {
+        "station": "syrup",
+        "outputKg": 0.015,
+        "inputs": [
+          {
+            "material": "syrup-stock",
+            "amount": 0.015
+          }
+        ]
+      }
+    },
+    "left-gripper": {
+      "kind": "gripper",
+      "model": "Parallel jaw simulated 120 mm extension (hardware rated 85 mm)",
+      "timing": {
+        "ackDelayMs": 0,
+        "startDelaySeconds": 0.1,
+        "sensorDelaySeconds": 0.04,
+        "warmupSeconds": 0,
+        "durationSeconds": 1,
+        "cooldownSeconds": 0,
+        "cleanSeconds": 5,
+        "resetSeconds": 0.5,
+        "graspSeconds": 0.3,
+        "releaseSeconds": 0.3
+      },
+      "gripper": {
+        "robot": "left",
+        "maxOpeningMm": 120,
+        "initialOpeningMm": 120,
+        "openingSpeedMmS": 42.5,
+        "closingSpeedMmS": 42.5,
+        "massKg": 0.7,
+        "maxPayloadKg": 2
+      }
+    },
+    "right-gripper": {
+      "kind": "gripper",
+      "model": "Parallel jaw simulated 120 mm extension (hardware rated 85 mm)",
+      "timing": {
+        "ackDelayMs": 0,
+        "startDelaySeconds": 0.1,
+        "sensorDelaySeconds": 0.04,
+        "warmupSeconds": 0,
+        "durationSeconds": 1,
+        "cooldownSeconds": 0,
+        "cleanSeconds": 5,
+        "resetSeconds": 0.5,
+        "graspSeconds": 0.3,
+        "releaseSeconds": 0.3
+      },
+      "gripper": {
+        "robot": "right",
+        "maxOpeningMm": 120,
+        "initialOpeningMm": 120,
+        "openingSpeedMmS": 42.5,
+        "closingSpeedMmS": 42.5,
+        "massKg": 0.7,
+        "maxPayloadKg": 2
+      }
+    }
+  }
+}
