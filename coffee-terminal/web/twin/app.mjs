@@ -1,31 +1,34 @@
 import {TwinRenderer} from './renderer.mjs';
 import {validateWorld} from './schema.mjs';
-import {latteTasks} from './recipes.mjs';
+import {experimentTasks,sharedWorld} from './shared-config.mjs';
 const $=id=>document.getElementById(id);
-const names={brewer:'咖啡机',foamer:'奶沫机','hot-water':'热水机',lidder:'封盖机',beans:'咖啡豆','water-stock':'水','milk-stock':'牛奶'};
+const names={'cup-dispenser':'落杯器','ice-maker':'制冰机','syrup-pump':'糖浆机','ice-stock':'冰块','syrup-stock':'糖浆',brewer:'咖啡机',foamer:'奶沫机','hot-water':'热水机',lidder:'封盖机',beans:'咖啡豆','water-stock':'水','milk-stock':'牛奶'};
 const modes={warming:'预热',idle:'待机',running:'运行',cooldown:'清洁恢复',fault:'故障',ready:'准备就绪',completed:'制作完成',failed:'任务失败',collision:'碰撞停机',pending:'等待',done:'完成',skipped:'跳过'};
-let config,renderer,worker,state,playing=false,busy=false,replay=null,last=performance.now(),accumulator=0;
+let loadingConfiguration=false,pendingConfiguration=false,defaultWorld,config,renderer,worker,state,playing=false,busy=false,replay=null,last=performance.now(),accumulator=0;
 function pause(){playing=false;$('play').textContent=state?.status==='running'?'继续':'开始';}
 function notify(message) {$('status').textContent=message;}
 function enable(enabled) {for(const id of ['play','step','reset','compare','export','fault','repair','refill'])$(id).disabled=!enabled;}
 function send(data){if(!worker)return;busy=true;worker.postMessage(data);}
 function node(tag,text,className=''){const e=document.createElement(tag);e.textContent=text;e.className=className;return e;}
 function draw(s,events=[]) {
-  state=s;renderer.apply(s);$('clock').textContent=`${s.time.toFixed(2)} s`;$('progress').textContent=`${Object.values(s.tasks).filter(t=>t.status==='done').length} / ${Object.keys(s.tasks).length}`;
+  state=s;renderer.sensorViews=s.deviceSensors?Object.fromEntries(Object.entries(s.deviceSensors).map(([id,sensors])=>[id,{online:true,sensors}])):undefined;renderer.apply(s);$('clock').textContent=`${s.time.toFixed(2)} s`;$('progress').textContent=`${Object.values(s.tasks).filter(t=>t.status==='done').length} / ${Object.keys(s.tasks).length}`;
   notify(`${replay?'回放 · ':''}${modes[s.status]??s.status}${s.collisions.length?` · ${s.collisions[0].a} ↔ ${s.collisions[0].b}`:''}`);
   $('devices').replaceChildren(...Object.entries(s.devices).map(([id,d])=>{const row=node('div','','device');row.append(node('b',names[id]??id),node('span',`${modes[d.mode]??d.mode}${d.remaining>0?' '+d.remaining.toFixed(1)+'s':''}`,`pill ${d.mode}`));return row;}));
   $('materials').replaceChildren(...Object.entries(s.materials).map(([id,m])=>{const row=node('div','','material');row.append(node('span',names[id]??id),node('span',`${m.amount.toFixed(3)} kg${m.reserved>.0001?' · 已预留 '+m.reserved.toFixed(3):''}`));return row;}));
-  $('containers').replaceChildren(...Object.entries(s.objects).map(([id,o])=>node('div',`${id} · ${(Object.values(o.contents).reduce((a,b)=>a+b,0)*1000).toFixed(1)} g · ${o.owner??'已放置'}`,'container')));
-  const taskDefs=replay?.tasks??latteTasks(config),max=Math.max(80,s.time);
+  $('shared-sensors').textContent=s.deviceSensors?Object.entries(s.deviceSensors).map(([id,v])=>`${names[id]??id} · 杯垫：${v.cupSensorEnabled?(v.cupPresent?'有杯':'无杯'):'停用'}`).join(' / '):'';
+  for(const [id,stock] of Object.entries(s.supplies??{})){const row=node('div','','material');row.append(node('span',`${names[id.replace(/-stock$/,'')]??id}库存`),node('span',`${stock.amount} 个`));$('materials').append(row);}
+  $('containers').replaceChildren(...Object.entries(s.objects).map(([id,o])=>node('div',`${id} · ${(Object.values(o.contents).reduce((a,b)=>a+b,0)*1000).toFixed(1)} g · ${o.present===false?'尚未落杯':o.owner??'已放置'}`,'container')));
+  const taskDefs=replay?.tasks??experimentTasks(config),max=Math.max(80,s.time);
   $('gantt').replaceChildren(...taskDefs.map(t=>{const ts=s.tasks[t.id],row=node('div','',`gantt-row ${ts.status}`),track=node('div','','gantt-track');row.title=`${t.id}: ${ts.reason??ts.status}`;row.append(node('span',t.id),track);if(ts.startedAt!==null){const bar=node('div','',`gantt-bar ${t.robot??''}`);bar.style.left=`${ts.startedAt/max*100}%`;bar.style.width=`${Math.max(.3,((ts.finishedAt??s.time)-ts.startedAt)/max*100)}%`;track.append(bar);}return row;}));
   $('events').textContent=events.slice(-15).map(e=>`${e.time.toFixed(2)}  ${e.type} ${e.task??e.reason??''}`).join('\n');
   if(s.status==='running'&&!Object.values(s.tasks).some(t=>t.status==='running')&&Object.values(s.tasks).some(t=>t.reason==='insufficient_material'))notify('等待补料 · 库存不足');
   if(s.status==='failed')notify('任务失败 · '+Object.values(s.tasks).find(t=>t.status==='failed')?.reason);
 }
+function sourceLabel(){const s=config.configurationSource;$('config-source').textContent=s?`配置来源：${s.type==='device-lab'?'联调台快照':s.fileName??'配置文件'}${s.configurationId?' · '+s.configurationId.slice(0,10):''}${s.exportedAt?' · '+new Date(s.exportedAt).toLocaleString():''}。独立运行，联调台修改后需重新载入。`:'配置来源：内置默认场景。';}
 function init(next=config) {
   const validated=validateWorld(next);
   playing=false;busy=false;accumulator=0;replay=null;$('play').textContent='开始';$('seek').disabled=true;enable(false);
-  config=validated;
+  config=validated;sourceLabel();
   const chosen=$('fault-device').value;
   $('fault-device').replaceChildren(...Object.keys(config.devices).map(id=>{const option=node('option',names[id]??id);option.value=id;return option;}));
   if(config.devices[chosen])$('fault-device').value=chosen;
@@ -33,8 +36,8 @@ function init(next=config) {
   worker=new Worker('digital-twin.worker.js',{type:'module'});
   worker.onmessage=({data})=>{
     busy=false;
-    if(data.type==='error'){playing=false;enable(true);notify(data.message);return;}
-    if(data.type==='state'){enable(true);draw(data.state,data.events);if(['completed','failed','collision'].includes(data.state.status)){playing=false;$('play').textContent='开始';}return;}
+    if(data.type==='error'){if(pendingConfiguration){pendingConfiguration=false;$('config-feedback').textContent='实验初始化失败：'+data.message;}playing=false;enable(true);notify(data.message);return;}
+    if(data.type==='state'){if(pendingConfiguration){pendingConfiguration=false;$('config-feedback').textContent=config.sharedDeviceConfig?'已载入设备与布局配置，建立独立实验。机械运动、工艺、库存、夹爪和杯垫参数生效；通信延迟/断连与命令确认请在联调台测试。':'已载入场景，实验已重置。';}enable(true);draw(data.state,data.events);if(['completed','failed','collision'].includes(data.state.status)){playing=false;$('play').textContent='开始';}return;}
     if(data.type==='export'){download(data.data,`coffee-twin-${Date.now()}.json`);return;}
     if(data.type==='compare') {
       enable(true);const [serial,parallel]=data.results;
@@ -55,11 +58,23 @@ $('export').onclick=()=>{pause();if(replay)download(replay,'coffee-twin-replay.j
 $('compare').onclick=()=>{pause();enable(false);$('comparison').textContent='正在执行串行与并行实验…';send({type:'compare',config});};
 for(const type of ['fault','repair'])$(type).onclick=()=>send({type:'command',command:{type,device:$('fault-device').value}});
 $('refill').onclick=()=>send({type:'command',command:{type:'refill',material:'milk-stock',amount:1}});
-$('world-file').onchange=async e=>{try{const file=e.target.files[0];if(file)init(JSON.parse(await file.text()));}catch(e){notify(e.message);}};
+async function loadConfiguration(read){
+ if(loadingConfiguration||playing||busy){$('config-feedback').textContent='请先暂停并等待当前操作结束，再载入配置。';return;}
+ loadingConfiguration=true;$('load-shared').disabled=true;enable(false);$('config-feedback').textContent='正在读取并校验配置…';
+ try{const data=await read();let next=data;
+  if(data.sharedDeviceConfig){sharedWorld(defaultWorld,data.sharedDeviceConfig,data.configurationSource);next=validateWorld(data);}
+  else if(data.devices&&Object.values(data.devices).some(p=>p.kind))next=sharedWorld(defaultWorld,data,{type:'file'});
+  validateWorld(next);init(next);pendingConfiguration=true;$('config-feedback').textContent='配置校验通过，正在初始化独立实验…';
+ }catch(e){enable(!replay);$('reset').disabled=false;$('export').disabled=false;$('config-feedback').textContent=`载入失败，保留原实验：${e.message}。若使用独立静态服务，请从联调台进入实验室，或导入导出的设备配置 JSON。`;}
+ finally{loadingConfiguration=false;$('load-shared').disabled=false;}
+}
+const readShared=async()=>{const r=await fetch('/api/experiment-config',{cache:'no-store'});if(!r.ok)throw Error(`配置服务 HTTP ${r.status}`);return r.json();};
+$('load-shared').onclick=()=>loadConfiguration(readShared);
+$('world-file').onchange=e=>{const file=e.target.files[0];if(file)loadConfiguration(async()=>JSON.parse(await file.text()));e.target.value='';};
 $('replay-file').onchange=async e=>{try{
   const file=e.target.files[0];if(!file)return;const data=JSON.parse(await file.text());validateWorld(data.config);
   if(data.schemaVersion!==1||!Array.isArray(data.trace)||!data.trace.length||!Array.isArray(data.tasks))throw Error('实验文件缺少有效回放轨迹');
-  playing=false;worker?.terminate();worker=null;busy=false;replay=data;config=data.config;renderer?.dispose();renderer=new TwinRenderer($('viewport'),config);renderer.debugVisible=$('collision').checked;renderer.setView($('view').value);renderer.labelsVisible=$('labels').checked;
+  playing=false;worker?.terminate();worker=null;busy=false;replay=data;config=data.config;sourceLabel();renderer?.dispose();renderer=new TwinRenderer($('viewport'),config);renderer.debugVisible=$('collision').checked;renderer.setView($('view').value);renderer.labelsVisible=$('labels').checked;
   enable(false);$('reset').disabled=false;$('export').disabled=false;$('seek').disabled=false;$('seek').max=data.trace.length-1;$('seek').value=0;draw(data.trace[0],[]);
 }catch(e){notify(`回放导入失败：${e.message}`);}};
 $('seek').oninput=()=>{const s=replay.trace[Number($('seek').value)];draw(s,replay.events.filter(e=>e.time<=s.time));};
@@ -68,4 +83,4 @@ function frame(now) {
   if(playing&&!busy&&!replay){accumulator+=elapsed*Number($('speed').value);const ticks=Math.min(50,Math.floor(accumulator/config.dt));if(ticks){accumulator-=ticks*config.dt;send({type:'advance',ticks});}}
   renderer?.render();requestAnimationFrame(frame);
 }
-try{const response=await fetch('twin/coffee-workcell-main-v2.json');if(!response.ok)throw Error(`场景加载 HTTP ${response.status}`);init(await response.json());requestAnimationFrame(frame);}catch(e){notify(e.message);}
+try{const response=await fetch('twin/coffee-workcell-main-v2.json');if(!response.ok)throw Error(`场景加载 HTTP ${response.status}`);defaultWorld=await response.json();init(defaultWorld);requestAnimationFrame(frame);if(new URLSearchParams(location.search).get('source')==='device-lab'){const onReady=setInterval(()=>{if(!busy){clearInterval(onReady);loadConfiguration(readShared);}},50);}}catch(e){notify(e.message);}

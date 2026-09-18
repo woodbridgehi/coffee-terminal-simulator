@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import http from 'node:http';
 import {Worker} from 'node:worker_threads';
 import {readFile} from 'node:fs/promises';
@@ -48,6 +49,7 @@ export async function createDeviceServer({world,config,port=9131}={}){
     if(req.method==='GET'){
      if(path==='/api/state')result=await rpc('snapshot');
      else if(path==='/api/devices')result=(await rpc('snapshot')).devices;
+     else if(path==='/api/experiment-config'){const s=await rpc('snapshot');result={...s.world,sharedDeviceConfig:s.config,configurationSource:{type:'device-lab',configurationId:createHash('sha256').update(JSON.stringify({world:s.world,devices:s.config})).digest('hex'),sessionId:s.sessionId,installationRevision:s.installationRevision,exportedAt:new Date().toISOString()}};}
      else if(path==='/api/config')result=(await rpc('snapshot')).config;
      else if(/^\/api\/devices\/[^/]+$/.test(path))result=await rpc('device',{deviceId:decodeURIComponent(path.split('/')[3])});
      else if(/^\/api\/commands\/[^/]+$/.test(path))result=await rpc('command',{commandId:decodeURIComponent(path.split('/')[3])});
