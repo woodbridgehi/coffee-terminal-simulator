@@ -4,6 +4,7 @@
 
 | 目的 | 当前文档 |
 | --- | --- |
+| 项目与 UI 设计交接、离线 HTML 范例 | [设计资料包](ui-design-handoff/README.md) · [HTML 入口](ui-design-handoff/index.html) |
 | 运行时、状态、SQLite和传输边界 | [DESIGN.md](../coffee-terminal/DESIGN.md) |
 | 云端协议、本地接口与联调 | [API.md](../coffee-terminal/API.md) |
 | 实例、配方、材料、历史版本 | [配置参考](../config/README.md) |

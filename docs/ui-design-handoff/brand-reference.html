@@ -1,0 +1,1054 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coffee Terminal × QARM 千臂机器人 · 品牌符号系统</title>
+<style>
+:root{
+  --forest-950:#0B2D24; --forest-900:#123D31; --forest-700:#1F5A46; --forest-500:#34795D; --forest-300:#75A58E;
+  --cream-50:#FFF9F0; --cream-100:#F6F0E5; --cream-200:#E9DFD0;
+  --espresso-900:#342219; --espresso-700:#5A3827; --espresso-500:#8A5A3B;
+  --brass-500:#B78A52; --brass-300:#D7B67E;
+  --c-title:#17382D; --c-body:#342F2A; --c-sub:#746D64; --c-line:#DDD3C4;
+  --console:#0D1713;
+  --ink:#17382D; --brass:#B78A52;
+  --font-ui:"Inter","Manrope","SF Pro Display",-apple-system,BlinkMacSystemFont,"PingFang SC","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-display:"Source Han Serif SC","Noto Serif SC","Songti SC","Iowan Old Style",Charter,Georgia,serif;
+  --font-mono:"JetBrains Mono","SF Mono",Menlo,Consolas,"PingFang SC",monospace;
+  --e-out:cubic-bezier(.22,1,.36,1);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth}
+html,body{margin:0}
+body{background:var(--cream-100);color:var(--c-body);font-family:var(--font-ui);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:var(--forest-700);text-decoration:none}
+a:hover{color:var(--forest-500)}
+a:focus-visible,button:focus-visible{outline:3px solid var(--brass-500);outline-offset:2px;border-radius:6px}
+svg{display:block}
+.num,.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+::selection{background:rgba(52,121,93,.22)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 44px}
+section{scroll-margin-top:76px}
+
+/* ── 顶栏 ── */
+.topnav{position:sticky;top:0;z-index:60;height:60px;background:rgba(255,249,240,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--c-line)}
+.topnav .wrap{display:flex;align-items:center;gap:28px;height:100%}
+.topnav .brand{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:12px;letter-spacing:.2em;font-weight:600;color:var(--c-title)}
+.topnav nav{display:flex;gap:4px;margin-left:auto}
+.topnav nav a{font-size:13px;color:var(--c-sub);padding:7px 11px;border-radius:999px;transition:all .15s var(--e-out)}
+.topnav nav a:hover{color:var(--c-title);background:var(--cream-200)}
+
+
+/* ── QARM 母品牌背书系统 ── */
+.qarm-endorsement{display:inline-flex;align-items:center;justify-content:center;gap:10px;font-family:var(--font-mono);color:var(--forest-700);letter-spacing:.12em;text-transform:uppercase}
+.qarm-endorsement .qarm-word{font-weight:800;letter-spacing:.18em;color:var(--c-title)}
+.qarm-endorsement .qarm-cn{font-family:var(--font-ui);font-weight:650;letter-spacing:.08em;color:var(--c-title)}
+.qarm-endorsement .qarm-divider{width:18px;height:1px;background:var(--brass-500)}
+.qarm-endorsement .qarm-role{font-size:9px;color:var(--c-sub);letter-spacing:.18em}
+.qarm-micro{font-family:var(--font-ui);font-size:9px;letter-spacing:.08em;font-weight:600;color:var(--c-sub);padding-left:10px;border-left:1px solid var(--c-line);white-space:nowrap}
+.masterline{display:flex;justify-content:center;margin:0 0 18px}
+.brand-arch{grid-template-columns:1.1fr 1fr 1fr}
+.arch-card{padding:24px;display:flex;flex-direction:column;gap:12px}
+.arch-card .eyebrow{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;color:var(--brass-500);text-transform:uppercase}
+.arch-card h3{margin:0;font-size:18px;color:var(--c-title)}
+.arch-card p{margin:0;font-size:12.8px;color:var(--c-sub)}
+.arch-lock{min-height:126px;border-radius:12px;background:var(--cream-100);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:9px;text-align:center;padding:18px}
+.arch-lock.dark{background:var(--forest-900)}
+.arch-lock .coffee{font-size:20px;font-weight:800;letter-spacing:.17em;color:var(--c-title)}
+.arch-lock.dark .coffee{color:var(--cream-50)}
+.arch-lock .byline{font-family:var(--font-ui);font-size:10px;font-weight:650;letter-spacing:.12em;color:var(--c-sub)}
+.arch-lock.dark .byline{color:rgba(255,249,240,.64)}
+.arch-lock .qarm{font-family:var(--font-mono);font-weight:800;letter-spacing:.18em;color:var(--forest-700)}
+.arch-lock.dark .qarm{color:var(--brass-300)}
+.arch-rules{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:7px;font-size:12.5px;color:var(--c-body)}
+.parent-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--brass-300);background:rgba(183,138,82,.07);border-radius:999px;padding:5px 10px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;color:var(--c-title)}
+.parent-chip::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--brass-500)}
+
+/* ── Hero ── */
+.hero{position:relative;overflow:hidden;border-bottom:1px solid var(--c-line)}
+.hero .patbg{position:absolute;inset:0;width:100%;height:100%;opacity:.5}
+.hero .glow{position:absolute;inset:0;background:radial-gradient(900px 420px at 50% -120px, rgba(183,138,82,.12), transparent 66%)}
+.hero .wrap{position:relative;padding-top:84px;padding-bottom:76px;text-align:center}
+.kicker{font-family:var(--font-mono);font-size:11px;letter-spacing:.26em;color:var(--forest-500);text-transform:uppercase}
+.hero h1{font-family:var(--font-display);font-size:42px;line-height:1.2;color:var(--c-title);margin:14px 0 10px;font-weight:600}
+.hero .defn{max-width:640px;margin:0 auto 40px;color:var(--c-sub);font-size:15px}
+.hero .lockup{display:flex;align-items:center;justify-content:center;gap:22px}
+.hero .lockup svg{width:76px;height:76px}
+.hero .lockup .wm{font-size:34px;font-weight:700;letter-spacing:.18em;color:var(--c-title);white-space:nowrap}
+.wm-cursor{display:inline-block;width:.6em;height:.12em;background:var(--brass-500);border-radius:2px;margin-left:.28em}
+.chips{display:flex;gap:10px;justify-content:center;margin-top:44px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:8px;background:var(--cream-50);border:1px solid var(--c-line);border-radius:999px;padding:7px 15px;font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--c-sub)}
+.chip i{width:12px;height:12px;border-radius:4px;display:inline-block}
+
+/* ── 通用 section 骨架 ── */
+.sec{padding:74px 0 6px}
+.sec-head{margin-bottom:30px}
+.sec-head h2{font-size:27px;color:var(--c-title);margin:8px 0 6px;font-weight:700;letter-spacing:-.01em}
+.sec-head p{margin:0;color:var(--c-sub);max-width:760px}
+.subhead{font-family:var(--font-mono);font-size:11px;letter-spacing:.22em;color:var(--forest-700);text-transform:uppercase;margin:34px 0 14px}
+.card{background:var(--cream-50);border:1px solid var(--c-line);border-radius:16px}
+.grid{display:grid;gap:16px}
+
+/* ── DNA ── */
+.dna-grid{grid-template-columns:1.05fr 1fr;align-items:stretch}
+.blueprint{padding:26px;display:flex;align-items:center;justify-content:center}
+.blueprint svg{width:100%;max-width:430px;height:auto}
+.dna-rules{padding:26px 26px 20px;display:flex;flex-direction:column;gap:0}
+.dna-rules h3{margin:0 0 4px;font-size:16px;color:var(--c-title)}
+.dna-rules ol{margin:10px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:10px;font-size:13.5px}
+.dna-rules .mono-tag{font-family:var(--font-mono);font-size:11px;color:var(--forest-700);background:rgba(52,121,93,.08);border-radius:5px;padding:1px 7px}
+
+/* ── 概念卡 ── */
+.concept-grid{grid-template-columns:repeat(3,1fr)}
+.concept{padding:20px;display:flex;flex-direction:column;gap:10px;position:relative}
+.concept .art{height:96px;display:flex;align-items:center;justify-content:center;background:var(--cream-100);border-radius:12px}
+.concept .art svg{width:60px;height:60px}
+.concept h4{margin:2px 0 0;font-size:15.5px;color:var(--c-title)}
+.concept h4 .en{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;color:var(--brass-500);margin-left:8px;text-transform:uppercase}
+.concept p{margin:0;font-size:12.8px;color:var(--c-sub)}
+.concept .use{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;color:var(--forest-700)}
+.concept.picked{border-color:var(--brass-300);box-shadow:0 0 0 1px var(--brass-300) inset}
+.concept .flag{position:absolute;top:14px;right:14px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em;color:var(--brass-500);border:1px solid var(--brass-300);border-radius:999px;padding:2px 9px;background:var(--cream-50)}
+
+/* ── 评分表 ── */
+table.score{width:100%;border-collapse:collapse;background:var(--cream-50);border:1px solid var(--c-line);border-radius:16px;overflow:hidden}
+.score th,.score td{padding:11px 16px;text-align:center;font-size:13px;border-bottom:1px solid var(--c-line)}
+.score th{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;color:var(--c-sub);font-weight:600;background:var(--cream-100)}
+.score td:first-child,.score th:first-child{text-align:left}
+.score td:last-child{font-family:var(--font-mono);font-weight:600;color:var(--c-title)}
+.score tr.top td{background:rgba(183,138,82,.07)}
+.score tr.top td:first-child::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--brass-500);margin-right:9px;vertical-align:1px}
+.score tr:last-child td{border-bottom:0}
+.pick-note{margin-top:14px;font-size:13px;color:var(--c-sub);background:var(--cream-50);border-left:3px solid var(--brass-500);border-radius:0 10px 10px 0;padding:12px 18px}
+
+/* ── Top3 ── */
+.final-grid{grid-template-columns:repeat(3,1fr)}
+.final{padding:24px;display:flex;flex-direction:column;gap:12px}
+.final .art{height:132px;display:flex;align-items:center;justify-content:center;background:var(--forest-900);border-radius:12px}
+.final .art svg{width:84px;height:84px;--bm-ink:#F6F0E5;--bm-brass:#D7B67E}
+.final h4{margin:0;font-size:16px;color:var(--c-title)}
+.final h4 .en{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;color:var(--brass-500);margin-left:8px}
+.final dl{margin:0;display:flex;flex-direction:column;gap:8px;font-size:12.8px}
+.final dt{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;color:var(--forest-500);text-transform:uppercase;margin-bottom:2px}
+.final dd{margin:0;color:var(--c-body);line-height:1.55}
+
+/* ── 主标识 ── */
+.id-grid{grid-template-columns:repeat(12,1fr)}
+.id-card{padding:26px;display:flex;flex-direction:column;gap:14px}
+.id-card h4{margin:0;font-size:14.5px;color:var(--c-title)}
+.id-card h4 .en{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;color:var(--brass-500);margin-left:8px}
+.id-card .stage{background:var(--cream-100);border-radius:12px;display:flex;align-items:center;justify-content:center;min-height:150px;padding:24px}
+.id-card .note{font-size:12.3px;color:var(--c-sub);margin:0}
+.span7{grid-column:span 7}.span5{grid-column:span 5}.span6{grid-column:span 6}.span4{grid-column:span 4}.span8{grid-column:span 8}.span12{grid-column:span 12}
+.sizes-row{display:flex;align-items:flex-end;gap:26px}
+.sizes-row .sz{display:flex;flex-direction:column;align-items:center;gap:8px;font-family:var(--font-mono);font-size:10px;color:var(--c-sub)}
+.wm-big{font-size:26px;font-weight:700;letter-spacing:.18em;color:var(--c-title);white-space:nowrap}
+.spec-line{font-family:var(--font-mono);font-size:10.5px;color:var(--c-sub);letter-spacing:.04em}
+
+/* ── 装饰 Mark ── */
+.mark-grid{grid-template-columns:repeat(5,1fr)}
+.mark{padding:16px;text-align:center}
+.mark .cell{height:78px;display:flex;align-items:center;justify-content:center;background:var(--cream-100);border-radius:10px}
+.mark .cell svg{width:40px;height:40px}
+.mark h5{margin:10px 0 1px;font-size:13px;color:var(--c-title)}
+.mark .mono-id{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;color:var(--brass-500);text-transform:uppercase}
+.mark p{margin:5px 0 0;font-size:11.3px;color:var(--c-sub);line-height:1.5}
+
+/* ── 徽章 / Glyph / 图案 ── */
+.badge-grid{grid-template-columns:repeat(3,1fr)}
+.badge-card{padding:24px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.badge-card .st{min-height:170px;display:flex;align-items:center;justify-content:center;width:100%}
+.badge-card p{margin:0;font-size:12.3px;color:var(--c-sub);text-align:center}
+.glyph-grid{grid-template-columns:repeat(6,1fr)}
+.pat-grid{grid-template-columns:repeat(3,1fr)}
+.pat-demo{position:relative;overflow:hidden;min-height:210px;display:flex;flex-direction:column;justify-content:flex-end}
+.pat-demo .patbg{position:absolute;inset:0;width:100%;height:100%}
+.pat-demo .cap{position:relative;padding:16px 18px;font-size:12.3px}
+.pat-demo h5{margin:0 0 3px;font-size:13.5px}
+.pat-demo .mono-id{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;color:var(--brass-500)}
+
+/* ── 色彩 / 场景 / 尺寸 ── */
+.color-row{display:grid;grid-template-columns:210px 1fr 300px;gap:0;align-items:center;border:1px solid var(--c-line);border-radius:14px;overflow:hidden;background:var(--cream-50)}
+.color-row + .color-row{margin-top:12px}
+.color-row .demo{padding:22px 26px;display:flex;align-items:center;gap:18px}
+.color-row .demo svg{width:52px;height:52px;flex:none}
+.color-row .demo .wm{font-size:17px;font-weight:700;letter-spacing:.18em;white-space:nowrap}
+.color-row .lbl{padding:0 20px;font-size:13px;color:var(--c-title);font-weight:600}
+.color-row .spec{padding:0 22px;text-align:right;font-family:var(--font-mono);font-size:10.5px;line-height:1.8;letter-spacing:.03em}
+.scene-grid{grid-template-columns:repeat(4,1fr)}
+.scene{border-radius:14px;min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.scene .wm{font-size:12px;font-weight:700;letter-spacing:.2em}
+.scene .mono-id{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em}
+.ladder{display:flex;align-items:flex-end;gap:34px;flex-wrap:wrap}
+.tabmock{display:flex;gap:0;align-items:flex-end;background:var(--cream-200);border-radius:12px 12px 0 0;padding:10px 12px 0;margin-top:26px}
+.tabmock .tab{display:flex;align-items:center;gap:9px;background:var(--cream-50);border-radius:10px 10px 0 0;padding:9px 16px;font-size:12px;color:var(--c-title)}
+.wrong-grid{grid-template-columns:repeat(3,1fr)}
+.wrong{padding:18px;text-align:center}
+.wrong .cell{height:86px;display:flex;align-items:center;justify-content:center;background:var(--cream-100);border-radius:10px;position:relative}
+.wrong .x{position:absolute;top:8px;right:10px;font-family:var(--font-mono);font-size:11px;color:#B64C3C}
+.wrong p{margin:9px 0 0;font-size:11.8px;color:var(--c-sub)}
+
+/* ── UI 应用示例 ── */
+.use-grid{grid-template-columns:1fr 1fr}
+.use{overflow:hidden;display:flex;flex-direction:column}
+.use .cap{padding:13px 18px;border-top:1px solid var(--c-line);font-size:12.3px;color:var(--c-sub);display:flex;justify-content:space-between;gap:10px;align-items:center}
+.use .cap b{color:var(--c-title);font-size:12.8px}
+.use .stage{flex:1;display:flex}
+/* mock：顾客屏页头 */
+.m-top{flex:1;background:var(--cream-100);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:18px 20px;gap:12px}
+.m-conn{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--c-sub)}
+.m-dot{width:8px;height:8px;border-radius:50%;background:#2E7658;box-shadow:0 0 0 3px rgba(46,118,88,.14);animation:breath 2.8s ease-in-out infinite}
+.m-dev{display:inline-flex;align-items:center;gap:9px;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.18em;color:var(--c-title);font-weight:600}
+.m-dev svg{width:20px;height:20px}
+.m-cmdbtn{justify-self:end;font-family:var(--font-mono);font-size:11px;color:var(--c-sub);border:1px solid var(--c-line);background:var(--cream-50);border-radius:999px;padding:6px 13px;transition:all .15s var(--e-out)}
+.m-cmdbtn:hover{border-color:var(--forest-500);color:var(--forest-700)}
+/* mock：QR 角标 */
+.m-qr{flex:1;background:var(--cream-100);display:flex;align-items:center;justify-content:center;gap:26px;padding:22px}
+.qr-card{position:relative;width:158px;height:158px;background:var(--cream-50);border:1px solid var(--brass-300);border-radius:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 14px 34px rgba(50,34,24,.09)}
+.qr-inner{width:104px;height:104px;background:
+  conic-gradient(var(--c-title) 25%, transparent 0 50%, var(--c-title) 0 75%, transparent 0) 0 0/26px 26px,
+  var(--cream-50);border-radius:6px;opacity:.92}
+.m-qr .cap2{max-width:170px}
+.m-qr .cap2 b{display:block;font-family:var(--font-display);font-size:19px;color:var(--c-title);font-weight:600;margin-bottom:5px}
+.m-qr .cap2 span{font-size:12px;color:var(--c-sub)}
+/* mock：控制台 */
+.m-console{flex:1;background:var(--console);display:flex;align-items:center;gap:14px;padding:20px 22px}
+.m-console svg.mk{width:26px;height:26px;--bm-ink:#EDF2EE;--bm-brass:#D0A166}
+.m-console .t{font-family:var(--font-mono);font-size:12px;letter-spacing:.2em;color:#EDF2EE;font-weight:600}
+.m-console .sub{font-family:var(--font-mono);font-size:10px;color:#687870;letter-spacing:.08em}
+.m-badge{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;padding:4px 11px;border-radius:999px}
+.m-badge.run{color:#55C893;background:rgba(85,200,147,.12)}
+.m-badge .bd{width:6px;height:6px;border-radius:50%;background:#55C893;animation:breath 2.8s ease-in-out infinite}
+/* mock：onboarding 品牌栏 */
+.m-OB{flex:1;position:relative;background:var(--forest-900);padding:24px;display:flex;flex-direction:column;gap:14px;overflow:hidden}
+.m-OB .patbg{position:absolute;inset:0;width:100%;height:100%;opacity:.55}
+.m-OB>*{position:relative}
+.m-OB .wm{font-family:var(--font-mono);font-size:11px;letter-spacing:.24em;color:#FFF9F0;font-weight:600}
+.m-OB h5{margin:2px 0 0;font-family:var(--font-display);font-size:22px;color:#FFF9F0;font-weight:600}
+.m-OB p{margin:0;font-size:11.5px;color:rgba(255,249,240,.72);max-width:300px}
+.m-steps{display:flex;gap:18px;margin-top:4px;font-size:11px}
+.m-step{display:flex;align-items:center;gap:7px;color:rgba(255,249,240,.55)}
+.m-step .n{width:18px;height:18px;border-radius:50%;border:1.5px solid rgba(255,249,240,.4);display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9.5px}
+.m-step.done{color:#D7B67E}
+.m-step.done .n{background:#D7B67E;border-color:#D7B67E;color:#123D31}
+.m-step.cur{color:#FFF9F0}
+.m-step.cur .n{border-color:#D7B67E;color:#D7B67E}
+/* mock：空态 / 加载 / 页脚 */
+.m-empty{flex:1;background:var(--cream-100);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center}
+.m-empty svg{width:34px;height:34px;--bm-ink:var(--forest-500)}
+.m-empty b{font-size:14px;color:var(--c-title)}
+.m-empty span{font-size:11.5px;color:var(--c-sub)}
+.m-load{flex:1;background:var(--cream-100);display:flex;align-items:center;justify-content:center;gap:30px;padding:24px}
+.m-load svg.big{width:58px;height:58px}
+.blink{animation:blink 1.3s steps(1) infinite}
+@keyframes blink{0%,55%{opacity:1}56%,100%{opacity:0}}
+.arcload{width:44px;height:44px}
+.arcload circle{animation:spin 1.6s linear infinite;transform-origin:center}
+@keyframes spin{to{transform:rotate(360deg)}}
+.m-load .t{font-family:var(--font-mono);font-size:11.5px;color:var(--c-sub);letter-spacing:.1em}
+@keyframes breath{0%,100%{opacity:1}50%{opacity:.45}}
+.m-foot{flex:1;background:var(--forest-950);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:26px}
+.m-foot .lock{display:flex;align-items:center;gap:12px}
+.m-foot .lock svg{width:26px;height:26px;--bm-ink:#F6F0E5;--bm-brass:#D7B67E}
+.m-foot .lock .wm{font-size:12.5px;font-weight:700;letter-spacing:.2em;color:#F6F0E5}
+.m-foot .tag{font-size:11.5px;color:rgba(255,249,240,.66)}
+
+/* ── 动效 ── */
+.motion-grid{grid-template-columns:1.2fr .8fr}
+table.motion{width:100%;border-collapse:collapse;background:var(--cream-50);border:1px solid var(--c-line);border-radius:16px;overflow:hidden}
+.motion th,.motion td{padding:10px 16px;font-size:12.6px;border-bottom:1px solid var(--c-line);text-align:left}
+.motion th{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;color:var(--c-sub);background:var(--cream-100)}
+.motion td:last-child{font-family:var(--font-mono);font-size:11px;color:var(--forest-700)}
+.motion tr:last-child td{border-bottom:0}
+.motion-demo{padding:24px;display:flex;flex-direction:column;gap:16px}
+.motion-demo .row{display:flex;align-items:center;gap:16px;background:var(--cream-100);border-radius:12px;padding:14px 18px}
+.motion-demo .row svg{width:44px;height:44px;flex:none}
+.motion-demo .row b{font-size:13px;color:var(--c-title);display:block}
+.motion-demo .row span{font-size:11.3px;color:var(--c-sub)}
+.breathdot{width:12px;height:12px;border-radius:50%;background:#2E7658;box-shadow:0 0 0 4px rgba(46,118,88,.14);animation:breath 2.8s ease-in-out infinite}
+
+/* ── 资产表 ── */
+table.assets{width:100%;border-collapse:collapse;background:var(--cream-50);border:1px solid var(--c-line);border-radius:16px;overflow:hidden}
+.assets th,.assets td{padding:10px 16px;font-size:12.6px;border-bottom:1px solid var(--c-line);text-align:left}
+.assets th{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;color:var(--c-sub);background:var(--cream-100)}
+.assets td:first-child{font-family:var(--font-mono);font-size:11.5px;color:var(--forest-700)}
+.assets tr:last-child td{border-bottom:0}
+
+/* ── 页脚 ── */
+.foot{margin-top:80px;border-top:1px solid var(--c-line);background:var(--forest-950)}
+.foot .wrap{display:flex;align-items:center;gap:16px;padding-top:34px;padding-bottom:38px}
+.foot svg{width:34px;height:34px;--bm-ink:#F6F0E5;--bm-brass:#D7B67E}
+.foot .wm{font-size:14px;font-weight:700;letter-spacing:.2em;color:#F6F0E5}
+.foot .tag{margin-left:auto;font-size:12px;color:rgba(255,249,240,.6)}
+
+@media (max-width:1060px){
+  .dna-grid,.id-grid{grid-template-columns:1fr}
+  .span7,.span5,.span6,.span4,.span8,.span12{grid-column:span 12}
+  .concept-grid,.final-grid,.badge-grid{grid-template-columns:repeat(2,1fr)}
+  .mark-grid,.glyph-grid{grid-template-columns:repeat(3,1fr)}
+  .scene-grid,.pat-grid,.use-grid,.wrong-grid,.motion-grid,.brand-arch{grid-template-columns:1fr}
+  .color-row{grid-template-columns:1fr;gap:8px}
+  .color-row .spec{text-align:left;padding:0 26px 16px}
+  .topnav nav{display:none}
+  .wrap{padding:0 22px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .m-dot,.bd,.breathdot,.blink,.arcload circle{animation:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════ SVG 资产精灵：所有符号经 CSS 变量 --bm-ink / --bm-brass 重着色 ══════ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<defs>
+  <pattern id="pat-bean" width="48" height="56" patternUnits="userSpaceOnUse">
+    <g stroke="#17382D" stroke-width="1.1" fill="none" opacity=".16">
+      <ellipse cx="16" cy="18" rx="6" ry="8"/><path d="M16 10c-2.6 2.8 2.6 11.2 0 16"/>
+      <ellipse cx="40" cy="46" rx="6" ry="8"/><path d="M40 38c-2.6 2.8 2.6 11.2 0 16"/>
+    </g>
+  </pattern>
+  <pattern id="pat-motion" width="120" height="80" patternUnits="userSpaceOnUse">
+    <g stroke="#17382D" stroke-width="1.2" fill="none" opacity=".16">
+      <path d="M-6 16h56q14 0 14 14v20q0 14 14 14h48"/><path d="M54 96v-20q0-14 14-14h52"/>
+    </g>
+    <circle cx="70" cy="50" r="2.4" fill="#B78A52" opacity=".3"/>
+  </pattern>
+  <pattern id="pat-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+    <path d="M24 0v24H0" stroke="#17382D" stroke-width=".7" fill="none" opacity=".13"/>
+  </pattern>
+  <pattern id="pat-grid-cream" width="24" height="24" patternUnits="userSpaceOnUse">
+    <path d="M24 0v24H0" stroke="#F6F0E5" stroke-width=".7" fill="none" opacity=".12"/>
+  </pattern>
+
+  <symbol id="sym-logo" viewBox="0 0 64 64" fill="none">
+    <rect x="17" y="15" width="25" height="35" rx="7" stroke="var(--bm-ink,#17382D)" stroke-width="4"/>
+    <path d="M42 27a7 7 0 0 1 0 12" stroke="var(--bm-ink,#17382D)" stroke-width="4"/>
+    <path d="M24.5 27h11" stroke="var(--bm-brass,#B78A52)" stroke-width="4" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="sym-mono" viewBox="0 0 64 64" fill="none">
+    <path d="M50.6 18.5A23 23 0 1 0 50.6 45.5" stroke="var(--bm-ink,#17382D)" stroke-width="4"/>
+    <path d="M21.5 24.5h21" stroke="var(--bm-ink,#17382D)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M32 24.5V37" stroke="var(--bm-ink,#17382D)" stroke-width="4" stroke-linecap="round"/>
+    <rect x="28.5" y="40.5" width="7" height="5.5" rx="1.6" fill="var(--bm-brass,#B78A52)"/>
+  </symbol>
+  <symbol id="sym-bean" viewBox="0 0 64 64" fill="none">
+    <ellipse cx="27" cy="37" rx="13" ry="17" stroke="var(--bm-ink,#17382D)" stroke-width="4"/>
+    <path d="M27 20c-7.5 8 7.5 26 0 34" stroke="var(--bm-ink,#17382D)" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M27 20c2-6 6.5-9 12.5-10.5" stroke="var(--bm-ink,#17382D)" stroke-width="3.5" stroke-linecap="round"/>
+    <circle cx="43" cy="8" r="3.5" fill="var(--bm-brass,#B78A52)"/>
+  </symbol>
+  <symbol id="sym-pour" viewBox="0 0 64 64" fill="none">
+    <circle cx="12" cy="15" r="3" fill="var(--bm-ink,#17382D)"/>
+    <path d="M12 15h24q6.5 0 6.5 6.5V33" stroke="var(--bm-ink,#17382D)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M42.5 39.5c3.9 4.9 5.9 7.4 5.9 10a5.9 5.9 0 0 1-11.8 0c0-2.6 2-5.1 5.9-10Z" fill="var(--bm-brass,#B78A52)"/>
+  </symbol>
+  <symbol id="sym-badge" viewBox="0 0 64 64" fill="none">
+    <rect x="4" y="4" width="56" height="56" rx="14" stroke="#B78A52" stroke-width="2.2"/>
+    <rect x="20" y="18" width="19" height="27" rx="5.5" stroke="#FFF9F0" stroke-width="3"/>
+    <path d="M39 26a5.5 5.5 0 0 1 0 11" stroke="#FFF9F0" stroke-width="3"/>
+    <path d="M25.5 26h8.5" stroke="#D7B67E" stroke-width="3" stroke-linecap="round"/>
+  </symbol>
+
+  <symbol id="m-cup" viewBox="0 0 24 24" fill="none">
+    <rect x="5" y="5.5" width="10" height="13" rx="3" stroke="var(--bm-ink,#17382D)" stroke-width="2"/>
+    <path d="M15 9a3.2 3.2 0 0 1 0 6.4" stroke="var(--bm-ink,#17382D)" stroke-width="2"/>
+    <path d="M7.8 9.5h4.4" stroke="var(--bm-brass,#B78A52)" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="m-bean" viewBox="0 0 24 24" fill="none">
+    <ellipse cx="10.5" cy="13.5" rx="5" ry="6.5" stroke="var(--bm-ink,#17382D)" stroke-width="2"/>
+    <path d="M10.5 7c-2.7 2.8 2.7 10.2 0 13" stroke="var(--bm-ink,#17382D)" stroke-width="1.75" stroke-linecap="round"/>
+    <path d="M10.5 7c.9-2.5 3-3.6 5.4-4" stroke="var(--bm-ink,#17382D)" stroke-width="1.75" stroke-linecap="round"/>
+    <circle cx="17.6" cy="2.6" r="1.5" fill="var(--bm-brass,#B78A52)"/>
+  </symbol>
+  <symbol id="m-brew" viewBox="0 0 24 24" fill="none">
+    <path d="M12 3.5c2.6 3.3 3.9 5 3.9 6.9a3.9 3.9 0 0 1-7.8 0c0-1.9 1.3-3.6 3.9-6.9Z" fill="var(--bm-ink,#17382D)"/>
+    <path d="M6.2 17.8a5.8 5.8 0 0 0 11.6 0" stroke="var(--bm-ink,#17382D)" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="m-pour" viewBox="0 0 24 24" fill="none">
+    <circle cx="4.8" cy="6" r="1.6" fill="var(--bm-ink,#17382D)"/>
+    <path d="M4.8 6H13q4.8 0 4.8 4.8V13" stroke="var(--bm-ink,#17382D)" stroke-width="2" stroke-linecap="round"/>
+    <path d="M17.8 15.2c2 2.5 3 3.7 3 5a3 3 0 0 1-6 0c0-1.3 1-2.5 3-5Z" fill="var(--bm-brass,#B78A52)"/>
+  </symbol>
+  <symbol id="m-robot" viewBox="0 0 24 24" fill="none">
+    <circle cx="5" cy="18.5" r="2.4" stroke="var(--bm-ink,#17382D)" stroke-width="2"/>
+    <path d="M6.9 17l3.7-3.6Q12 12 14 12h4.3" stroke="var(--bm-ink,#17382D)" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="10.6" cy="13.4" r="1.3" fill="var(--bm-ink,#17382D)"/>
+    <circle cx="20.6" cy="12" r="1.9" fill="var(--bm-brass,#B78A52)"/>
+  </symbol>
+  <symbol id="m-live" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="8.5" stroke="var(--bm-ink,#17382D)" stroke-width="2" opacity=".45"/>
+    <circle cx="12" cy="12" r="3.2" fill="var(--bm-brass,#B78A52)"/>
+  </symbol>
+  <symbol id="m-ai" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="17.6" r="2" fill="var(--bm-brass,#B78A52)"/>
+    <path d="M8 14.2a5.7 5.7 0 0 1 8 0" stroke="var(--bm-ink,#17382D)" stroke-width="2" stroke-linecap="round"/>
+    <path d="M5.4 10.6a9.3 9.3 0 0 1 13.2 0" stroke="var(--bm-ink,#17382D)" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="m-flow" viewBox="0 0 24 24" fill="none">
+    <circle cx="5.2" cy="7" r="2.4" stroke="var(--bm-ink,#17382D)" stroke-width="2"/>
+    <path d="M5.2 9.4V12q0 3.4 3.4 3.4h7.4" stroke="var(--bm-ink,#17382D)" stroke-width="2" stroke-linecap="round"/>
+    <rect x="16" y="12.6" width="5.6" height="5.6" rx="1.6" fill="var(--bm-brass,#B78A52)"/>
+  </symbol>
+  <symbol id="m-ready" viewBox="0 0 24 24" fill="none">
+    <path d="M12 3.5A8.5 8.5 0 1 0 20.5 12" stroke="var(--bm-ink,#17382D)" stroke-width="2" stroke-linecap="round"/>
+    <path d="M8 12.4l3 3 9.4-9.8" stroke="var(--bm-brass,#B78A52)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="m-terminal" viewBox="0 0 24 24" fill="none">
+    <path d="M5.5 7l6 5-6 5" stroke="var(--bm-ink,#17382D)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M13.5 17.5H19" stroke="var(--bm-brass,#B78A52)" stroke-width="2.5" stroke-linecap="round"/>
+  </symbol>
+
+  <symbol id="g-steam" viewBox="0 0 24 24" fill="none">
+    <path d="M12 22C8.5 18.5 15.5 15 12 11.5 8.5 8 15.5 5 12 1.5" stroke="var(--bm-ink,#17382D)" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="g-drop" viewBox="0 0 24 24" fill="none">
+    <path d="M12 3c3.2 4 4.8 6.1 4.8 8.2a4.8 4.8 0 0 1-9.6 0C7.2 9.1 8.8 7 12 3Z" fill="var(--bm-ink,#17382D)"/>
+  </symbol>
+  <symbol id="g-split" viewBox="0 0 24 24" fill="none">
+    <path d="M12 2c-4.5 5 4.5 15 0 20" stroke="var(--bm-ink,#17382D)" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="g-ticks" viewBox="0 0 24 24" fill="none">
+    <path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5" stroke="var(--bm-ink,#17382D)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="g-arc" viewBox="0 0 24 24" fill="none">
+    <path d="M12 3.5A8.5 8.5 0 1 0 20.5 12" stroke="var(--bm-ink,#17382D)" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="20.5" cy="12" r="2.2" fill="var(--bm-brass,#B78A52)"/>
+  </symbol>
+  <symbol id="g-pulse" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="15.5" r="2.4" fill="var(--bm-brass,#B78A52)"/>
+    <path d="M7.6 10.6a6.2 6.2 0 0 1 8.8 0" stroke="var(--bm-ink,#17382D)" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+</defs>
+</svg>
+
+<!-- ══════ 顶栏 ══════ -->
+<header class="topnav" data-od-id="topnav">
+  <div class="wrap">
+    <span class="brand"><svg width="22" height="22"><use href="#sym-logo"/></svg>COFFEE TERMINAL <span class="qarm-micro">BY QARM · 千臂机器人</span></span>
+    <nav aria-label="页面导航">
+      <a href="#architecture">品牌架构</a><a href="#dna">设计基因</a><a href="#concepts">概念探索</a><a href="#identity">主标识</a><a href="#marks">装饰系统</a><a href="#usage">应用场景</a><a href="#motion">动效</a><a href="#assets">资产</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ══════ Hero ══════ -->
+<section class="hero" id="hero" data-od-id="hero">
+  <svg class="patbg" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="100%" height="100%" fill="url(#pat-grid)"/></svg>
+  <div class="glow"></div>
+  <div class="wrap">
+    <div class="masterline"><div class="qarm-endorsement"><span class="qarm-word">QARM</span><span class="qarm-divider"></span><span class="qarm-cn">千臂机器人</span><span class="qarm-role">MASTER BRAND</span></div></div>
+    <p class="kicker">Brand Mark System · v1.1 · Endorsed by QARM</p>
+    <h1>QARM 千臂机器人旗下 · Coffee Terminal 视觉符号语言</h1>
+    <p class="defn">以 QARM「千臂机器人」作为技术母品牌，Coffee Terminal 作为面向消费者的机器人饮品子品牌。视觉继续以森林深绿、奶油白与 espresso 暖棕为底色，用黄铜细节承载精密感；母品牌只做克制背书，不抢占 Coffee Terminal 的消费品牌识别。</p>
+    <div class="lockup">
+      <svg aria-hidden="true"><use href="#sym-logo"/></svg>
+      <span class="wm">COFFEE TERMINAL<span class="wm-cursor"></span></span>
+    </div>
+    <div class="chips">
+      <span class="chip"><i style="background:#123D31"></i>FOREST 系统 · 智能 / 稳定</span>
+      <span class="chip"><i style="background:#F6F0E5;border:1px solid #DDD3C4"></i>CREAM 体验 · 温暖 / 纸感</span>
+      <span class="chip"><i style="background:#5A3827"></i>ESPRESSO 工艺 · 咖啡 / 液体</span>
+      <span class="chip"><i style="background:#B78A52"></i>BRASS 精密 · 仅作单一点缀</span>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+
+<!-- ══════ 0 品牌架构：QARM × Coffee Terminal ══════ -->
+<section class="sec" id="architecture" data-od-id="architecture">
+  <div class="sec-head">
+    <p class="kicker">Master Brand Architecture</p>
+    <h2>品牌架构：QARM 千臂机器人 × Coffee Terminal</h2>
+    <p>QARM / 千臂机器人负责承载机器人技术、平台能力与企业信用；Coffee Terminal 负责承载门店、饮品、服务体验与消费者记忆。二者采用“母品牌背书型子品牌”关系，而不是把两个名称强行合成一个 Logo。</p>
+  </div>
+  <div class="grid brand-arch">
+    <div class="card arch-card">
+      <span class="eyebrow">MASTER BRAND</span>
+      <div class="arch-lock">
+        <span class="qarm" style="font-size:25px">QARM</span>
+        <span style="font-size:13px;font-weight:650;letter-spacing:.18em;color:var(--c-title)">千臂机器人</span>
+        <span class="parent-chip">ROBOTICS PLATFORM</span>
+      </div>
+      <h3>母品牌 · 企业与技术信用</h3>
+      <p>用于公司介绍、机器人平台、设备铭牌、技术文档、合作伙伴物料与门店背书。当前未提供 QARM 官方图形 Logo，因此本规范仅定义字标背书，不虚构新的母品牌图形。</p>
+    </div>
+    <div class="card arch-card">
+      <span class="eyebrow">CONSUMER BRAND</span>
+      <div class="arch-lock">
+        <svg width="56" height="56" aria-hidden="true"><use href="#sym-logo"/></svg>
+        <span class="coffee">COFFEE TERMINAL<span class="wm-cursor"></span></span>
+      </div>
+      <h3>子品牌 · 消费者第一识别</h3>
+      <p>门头、菜单、点单屏、杯身、取杯台与所有消费触点仍以 Coffee Terminal 为第一识别。QARM 不替代杯沿光标，也不进入主 Logo 内部。</p>
+    </div>
+    <div class="card arch-card">
+      <span class="eyebrow">ENDORSED LOCKUP</span>
+      <div class="arch-lock dark">
+        <svg width="42" height="42" style="--bm-ink:#F6F0E5;--bm-brass:#D7B67E" aria-hidden="true"><use href="#sym-logo"/></svg>
+        <span class="coffee" style="font-size:16px">COFFEE TERMINAL</span>
+        <span class="byline">BY <span class="qarm">QARM</span> · 千臂机器人</span>
+      </div>
+      <h3>背书组合 · 克制出现</h3>
+      <ol class="arch-rules">
+        <li>母品牌字标高度建议为 Coffee Terminal 字标高度的 28–35%。</li>
+        <li>默认文案：<b>BY QARM · 千臂机器人</b>；对外英文可用 <b>A QARM ROBOTICS BRAND</b>。</li>
+        <li>适合门店次级铭牌、设备侧标、Splash / About、包装底部与页脚；不用于菜单主标题和促销 CTA。</li>
+        <li>母品牌与子品牌之间保持至少 1× 主符号杯柄半径的净空。</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════ 1 设计基因 ══════ -->
+<section class="sec" id="dna" data-od-id="dna">
+  <div class="sec-head">
+    <p class="kicker">Geometry DNA</p>
+    <h2>设计基因：五组可复用的几何母题</h2>
+    <p>整套符号系统由五个基本形构成——圆角矩形、正圆弧、短横光标、S 曲线与 45° 网格点。任何新装饰图形都必须能用这五组母题拼出。</p>
+  </div>
+  <div class="grid dna-grid">
+    <div class="card blueprint">
+      <svg viewBox="0 0 300 250" fill="none" role="img" aria-label="主符号几何解剖图">
+        <g stroke="#DDD3C4" stroke-width="1" stroke-dasharray="2 4">
+          <path d="M20 62h260M20 130h260M20 198h260M60 20v210M150 20v210M240 20v210"/>
+        </g>
+        <g transform="translate(86,61) scale(2)">
+          <rect x="17" y="15" width="25" height="35" rx="7" stroke="#17382D" stroke-width="4"/>
+          <path d="M42 27a7 7 0 0 1 0 12" stroke="#17382D" stroke-width="4"/>
+          <path d="M24.5 27h11" stroke="#B78A52" stroke-width="4" stroke-linecap="round"/>
+        </g>
+        <circle cx="170" cy="127" r="14" stroke="#B78A52" stroke-width="1" stroke-dasharray="3 3"/>
+        <path d="M150 116H20" stroke="#75A58E" stroke-width="1" stroke-dasharray="3 3"/>
+        <path d="M118.5 98.5H240" stroke="#B78A52" stroke-width="1" stroke-dasharray="3 3"/>
+        <g font-family="JetBrains Mono,Menlo,Consolas,monospace" font-size="9" fill="#746D64">
+          <text x="24" y="110">光标 y=27，与柄顶锚点同高</text>
+          <text x="176" y="103">柄 = 正圆弧 R7</text>
+          <text x="150" y="212">杯身 = 圆角矩形 25×35 · rx7 · 笔画 4/64</text>
+          <text x="24" y="32">字体网格 64×64 · 等价 24×24 / 笔画 2</text>
+        </g>
+        <g font-family="JetBrains Mono,Menlo,Consolas,monospace" font-size="9" fill="#B78A52">
+          <text x="24" y="94">黄铜光标 _（唯一彩色点缀）</text>
+        </g>
+      </svg>
+    </div>
+    <div class="card dna-rules">
+      <h3>母题与规则</h3>
+      <ol>
+        <li><b>圆角矩形</b>——杯身与容器的基础形，rx = 笔画宽的 1.75 倍；<span class="mono-tag">25×35 @64</span></li>
+        <li><b>正圆弧</b>——杯柄、C 环、信号弧，全部来自同一圆心体系；<span class="mono-tag">R7 @64</span></li>
+        <li><b>短横光标</b>——系统的签名元素：液面即终端光标 <span class="mono-tag">_</span>，在 wordmark、terminal、ready 中复用</li>
+        <li><b>S 曲线</b>——咖啡豆裂线、蒸汽、注液流，共用同一曲率；<span class="mono-tag">c±7.5,8</span></li>
+        <li><b>45° 网格点</b>——节点圆点与校准刻度，永远落在 8 的倍数上</li>
+      </ol>
+      <p style="margin:16px 0 0;font-size:12.5px;color:var(--c-sub)">笔画阶梯：<span class="mono-tag">4 @64 → 2 @24 → 1 @16</span>，端点与转角一律圆头；黄铜在每个图形中最多出现一次，只落在光标、节点或对勾上。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════ 2 概念探索 ══════ -->
+<section class="sec" id="concepts" data-od-id="concepts">
+  <div class="sec-head">
+    <p class="kicker">Concept Exploration</p>
+    <h2>六个概念：从杯沿到轨迹</h2>
+    <p>先发散后收敛。六个方向共享同一色板与笔画语言，仅在几何母题的组合方式上彼此拉开差异。</p>
+  </div>
+  <div class="grid concept-grid">
+    <div class="card concept picked">
+      <span class="flag">TOP 1</span>
+      <div class="art"><svg aria-hidden="true"><use href="#sym-logo"/></svg></div>
+      <h4>杯沿光标<span class="en">Rim Cursor</span></h4>
+      <p>杯身内唯一的横线既是液面，也是终端光标——杯子永远在等待下一条指令。第一眼是杯，第二眼是终端。</p>
+      <span class="use">主 Logo · Favicon · 设备铭牌</span>
+    </div>
+    <div class="card concept picked">
+      <span class="flag">TOP 2</span>
+      <div class="art"><svg aria-hidden="true"><use href="#sym-bean"/></svg></div>
+      <h4>豆径轨迹<span class="en">Bean Trajectory</span></h4>
+      <p>咖啡豆的裂线延长为机械运动轨迹，终点落在黄铜节点上——原料与机械臂在一条曲线上相遇。</p>
+      <span class="use">加载 · 配方/物料 · 装饰 Mark</span>
+    </div>
+    <div class="card concept">
+      <div class="art"><svg aria-hidden="true"><use href="#sym-mono"/></svg></div>
+      <h4>CT 字环<span class="en">CT Seal</span></h4>
+      <p>断口圆环 C 包裹由横杠、竖笔与光标块组成的 T；环的缺口与光标块同色，字母组合自然生长出终端语义。</p>
+      <span class="use">Monogram · Avatar · Favicon</span>
+    </div>
+    <div class="card concept">
+      <div class="art">
+        <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
+          <circle cx="32" cy="30" r="16" stroke="#17382D" stroke-width="4"/>
+          <path d="M32 9v6M53 30h-6M32 51v-6M11 30h6" stroke="#17382D" stroke-width="4" stroke-linecap="round"/>
+          <path d="M32 30l-11-8" stroke="#B78A52" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="32" cy="30" r="3.5" fill="#B78A52"/>
+        </svg>
+      </div>
+      <h4>萃取刻度<span class="en">Brew Gauge</span></h4>
+      <p>把萃取当作精密仪器的标定过程：刻度环、指针与中心轴构成铭牌式符号，工程感最强。</p>
+      <span class="use">徽章 · 铭牌 · 校准场景</span>
+    </div>
+    <div class="card concept">
+      <div class="art">
+        <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
+          <rect x="20" y="28" width="22" height="24" rx="6" stroke="#17382D" stroke-width="4"/>
+          <path d="M42 34a6 6 0 0 1 0 12" stroke="#17382D" stroke-width="4"/>
+          <path d="M26 8v7M36 12v7" stroke="#75A58E" stroke-width="4" stroke-linecap="round" stroke-dasharray="3.5 4"/>
+          <path d="M26 37h10" stroke="#B78A52" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h4>提示蒸汽<span class="en">Prompt Steam</span></h4>
+      <p>虚线蒸汽向上升腾，尽头是黄铜光标；温度感与俏皮度最高，但技术语义最弱。</p>
+      <span class="use">营销物料 · 周边贴纸</span>
+    </div>
+    <div class="card concept picked">
+      <span class="flag">TOP 3</span>
+      <div class="art"><svg aria-hidden="true"><use href="#sym-pour"/></svg></div>
+      <h4>注路轨迹<span class="en">Pour Path</span></h4>
+      <p>一条 90° 圆角轨迹从信号源走到黄铜液滴——机械臂的路径就是注咖啡的路径，天然可平铺成图案。</p>
+      <span class="use">Pattern · 分节装饰 · 流程图示</span>
+    </div>
+  </div>
+
+  <h3 class="subhead">概念评分 · 1–5 分</h3>
+  <table class="score" data-od-id="score-table">
+    <thead><tr><th>概念</th><th>识别度</th><th>咖啡属性</th><th>技术属性</th><th>延展性</th><th>UI 兼容</th><th>品牌潜力</th><th>总分</th></tr></thead>
+    <tbody>
+      <tr class="top"><td>杯沿光标 Rim Cursor</td><td>5</td><td>4</td><td>4</td><td>5</td><td>5</td><td>5</td><td>28</td></tr>
+      <tr class="top"><td>豆径轨迹 Bean Trajectory</td><td>4</td><td>5</td><td>3</td><td>5</td><td>4</td><td>4</td><td>25</td></tr>
+      <tr class="top"><td>注路轨迹 Pour Path</td><td>5</td><td>3</td><td>4</td><td>4</td><td>4</td><td>4</td><td>24</td></tr>
+      <tr><td>CT 字环 CT Seal</td><td>4</td><td>2</td><td>4</td><td>5</td><td>5</td><td>4</td><td>24</td></tr>
+      <tr><td>提示蒸汽 Prompt Steam</td><td>4</td><td>5</td><td>2</td><td>4</td><td>4</td><td>3</td><td>22</td></tr>
+      <tr><td>萃取刻度 Brew Gauge</td><td>3</td><td>4</td><td>4</td><td>3</td><td>3</td><td>4</td><td>21</td></tr>
+    </tbody>
+  </table>
+  <p class="pick-note">收敛结论：CT 字环与注路轨迹同为 24 分，但 CT 字环的咖啡属性仅 2 分——它被保留为<b>派生的 Monogram</b> 而非独立概念；注路轨迹提供了另两个方向都没有的「动线母题」，与豆径轨迹同属路径语言、系统互补性更强，故入选 Top 3。杯沿光标虽几何最简，但其识别度来自隐藏语义与全系统复用，品牌潜力最高，确定为主符号。</p>
+</section>
+
+<!-- ══════ 3 Top 3 深化 ══════ -->
+<section class="sec" id="final" data-od-id="final">
+  <div class="sec-head">
+    <p class="kicker">Final Candidates</p>
+    <h2>Top 3 深化设计</h2>
+  </div>
+  <div class="grid final-grid">
+    <div class="card final">
+      <div class="art"><svg aria-hidden="true"><use href="#sym-logo"/></svg></div>
+      <h4>杯沿光标<span class="en">Rim Cursor · Primary</span></h4>
+      <dl>
+        <div><dt>核心想法</dt><dd>杯内唯一横线 = 液面 = 终端光标，杯体即待命状态的输入框。</dd></div>
+        <div><dt>几何构成</dt><dd>圆角矩形杯身 + 正圆弧柄 + 黄铜短横，共 3 个核心几何。</dd></div>
+        <div><dt>隐藏语义</dt><dd>光标与柄顶锚点同高（y=27），暗示「液面被系统精确标定」。</dd></div>
+        <div><dt>优势 / 风险</dt><dd>3 笔成立、16px 清晰、可眨眼化为加载态；风险是横线易被读成单纯水位，需靠系统复用强化光标语义。</dd></div>
+      </dl>
+    </div>
+    <div class="card final">
+      <div class="art"><svg aria-hidden="true"><use href="#sym-bean"/></svg></div>
+      <h4>豆径轨迹<span class="en">Bean Trajectory · Support</span></h4>
+      <dl>
+        <div><dt>核心想法</dt><dd>豆子的裂线继续向上延伸，离开豆体后成为机械轨迹，终结于黄铜节点。</dd></div>
+        <div><dt>几何构成</dt><dd>椭圆豆体 + S 裂线 + 延伸弧 + 节点圆点，共 4 个核心几何。</dd></div>
+        <div><dt>隐藏语义</dt><dd>咖啡豆是被机器阅读的输入，节点是机械臂的末端执行器。</dd></div>
+        <div><dt>优势 / 风险</dt><dd>咖啡属性最强的候选、天然适合加载旋转；风险是小尺寸下延伸弧退化为普通豆子（可接受的优雅降级）。</dd></div>
+      </dl>
+    </div>
+    <div class="card final">
+      <div class="art"><svg aria-hidden="true"><use href="#sym-pour"/></svg></div>
+      <h4>注路轨迹<span class="en">Pour Path · Motif</span></h4>
+      <dl>
+        <div><dt>核心想法</dt><dd>机械臂的运动轨迹与注咖啡的路径是同一条 90° 圆角折线。</dd></div>
+        <div><dt>几何构成</dt><dd>起点节点 + 两段正交圆角线 + 黄铜液滴，共 3 个核心几何。</dd></div>
+        <div><dt>隐藏语义</dt><dd>横线是传送带/路径，拐角半径与杯身 rx 一致——全系统共用同一圆角。</dd></div>
+        <div><dt>优势 / 风险</dt><dd>可无缝平铺为 Motion Path 图案、适合分节与流程；风险是咖啡属性靠液滴单点支撑，不单独作主 Logo。</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ══════ 4 主标识系统 ══════ -->
+<section class="sec" id="identity" data-od-id="identity">
+  <div class="sec-head">
+    <p class="kicker">Primary Identity</p>
+    <h2>主标识系统</h2>
+    <p>主符号、字标、横排 / 紧凑组合、Monogram 与设备徽章共用同一几何基因；黄铜只允许出现在光标（或单一节点）上。QARM 作为母品牌以独立背书行出现，不并入杯沿光标主符号。</p>
+  </div>
+  <div class="grid id-grid">
+    <div class="card id-card span7">
+      <h4>主符号<span class="en">PRIMARY SYMBOL</span></h4>
+      <div class="stage">
+        <div class="sizes-row">
+          <span class="sz"><svg width="128" height="128"><use href="#sym-logo"/></svg>128</span>
+          <span class="sz"><svg width="64" height="64"><use href="#sym-logo"/></svg>64</span>
+          <span class="sz"><svg width="32" height="32"><use href="#sym-logo"/></svg>32</span>
+          <span class="sz"><svg width="16" height="16"><use href="#sym-logo"/></svg>16</span>
+        </div>
+      </div>
+      <p class="note">3 个核心几何 · 16px 仍然成立。加载场景下黄铜光标以 <span class="num">steps(1) 1.3s</span> 眨眼（见「动效」）。</p>
+    </div>
+    <div class="card id-card span5">
+      <h4>字标<span class="en">WORDMARK</span></h4>
+      <div class="stage"><span class="wm-big">COFFEE TERMINAL<span class="wm-cursor"></span></span></div>
+      <p class="note">排版型字标：UI 无衬线 Bold + <span class="num">0.18em</span> 字距 + 基线黄铜光标。SVG 资产用 <span class="num">textLength</span> 锁宽以对冲平台字体差异。</p>
+      <p class="spec-line">仅全大写 · 不换行 · 最小高度 12px</p>
+    </div>
+    <div class="card id-card span7">
+      <h4>横排组合<span class="en">HORIZONTAL LOCKUP</span></h4>
+      <div class="stage" style="gap:18px">
+        <svg width="52" height="52" aria-hidden="true"><use href="#sym-logo"/></svg>
+        <span class="wm-big" style="font-size:22px">COFFEE TERMINAL<span class="wm-cursor"></span></span>
+      </div>
+      <p class="note">符号高 : 字标高 ≈ 2 : 1，间距 = 符号高的 25%。用于页头、页脚、Splash、关于页。</p>
+    </div>
+    <div class="card id-card span12">
+      <h4>母品牌背书组合<span class="en">ENDORSED BY QARM · 千臂机器人</span></h4>
+      <div class="stage" style="gap:24px">
+        <svg width="52" height="52" aria-hidden="true"><use href="#sym-logo"/></svg>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
+          <span class="wm-big" style="font-size:22px">COFFEE TERMINAL<span class="wm-cursor"></span></span>
+          <span style="font-family:var(--font-ui);font-size:9.5px;letter-spacing:.14em;color:var(--c-sub);font-weight:650">BY <b style="color:var(--forest-700);letter-spacing:.18em">QARM</b> · 千臂机器人</span>
+        </div>
+      </div>
+      <p class="note">用于门店次级标牌、机器人工作站铭牌、官网 About、包装底部及对外宣传的企业背书；消费者第一识别始终保持 Coffee Terminal。</p>
+    </div>
+    <div class="card id-card span5">
+      <h4>紧凑组合<span class="en">COMPACT LOCKUP</span></h4>
+      <div class="stage" style="flex-direction:column;gap:8px">
+        <svg width="56" height="56" aria-hidden="true"><use href="#sym-logo"/></svg>
+        <span style="font-family:var(--font-mono);font-size:11px;letter-spacing:.3em;color:var(--c-title);font-weight:600">COFFEE<br>TERMINAL</span>
+      </div>
+      <p class="note">窄空间（侧栏、安装向导品牌位）使用；双行居中，不放光标。</p>
+    </div>
+    <div class="card id-card span4">
+      <h4>Monogram<span class="en">CT</span></h4>
+      <div class="stage">
+        <div class="sizes-row" style="gap:18px">
+          <span class="sz"><svg width="64" height="64"><use href="#sym-mono"/></svg>64</span>
+          <span class="sz"><svg width="32" height="32"><use href="#sym-mono"/></svg>32</span>
+          <span class="sz"><svg width="16" height="16"><use href="#sym-mono"/></svg>16</span>
+        </div>
+      </div>
+      <p class="note">断环 C + 杠/竖/光标块 T，由杯柄弧派生。用于 Avatar、Favicon、设备铭牌水印。</p>
+    </div>
+    <div class="card id-card span4">
+      <h4>设备徽章<span class="en">DEVICE BADGE</span></h4>
+      <div class="stage" style="background:var(--forest-900)">
+        <div class="sizes-row" style="gap:18px">
+          <span class="sz"><svg width="88" height="88"><use href="#sym-badge"/></svg>88</span>
+          <span class="sz" style="color:rgba(255,249,240,.7)"><svg width="46" height="46"><use href="#sym-badge"/></svg>46</span>
+        </div>
+      </div>
+      <p class="note">黄铜圆角方框 + 奶油杯体，专用于森林深色面板（安装向导品牌位、机身铭牌）。</p>
+    </div>
+    <div class="card id-card span4">
+      <h4>净空与最小尺寸<span class="en">CLEAR SPACE</span></h4>
+      <div class="stage">
+        <svg width="180" height="180" viewBox="0 0 180 180" fill="none" aria-label="净空示意图">
+          <rect x="25" y="25" width="130" height="130" stroke="#B78A52" stroke-width="1" stroke-dasharray="4 4"/>
+          <rect x="45" y="45" width="90" height="90" rx="0" stroke="#DDD3C4" stroke-width="0"/>
+          <g transform="translate(53,53) scale(1.15625)"><use href="#sym-logo" width="64" height="64"/></g>
+          <g font-family="JetBrains Mono,Menlo,Consolas,monospace" font-size="9" fill="#746D64">
+            <text x="25" y="18">净空 = 符号高 × 25%（≥1 个柄半径）</text>
+            <text x="25" y="172">最小：符号 16px · 横排高 24px · Monogram 16px</text>
+          </g>
+        </svg>
+      </div>
+      <p class="note">净空内不得出现文字、分割线或其他图形；背景只需与符号保持 AA 对比。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════ 5 装饰 Mark 系统 ══════ -->
+<section class="sec" id="marks" data-od-id="marks">
+  <div class="sec-head">
+    <p class="kicker">Decorative Mark System</p>
+    <h2>十个装饰 Mark</h2>
+    <p>与主符号同一网格（24×24 / 笔画 2）、同一圆角、同一黄铜规则，各自表达一个产品概念。禁止当通用图标库使用——只在下述语义场景出现。</p>
+  </div>
+  <div class="grid mark-grid">
+    <div class="card mark"><div class="cell"><svg><use href="#m-cup"/></svg></div><h5>杯</h5><span class="mono-id">CUP</span><p>容器与饮品入口</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#m-bean"/></svg></div><h5>豆径</h5><span class="mono-id">BEAN</span><p>原料、配方与物料</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#m-brew"/></svg></div><h5>萃取</h5><span class="mono-id">BREW</span><p>制作过程、步骤进行中</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#m-pour"/></svg></div><h5>注路</h5><span class="mono-id">POUR</span><p>出杯动线、流程指示</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#m-robot"/></svg></div><h5>关节</h5><span class="mono-id">ROBOT</span><p>机械运动、校准与调试</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#m-live"/></svg></div><h5>呼吸</h5><span class="mono-id">LIVE</span><p>在线、实时状态与 LIVE 徽标</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#m-ai"/></svg></div><h5>处理</h5><span class="mono-id">AI</span><p>智能运算、思考中</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#m-flow"/></svg></div><h5>任务流</h5><span class="mono-id">FLOW</span><p>任务队列、步骤管线</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#m-ready"/></svg></div><h5>完成</h5><span class="mono-id">READY</span><p>就绪态、成功反馈</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#m-terminal"/></svg></div><h5>提示符</h5><span class="mono-id">TERMINAL</span><p>开发控制台、工程入口</p></div>
+  </div>
+
+  <h3 class="subhead">Badge / Seal 系统</h3>
+  <div class="grid badge-grid">
+    <div class="card badge-card">
+      <div class="st"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNDAgMTQwIiBmaWxsPSJub25lIj4KICA8dGl0bGU+QUkgQnJldyBTeXN0ZW0gU2VhbDwvdGl0bGU+CiAgPGNpcmNsZSBjeD0iNzAiIGN5PSI3MCIgcj0iNjYiIHN0cm9rZT0iIzE3MzgyRCIgc3Ryb2tlLXdpZHRoPSIxLjUiLz4KICA8Y2lyY2xlIGN4PSI3MCIgY3k9IjcwIiByPSI1OCIgc3Ryb2tlPSIjMTczODJEIiBzdHJva2Utd2lkdGg9IjIuNCIgc3Ryb2tlLWRhc2hhcnJheT0iMyAyNy4zNyIgb3BhY2l0eT0iLjU1Ii8+CiAgPHBhdGggaWQ9ImJtLWFyYy10b3AiIGQ9Ik0yMiA3MGE0OCA0OCAwIDAgMSA5NiAwIiBmaWxsPSJub25lIi8+CiAgPHBhdGggaWQ9ImJtLWFyYy1idG0iIGQ9Ik0yMiA3MGE0OCA0OCAwIDAgMCA5NiAwIiBmaWxsPSJub25lIi8+CiAgPHRleHQgZm9udC1mYW1pbHk9IidKZXRCcmFpbnMgTW9ubycsJ1NGIE1vbm8nLE1lbmxvLENvbnNvbGFzLG1vbm9zcGFjZSIgZm9udC1zaXplPSI5LjUiIGxldHRlci1zcGFjaW5nPSIyLjYiIGZpbGw9IiMxNzM4MkQiPgogICAgPHRleHRQYXRoIGhyZWY9IiNibS1hcmMtdG9wIiBzdGFydE9mZnNldD0iNTAlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5BSSBCUkVXIFNZU1RFTTwvdGV4dFBhdGg+CiAgPC90ZXh0PgogIDx0ZXh0IGZvbnQtZmFtaWx5PSInSmV0QnJhaW5zIE1vbm8nLCdTRiBNb25vJyxNZW5sbyxDb25zb2xhcyxtb25vc3BhY2UiIGZvbnQtc2l6ZT0iOS41IiBsZXR0ZXItc3BhY2luZz0iMi42IiBmaWxsPSIjMTczODJEIj4KICAgIDx0ZXh0UGF0aCBocmVmPSIjYm0tYXJjLWJ0bSIgc3RhcnRPZmZzZXQ9IjUwJSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+Q09GRkVFIFRFUk1JTkFMPC90ZXh0UGF0aD4KICA8L3RleHQ+CiAgPGNpcmNsZSBjeD0iMjIiIGN5PSI3MCIgcj0iMiIgZmlsbD0iI0I3OEE1MiIvPjxjaXJjbGUgY3g9IjExOCIgY3k9IjcwIiByPSIyIiBmaWxsPSIjQjc4QTUyIi8+CiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNTAuMiw1MC41KSBzY2FsZSguNikiPgogICAgPHJlY3QgeD0iMTciIHk9IjE1IiB3aWR0aD0iMjUiIGhlaWdodD0iMzUiIHJ4PSI3IiBzdHJva2U9IiMxNzM4MkQiIHN0cm9rZS13aWR0aD0iNS42Ii8+CiAgICA8cGF0aCBkPSJNNDIgMjdhNyA3IDAgMCAxIDAgMTIiIHN0cm9rZT0iIzE3MzgyRCIgc3Ryb2tlLXdpZHRoPSI1LjYiLz4KICAgIDxwYXRoIGQ9Ik0yNC41IDI3aDExIiBzdHJva2U9IiNCNzhBNTIiIHN0cm9rZS13aWR0aD0iNS42IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8L2c+Cjwvc3ZnPgo=" width="150" height="150" alt="AI Brew System 印章"></div>
+      <p><b class="mono" style="color:var(--c-title);letter-spacing:.12em">AI BREW SYSTEM</b><br>Hero、关于页与设备信息面板的圆形印章；环形文字为等宽字体，两枚黄铜节点封口。</p>
+    </div>
+    <div class="card badge-card">
+      <div class="st"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMzIgNzYiIGZpbGw9Im5vbmUiPgogIDx0aXRsZT5QcmVjaXNpb24gQnJldyBMYWJlbDwvdGl0bGU+CiAgPHJlY3QgeD0iMiIgeT0iMiIgd2lkdGg9IjIyOCIgaGVpZ2h0PSI3MiIgcng9IjEyIiBzdHJva2U9IiMxNzM4MkQiIHN0cm9rZS13aWR0aD0iMS42Ii8+CiAgPGNpcmNsZSBjeD0iMzQiIGN5PSIzOCIgcj0iMTIuNSIgc3Ryb2tlPSIjMTczODJEIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8cGF0aCBkPSJNMzQgMjUuNXYzLjVNNDYuNSAzOEg0M00zNCA1MC41VjQ3TTIxLjUgMzhIMjUiIHN0cm9rZT0iIzE3MzgyRCIgc3Ryb2tlLXdpZHRoPSIxLjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0zNCAzOGwtNy41LTcuNSIgc3Ryb2tlPSIjQjc4QTUyIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxjaXJjbGUgY3g9IjM0IiBjeT0iMzgiIHI9IjIuNCIgZmlsbD0iI0I3OEE1MiIvPgogIDx0ZXh0IHg9IjU4IiB5PSIzNSIgZm9udC1mYW1pbHk9IkludGVyLCBNYW5yb3BlLCAnSGVsdmV0aWNhIE5ldWUnLCBBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMy41IiBmb250LXdlaWdodD0iNzAwIiBsZXR0ZXItc3BhY2luZz0iMi4yIiBmaWxsPSIjMTczODJEIj5QUkVDSVNJT04gQlJFVzwvdGV4dD4KICA8dGV4dCB4PSI1OCIgeT0iNTIiIGZvbnQtZmFtaWx5PSInSmV0QnJhaW5zIE1vbm8nLCdTRiBNb25vJyxNZW5sbyxDb25zb2xhcyxtb25vc3BhY2UiIGZvbnQtc2l6ZT0iOCIgbGV0dGVyLXNwYWNpbmc9IjEuNCIgZmlsbD0iIzc0NkQ2NCI+QVVUT05PTU9VUyBFWFRSQUNUSU9OPC90ZXh0Pgo8L3N2Zz4K" width="232" height="76" alt="Precision Brew 技术铭牌"></div>
+      <p><b class="mono" style="color:var(--c-title);letter-spacing:.12em">PRECISION BREW</b><br>工业铭牌式横排徽章：标定环 + 黄铜指针。用于设备参数区、空状态与包装标签。</p>
+    </div>
+    <div class="card badge-card">
+      <div class="st"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNDAgMTQwIiBmaWxsPSJub25lIj4KICA8dGl0bGU+QXV0b25vbW91cyBDb2ZmZWUgU3RhbXA8L3RpdGxlPgogIDxjaXJjbGUgY3g9IjcwIiBjeT0iNzAiIHI9IjY2IiBzdHJva2U9IiMxNzM4MkQiIHN0cm9rZS13aWR0aD0iMS41Ii8+CiAgPGNpcmNsZSBjeD0iNzAiIGN5PSI3MCIgcj0iNTUiIHN0cm9rZT0iIzE3MzgyRCIgc3Ryb2tlLXdpZHRoPSIxIiBvcGFjaXR5PSIuNiIvPgogIDxwYXRoIGQ9Ik03MCA0djgiIHN0cm9rZT0iI0I3OEE1MiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8cGF0aCBpZD0iYm0tc3RhbXAtdG9wIiBkPSJNMjYgNzBhNDQgNDQgMCAwIDEgODggMCIgZmlsbD0ibm9uZSIvPgogIDxwYXRoIGlkPSJibS1zdGFtcC1idG0iIGQ9Ik0yNiA3MGE0NCA0NCAwIDAgMCA4OCAwIiBmaWxsPSJub25lIi8+CiAgPHRleHQgZm9udC1mYW1pbHk9IidKZXRCcmFpbnMgTW9ubycsJ1NGIE1vbm8nLE1lbmxvLENvbnNvbGFzLG1vbm9zcGFjZSIgZm9udC1zaXplPSI5IiBsZXR0ZXItc3BhY2luZz0iMi40IiBmaWxsPSIjMTczODJEIj4KICAgIDx0ZXh0UGF0aCBocmVmPSIjYm0tc3RhbXAtdG9wIiBzdGFydE9mZnNldD0iNTAlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5BVVRPTk9NT1VTIENPRkZFRTwvdGV4dFBhdGg+CiAgPC90ZXh0PgogIDx0ZXh0IGZvbnQtZmFtaWx5PSInSmV0QnJhaW5zIE1vbm8nLCdTRiBNb25vJyxNZW5sbyxDb25zb2xhcyxtb25vc3BhY2UiIGZvbnQtc2l6ZT0iOSIgbGV0dGVyLXNwYWNpbmc9IjIuNCIgZmlsbD0iIzE3MzgyRCI+CiAgICA8dGV4dFBhdGggaHJlZj0iI2JtLXN0YW1wLWJ0bSIgc3RhcnRPZmZzZXQ9IjUwJSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+RlJFU0hMWSBNQURFPC90ZXh0UGF0aD4KICA8L3RleHQ+CiAgPGVsbGlwc2UgY3g9IjcwIiBjeT0iNzAiIHJ4PSIxMCIgcnk9IjEzIiBzdHJva2U9IiMxNzM4MkQiIHN0cm9rZS13aWR0aD0iMi40Ii8+CiAgPHBhdGggZD0iTTcwIDU3Yy02IDYuNSA2IDE5LjUgMCAyNiIgc3Ryb2tlPSIjMTczODJEIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxjaXJjbGUgY3g9IjcwIiBjeT0iNTciIHI9IjIuNiIgZmlsbD0iI0I3OEE1MiIvPgo8L3N2Zz4K" width="150" height="150" alt="Autonomous Coffee 邮戳"></div>
+      <p><b class="mono" style="color:var(--c-title);letter-spacing:.12em">AUTONOMOUS COFFEE</b><br>邮戳式双环 + 豆体符号，12 点位黄铜刻度。用于页脚、 empty state 与线下物料。</p>
+    </div>
+  </div>
+
+  <h3 class="subhead">网页装饰 Glyph</h3>
+  <div class="grid glyph-grid">
+    <div class="card mark"><div class="cell"><svg><use href="#g-steam"/></svg></div><h5>蒸汽曲线</h5><span class="mono-id">STEAM</span><p>热饮标识 · 空态装饰</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#g-drop"/></svg></div><h5>液滴</h5><span class="mono-id">DROP</span><p>出杯完成 · 原料指示</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#g-split"/></svg></div><h5>豆裂线</h5><span class="mono-id">SPLIT</span><p>分隔符 · 纹理母题</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#g-ticks"/></svg></div><h5>校准角标</h5><span class="mono-id">TICKS</span><p>二维码取景框四角</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#g-arc"/></svg></div><h5>进度弧</h5><span class="mono-id">ARC</span><p>加载 · 环形进度</p></div>
+    <div class="card mark"><div class="cell"><svg><use href="#g-pulse"/></svg></div><h5>信号脉冲</h5><span class="mono-id">PULSE</span><p>连接状态 · 轻量点缀</p></div>
+  </div>
+
+  <h3 class="subhead">Pattern / Background Motif</h3>
+  <div class="grid pat-grid">
+    <div class="card pat-demo">
+      <svg class="patbg" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="100%" height="100%" fill="url(#pat-bean)"/></svg>
+      <div class="cap"><span class="mono-id">BEAN GRID · 2–6% 不透明度</span><h5>豆格阵列</h5><p style="margin:4px 0 0;color:var(--c-sub);font-size:12px">Hero 背景、休息区留白。砖形错位排布，间距 48×56。</p></div>
+    </div>
+    <div class="card pat-demo">
+      <svg class="patbg" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="100%" height="100%" fill="url(#pat-motion)"/></svg>
+      <div class="cap"><span class="mono-id">MOTION PATH · 2–6%</span><h5>动线编织</h5><p style="margin:4px 0 0;color:var(--c-sub);font-size:12px">空态与加载屏背景。注路折线连续延伸，节点即黄铜点缀。</p></div>
+    </div>
+    <div class="card pat-demo" style="background:var(--forest-900);border-color:var(--forest-900)">
+      <svg class="patbg" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="100%" height="100%" fill="url(#pat-grid-cream)"/></svg>
+      <div class="cap"><span class="mono-id">TERMINAL GRID · 4–8%</span><h5 style="color:#FFF9F0">终端标定网格</h5><p style="margin:4px 0 0;color:rgba(255,249,240,.72);font-size:12px">安装向导品牌栏、控制台空区。24px 细网格 + 每 96px 一枚黄铜标定十字。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════ 6 色彩与场景 ══════ -->
+<section class="sec" id="colors" data-od-id="colors">
+  <div class="sec-head">
+    <p class="kicker">Color Variations</p>
+    <h2>色彩版本与明暗场景</h2>
+    <p>每个主要标识提供四个正式色彩版本 + 单色版；黄铜永远只出现在光标或单一节点上，无色时（单色）图形必须依然成立。</p>
+  </div>
+  <div class="color-row">
+    <div class="lbl">Forest on Cream<br><span class="spec-line" style="font-weight:400">默认 · 数字界面主版本</span></div>
+    <div class="demo"><svg aria-hidden="true"><use href="#sym-logo"/></svg><span class="wm" style="color:var(--c-title)">COFFEE TERMINAL<span class="wm-cursor"></span></span></div>
+    <div class="spec">ink #17382D<br>brass #B78A52 · bg #FFF9F0</div>
+  </div>
+  <div class="color-row" style="background:var(--forest-900);border-color:var(--forest-900)">
+    <div class="lbl" style="color:#F6F0E5">Cream on Forest<br><span class="spec-line" style="color:rgba(255,249,240,.66);font-weight:400">深色面板 / 页脚</span></div>
+    <div class="demo"><svg style="--bm-ink:#F6F0E5;--bm-brass:#D7B67E" aria-hidden="true"><use href="#sym-logo"/></svg><span class="wm" style="color:#F6F0E5">COFFEE TERMINAL<span class="wm-cursor" style="background:#D7B67E"></span></span></div>
+    <div class="spec" style="color:rgba(255,249,240,.66)">ink #F6F0E5<br>brass #D7B67E · bg #123D31</div>
+  </div>
+  <div class="color-row">
+    <div class="lbl">Espresso on Cream<br><span class="spec-line" style="font-weight:400">印刷 / 包装 / 温度场景</span></div>
+    <div class="demo"><svg style="--bm-ink:#5A3827" aria-hidden="true"><use href="#sym-logo"/></svg><span class="wm" style="color:#5A3827">COFFEE TERMINAL<span class="wm-cursor"></span></span></div>
+    <div class="spec">ink #5A3827<br>brass #B78A52 · bg #F6F0E5</div>
+  </div>
+  <div class="color-row">
+    <div class="lbl">Monochrome<br><span class="spec-line" style="font-weight:400">单墨 / 单白 · 雕刻与传真场景</span></div>
+    <div class="demo"><svg style="--bm-ink:#1F1D1A;--bm-brass:#1F1D1A" aria-hidden="true"><use href="#sym-logo"/></svg><span class="wm" style="color:#1F1D1A">COFFEE TERMINAL</span><svg style="--bm-ink:#1F1D1A;--bm-brass:#1F1D1A" width="34" height="34" aria-hidden="true"><use href="#sym-mono"/></svg></div>
+    <div class="spec">ink #1F1D1A（或纯白）<br>brass = ink · 全色等值</div>
+  </div>
+
+  <h3 class="subhead">明暗场景实测</h3>
+  <div class="grid scene-grid">
+    <div class="scene card" style="--bm-ink:#17382D"><svg width="48" height="48" aria-hidden="true"><use href="#sym-logo"/></svg><span class="wm" style="color:var(--c-title)">COFFEE TERMINAL</span><span class="mono-id" style="color:var(--c-sub)">CREAM 50</span></div>
+    <div class="scene" style="background:var(--cream-200);border-radius:14px"><svg width="48" height="48" aria-hidden="true"><use href="#sym-logo"/></svg><span class="wm" style="color:var(--c-title)">COFFEE TERMINAL</span><span class="mono-id" style="color:var(--c-sub)">CREAM 200</span></div>
+    <div class="scene" style="background:var(--forest-900);border-radius:14px"><svg width="48" height="48" style="--bm-ink:#F6F0E5;--bm-brass:#D7B67E" aria-hidden="true"><use href="#sym-logo"/></svg><span class="wm" style="color:#F6F0E5">COFFEE TERMINAL</span><span class="mono-id" style="color:rgba(255,249,240,.6)">FOREST 900</span></div>
+    <div class="scene" style="background:var(--console);border-radius:14px"><svg width="48" height="48" style="--bm-ink:#EDF2EE;--bm-brass:#D0A166" aria-hidden="true"><use href="#sym-logo"/></svg><span class="wm" style="color:#EDF2EE">COFFEE TERMINAL</span><span class="mono-id" style="color:#687870">CONSOLE #0D1713</span></div>
+  </div>
+
+  <h3 class="subhead">尺寸测试 · 16 → 256px</h3>
+  <div class="card" style="padding:30px 30px 24px">
+    <div class="ladder" style="--bm-ink:#17382D">
+      <span class="sz" style="display:flex;flex-direction:column;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;color:var(--c-sub)"><svg width="256" height="256"><use href="#sym-logo"/></svg>256</span>
+      <span class="sz" style="display:flex;flex-direction:column;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;color:var(--c-sub)"><svg width="128" height="128"><use href="#sym-logo"/></svg>128</span>
+      <span class="sz" style="display:flex;flex-direction:column;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;color:var(--c-sub)"><svg width="64" height="64"><use href="#sym-logo"/></svg>64</span>
+      <span class="sz" style="display:flex;flex-direction:column;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;color:var(--c-sub)"><svg width="48" height="48"><use href="#sym-logo"/></svg>48</span>
+      <span class="sz" style="display:flex;flex-direction:column;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;color:var(--c-sub)"><svg width="32" height="32"><use href="#sym-logo"/></svg>32</span>
+      <span class="sz" style="display:flex;flex-direction:column;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;color:var(--c-sub)"><svg width="24" height="24"><use href="#sym-logo"/></svg>24</span>
+      <span class="sz" style="display:flex;flex-direction:column;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;color:var(--c-sub)"><svg width="16" height="16"><use href="#sym-logo"/></svg>16</span>
+    </div>
+    <div class="ladder" style="--bm-ink:#17382D;margin-top:26px;padding-top:22px;border-top:1px dashed var(--c-line)">
+      <span class="sz" style="display:flex;flex-direction:column;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;color:var(--c-sub)"><svg width="128" height="128"><use href="#sym-mono"/></svg>128</span>
+      <span class="sz" style="display:flex;flex-direction:column;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;color:var(--c-sub)"><svg width="64" height="64"><use href="#sym-mono"/></svg>64</span>
+      <span class="sz" style="display:flex;flex-direction:column;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;color:var(--c-sub)"><svg width="32" height="32"><use href="#sym-mono"/></svg>32</span>
+      <span class="sz" style="display:flex;flex-direction:column;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;color:var(--c-sub)"><svg width="24" height="24"><use href="#sym-mono"/></svg>24</span>
+      <span class="sz" style="display:flex;flex-direction:column;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;color:var(--c-sub)"><svg width="16" height="16"><use href="#sym-mono"/></svg>16</span>
+      <div class="tabmock" style="margin-left:auto">
+        <div class="tab"><svg width="16" height="16" aria-hidden="true"><use href="#sym-mono"/></svg>Coffee Terminal · 顾客屏</div>
+      </div>
+    </div>
+  </div>
+
+  <h3 class="subhead">错误用法</h3>
+  <div class="grid wrong-grid">
+    <div class="card wrong"><div class="cell"><svg width="120" height="44" viewBox="0 0 64 64" preserveAspectRatio="none" aria-hidden="true"><use href="#sym-logo"/></svg><span class="x">✕</span></div><p>禁止拉伸变形——比例锁死 1:1</p></div>
+    <div class="card wrong"><div class="cell"><svg width="64" height="64" style="--bm-ink:#3B5BDB;--bm-brass:#7C93F5" aria-hidden="true"><use href="#sym-logo"/></svg><span class="x">✕</span></div><p>禁止蓝紫等体系外配色</p></div>
+    <div class="card wrong"><div class="cell"><svg width="64" height="64" style="--bm-ink:#17382D;--bm-brass:#B78A52;filter:drop-shadow(0 0 8px rgba(183,138,82,.9))" aria-hidden="true"><use href="#sym-logo"/></svg><span class="x">✕</span></div><p>禁止发光、渐变、阴影与描边加粗</p></div>
+  </div>
+</section>
+
+<!-- ══════ 7 UI 应用示例 ══════ -->
+<section class="sec" id="usage" data-od-id="usage">
+  <div class="sec-head">
+    <p class="kicker">UI Usage</p>
+    <h2>放回真实界面</h2>
+    <p>七处实际嵌入：顾客屏页头、Idle 二维码、控制台、安装向导品牌栏、空状态、加载与页脚。符号永远做低声的品牌信号，不与业务信息争夺注意力。</p>
+  </div>
+  <div class="grid use-grid">
+    <div class="card use">
+      <div class="stage"><div class="m-top">
+        <span class="m-conn"><span class="m-dot"></span>设备在线</span>
+        <span class="m-dev"><svg aria-hidden="true"><use href="#sym-logo"/></svg>西湖门店 · 01 号机</span>
+        <button class="m-cmdbtn" type="button">⌘ 开发控制台</button>
+      </div></div>
+      <div class="cap"><b>顾客屏页头</b><span class="mono">topbar · 符号 20px 与设备名并置</span></div>
+    </div>
+    <div class="card use">
+      <div class="stage"><div class="m-qr">
+        <div class="qr-card"><svg style="position:absolute;top:7px;left:7px;width:14px;height:14px;color:var(--brass-500)" aria-hidden="true"><use href="#g-ticks"/></svg><svg style="position:absolute;top:7px;right:7px;width:14px;height:14px;color:var(--brass-500);transform:scaleX(-1)" aria-hidden="true"><use href="#g-ticks"/></svg><svg style="position:absolute;bottom:7px;left:7px;width:14px;height:14px;color:var(--brass-500);transform:scaleY(-1)" aria-hidden="true"><use href="#g-ticks"/></svg><svg style="position:absolute;bottom:7px;right:7px;width:14px;height:14px;color:var(--brass-500);transform:scale(-1)" aria-hidden="true"><use href="#g-ticks"/></svg><div class="qr-inner"></div></div>
+        <div class="cap2"><b>扫码点咖啡</b><span>黄铜校准角标把取景框语义借给二维码，四周保留静区。</span></div>
+      </div></div>
+      <div class="cap"><b>Idle · 二维码装饰</b><span class="mono">g-ticks × 4 · 黄铜 #B78A52</span></div>
+    </div>
+    <div class="card use">
+      <div class="stage"><div class="m-console">
+        <svg class="mk" aria-hidden="true"><use href="#m-terminal"/></svg>
+        <div><div class="t">DEV CONSOLE</div><div class="sub">coffee-bot-042 · sim</div></div>
+        <span class="m-badge run"><span class="bd"></span>RUNNING</span>
+      </div></div>
+      <div class="cap"><b>开发者控制台</b><span class="mono">m-terminal · 提示符即工程入口</span></div>
+    </div>
+    <div class="card use">
+      <div class="stage"><div class="m-OB">
+        <svg class="patbg" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="100%" height="100%" fill="url(#pat-grid-cream)"/></svg>
+        <svg width="46" height="46" aria-hidden="true"><use href="#sym-badge"/></svg>
+        <span class="wm">COFFEE TERMINAL</span>
+        <span style="font-family:var(--font-ui);font-size:9px;letter-spacing:.12em;color:rgba(255,249,240,.62);font-weight:650">BY QARM · 千臂机器人</span>
+        <h5>设备首次安装</h5>
+        <p>完成部署资料与安全激活后，这台终端将进入咖啡制作界面。</p>
+        <div class="m-steps">
+          <span class="m-step done"><span class="n">✓</span>设备身份</span>
+          <span class="m-step cur"><span class="n">2</span>门店部署</span>
+          <span class="m-step"><span class="n">3</span>安全激活</span>
+        </div>
+      </div></div>
+      <div class="cap"><b>安装向导品牌栏</b><span class="mono">device badge + 终端网格 6%</span></div>
+    </div>
+    <div class="card use">
+      <div class="stage"><div class="m-empty">
+        <svg aria-hidden="true"><use href="#g-drop"/></svg>
+        <b>暂无制作任务</b>
+        <span>设备待命中 · 扫码即可开始</span>
+      </div></div>
+      <div class="cap"><b>空状态</b><span class="mono">g-drop · forest-500 单色</span></div>
+    </div>
+    <div class="card use">
+      <div class="stage"><div class="m-load">
+        <svg class="big" aria-hidden="true"><use href="#sym-logo"/></svg>
+        <svg class="arcload" viewBox="0 0 44 44" fill="none" aria-hidden="true">
+          <circle cx="22" cy="22" r="17" stroke="#DDD3C4" stroke-width="3.5"/>
+          <circle cx="22" cy="22" r="17" stroke="#34795D" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="26 81"/>
+        </svg>
+        <span class="t">正在预热萃取系统…</span>
+      </div></div>
+      <div class="cap"><b>加载</b><span class="mono">光标眨眼 1.3s + 进度弧旋转</span></div>
+    </div>
+    <div class="card use" style="grid-column:1/-1">
+      <div class="stage"><div class="m-foot">
+        <div class="lock"><svg aria-hidden="true"><use href="#sym-logo"/></svg><span class="wm">COFFEE TERMINAL</span></div>
+        <span class="tag">一台安静、可信、持续思考的 AI 咖啡终端 · BY QARM 千臂机器人</span>
+      </div></div>
+      <div class="cap"><b>页脚</b><span class="mono">cream on forest-950 · 光标黄铜 300</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════ 8 动效 ══════ -->
+<section class="sec" id="motion" data-od-id="motion">
+  <div class="sec-head">
+    <p class="kicker">Motion</p>
+    <h2>品牌动效：只有三种，全部克制</h2>
+    <p>符号系统的动效只有眨眼、呼吸与旋转三种母题，时长与缓动对齐全局规范；prefers-reduced-motion 下全部静止且不丢失状态。</p>
+  </div>
+  <div class="grid motion-grid">
+    <table class="motion" data-od-id="motion-table">
+      <thead><tr><th>动效</th><th>用法</th><th>规格</th></tr></thead>
+      <tbody>
+        <tr><td>光标眨眼 <span class="mono">blink</span></td><td>加载中的主符号、字标光标</td><td>steps(1) · 1.3s 循环</td></tr>
+        <tr><td>呼吸 <span class="mono">breath</span></td><td>在线点、LIVE 徽标、m-live 圆点</td><td>opacity 1→.45 · 2.8s ease-in-out</td></tr>
+        <tr><td>旋转 <span class="mono">spin</span></td><td>进度弧、豆径轨迹加载</td><td>1.6s linear · 仅 dasharray 弧段</td></tr>
+        <tr><td>悬停 / 按压</td><td>品牌入口按钮（⌘ 控制台）</td><td>100–160ms · cubic-bezier(.22,1,.36,1)</td></tr>
+        <tr><td>Reduced Motion</td><td>全部动效</td><td>animation:none，状态用静态高亮保留</td></tr>
+      </tbody>
+    </table>
+    <div class="card motion-demo">
+      <div class="row">
+        <svg class="big" viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="17" y="15" width="25" height="35" rx="7" stroke="#17382D" stroke-width="4"/><path d="M42 27a7 7 0 0 1 0 12" stroke="#17382D" stroke-width="4"/><path class="blink" d="M24.5 27h11" stroke="#B78A52" stroke-width="4" stroke-linecap="round"/></svg>
+        <div><b>眨眼加载</b><span>黄铜光标以终端节奏闪烁，杯体保持不动</span></div>
+      </div>
+      <div class="row">
+        <svg aria-hidden="true"><use href="#m-live"/></svg>
+        <div><b>呼吸在线</b><span>黄铜点呼吸，与顾客屏在线指示同源</span></div>
+      </div>
+      <div class="row">
+        <svg class="arcload" viewBox="0 0 44 44" fill="none" aria-hidden="true"><circle cx="22" cy="22" r="17" stroke="#DDD3C4" stroke-width="3.5"/><circle cx="22" cy="22" r="17" stroke="#1F5A46" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="26 81" style="animation:spin 1.6s linear infinite;transform-origin:center"/></svg>
+        <div><b>进度弧</b><span>单段圆弧旋转，永不做无限假进度</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════ 9 资产目录 ══════ -->
+<section class="sec" id="assets" data-od-id="assets">
+  <div class="sec-head">
+    <p class="kicker">Assets</p>
+    <h2>SVG 资产目录</h2>
+    <p>全部为纯 SVG（path / rect / circle + 系统字体），无 Base64、无外部图片、无网络字体；主笔画使用 <span class="num">#17382D</span>、黄铜 <span class="num">#B78A52</span> 固定值，嵌入时可按上文色彩表替换。</p>
+  </div>
+  <table class="assets" data-od-id="asset-table">
+    <thead><tr><th>文件</th><th>内容</th><th>典型用途</th></tr></thead>
+    <tbody>
+      <tr><td>assets/brand/logo-symbol.svg</td><td>主符号 · 杯沿光标</td><td>页头、设备铭牌、水印</td></tr>
+      <tr><td>assets/brand/logo-wordmark.svg</td><td>字标（textLength 锁宽）</td><td>页脚、关于页、印刷</td></tr>
+      <tr><td>assets/brand/logo-horizontal.svg</td><td>横排组合</td><td>页头、Splash</td></tr>
+      <tr><td>assets/brand/logo-compact.svg</td><td>紧凑组合（上下双行）</td><td>窄侧栏、移动签名位</td></tr>
+      <tr><td>assets/brand/monogram-ct.svg</td><td>CT Monogram</td><td>Favicon、Avatar、水印</td></tr>
+      <tr><td>assets/brand/logo-badge.svg</td><td>设备徽章（深色面板版）</td><td>安装向导品牌位、机身铭牌</td></tr>
+      <tr><td>assets/brand/lockup-endorsed.svg</td><td>Coffee Terminal + BY QARM · 千臂机器人</td><td>门店次级标牌、设备铭牌、包装底部</td></tr>
+      <tr><td>assets/brand/qarm-wordmark.svg</td><td>QARM / 千臂机器人母品牌字标（临时排版版）</td><td>企业背书；待官方 Logo 到位后替换</td></tr>
+      <tr><td>assets/brand/marks/ ×10</td><td>cup · bean · brew · pour · robot · live · ai · flow · ready · terminal</td><td>界面语义图标（24 网格）</td></tr>
+      <tr><td>assets/brand/badges/ ×3</td><td>ai-brew-system · precision-brew · autonomous-coffee</td><td>印章、铭牌、邮戳</td></tr>
+      <tr><td>assets/brand/patterns/ ×3</td><td>bean-grid · motion-path · terminal-grid</td><td>背景纹理（2–8% 不透明度）</td></tr>
+      <tr><td>docs/BRAND_MARK_GUIDELINES.md</td><td>品牌图形规范全文</td><td>设计与工程对照执行</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</div><!-- /wrap -->
+
+<!-- ══════ 页脚 ══════ -->
+<footer class="foot" data-od-id="footer">
+  <div class="wrap">
+    <svg aria-hidden="true"><use href="#sym-logo"/></svg>
+    <span class="wm">COFFEE TERMINAL</span>
+    <span class="tag">Brand Mark System v1.1 · COFFEE TERMINAL · A QARM / 千臂机器人 brand</span>
+  </div>
+</footer>
+
+<script>
+/* 加载示例：把展示区的默认符号替换为眨眼光标版本（reduced-motion 由 CSS 兜底） */
+(function(){
+  var loadStage=document.querySelector('.m-load svg.big');
+  if(!loadStage)return;
+  loadStage.setAttribute('viewBox','0 0 64 64');
+  loadStage.setAttribute('fill','none');
+  loadStage.innerHTML='<rect x="17" y="15" width="25" height="35" rx="7" stroke="#17382D" stroke-width="4"/>'+
+    '<path d="M42 27a7 7 0 0 1 0 12" stroke="#17382D" stroke-width="4"/>'+
+    '<path class="blink" d="M24.5 27h11" stroke="#B78A52" stroke-width="4" stroke-linecap="round"/>';
+})();
+</script>
+</body>
+</html>
