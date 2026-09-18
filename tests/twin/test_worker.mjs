@@ -17,6 +17,6 @@ test('built worker initializes, advances fixed ticks and exports a versioned exp
     const config=JSON.parse(await readFile(new URL('../../config/twin/coffee-workcell-v1.json',import.meta.url)));
     const init=await ask({type:'init',config,tasks:[{id:'wait',type:'wait',after:[],resources:[],duration:.1}]});assert.equal(init.type,'state');assert.equal(init.state.time,0);
     const advanced=await ask({type:'advance',ticks:10});assert.equal(advanced.state.status,'completed');assert.equal(advanced.state.time,.1);
-    const exported=await ask({type:'export'});assert.equal(exported.type,'export');assert.equal(exported.data.engineVersion,'1.0.0');assert.equal(exported.data.finalState.tick,5);
+    const exported=await ask({type:'export'});assert.equal(exported.type,'export');assert.equal(exported.data.engineVersion,'1.1.0');assert.equal(exported.data.finalState.tick,5);
   }finally{await worker.terminate();}
 });

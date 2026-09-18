@@ -17,24 +17,32 @@ export function planMotion(config,state,task,checker) {
     const offset=objects[0][1].pose.position.map((v,i)=>v-from.position[i]);
     target.position=target.position.map((v,i)=>v-offset[i]);
   }
-  const approach=new Vector3(0,-.12,0).applyQuaternion(new Quaternion(...target.quaternion));
-  const pre={position:target.position.map((v,i)=>v+approach.toArray()[i]),quaternion:target.quaternion};
-  const departure=new Vector3(0,-.12,0).applyQuaternion(new Quaternion(...from.quaternion));
-  const post={position:from.position.map((v,i)=>v+departure.toArray()[i]),quaternion:from.quaternion};
+  const nearCup=p=>Object.values(state.objects).some(o=>o.present!==false&&!o.owner&&new Vector3(...o.pose.position).distanceTo(new Vector3(...p.position))<.02);
+  const withdraw=nearCup(from),enter=nearCup(target);
+  // Do not enter around a cup with closed fingers and open them afterwards.
+  if(enter)for(const g of Object.values(state.grippers??{}))if(g.robot===task.robot){
+    const object=Object.entries(state.objects).find(([,o])=>o.present!==false&&!o.owner&&new Vector3(...o.pose.position).distanceTo(new Vector3(...target.position))<.02);
+    if(g.openingMm<config.objects[object[0]].radius*2000+4)throw Error('GRIPPER_APPROACH_CLEARANCE: open jaws at least 4 mm wider than the container before approach');
+  }
+  const axial=config.motionProfile==='upright-corridor';
+  const approach=new Vector3(0,axial?-.16:-.12,0).applyQuaternion(new Quaternion(...target.quaternion));
+  const pre=(!axial||enter)?{position:target.position.map((v,i)=>v+approach.toArray()[i]),quaternion:target.quaternion}:target;
+  const departure=new Vector3(0,axial?-.16:-.12,0).applyQuaternion(new Quaternion(...from.quaternion));
+  const post=(!axial||withdraw)?{position:from.position.map((v,i)=>v+departure.toArray()[i]),quaternion:from.quaternion}:from;
   let corridors=[[target],[pre,target],[post,target],[post,pre,target],...[.15,.3,.45].map(lift=>{
     const z=Math.max(from.position[2],target.position[2])+lift;
     return [post,{position:[post.position[0],post.position[1],z],quaternion:from.quaternion},{position:[pre.position[0],pre.position[1],z],quaternion:target.quaternion},pre,target];
   })];
   if(config.motionProfile==='upright-corridor'&&!task.target) {
-    // Main's mouths face the front (-Y). Keep containers upright and use
-    // horizontal withdrawal, a front travel corridor and horizontal entry.
+    // Axial disengagement comes before the front corridor; yaw is allowed only
+    // after the fingers clear the container. Held containers stay upright.
     corridors=[];
     for(const height of [1.28,1.45,1.65,1.85])for(const front of [-.40,-.65,-.85]) {
       const z=Math.max(height,from.position[2],target.position[2]);
-      const exit={position:[from.position[0],Math.min(front,from.position[1]),from.position[2]],quaternion:from.quaternion};
-      const entry={position:[target.position[0],Math.min(front,target.position[1]),target.position[2]],quaternion:target.quaternion};
-      corridors.push([exit,{position:[exit.position[0],exit.position[1],z],quaternion:from.quaternion},
-        {position:[entry.position[0],entry.position[1],z],quaternion:target.quaternion},entry,target]);
+      const exit={position:[post.position[0],Math.min(front,post.position[1]),post.position[2]],quaternion:from.quaternion};
+      const entry={position:[pre.position[0],Math.min(front,pre.position[1]),pre.position[2]],quaternion:target.quaternion};
+      corridors.push([...(withdraw?[{...post,axial:true}]:[]),exit,{position:[exit.position[0],exit.position[1],z],quaternion:from.quaternion},
+        {position:[entry.position[0],entry.position[1],z],quaternion:target.quaternion},entry,...(enter?[{...pre,orientAtEnd:true},{...target,axial:true}]:[target])]);
     }
   }
   const failures=[];
@@ -47,7 +55,7 @@ export function planMotion(config,state,task,checker) {
       for(const p of waypoints) {
         if(config.motionProfile==='upright-corridor'&&!task.target) {
           const knots=[q];
-          for(const pose of uprightLeg(def,fk(def,q),p)){q=ik(def,pose,q);if(q.some((v,j)=>Math.abs(v-knots.at(-1)[j])>1e-6))knots.push(q);}
+          for(const pose of (p.axial?axialLeg(fk(def,q),p):uprightLeg(def,fk(def,q),p))){q=ik(def,pose,q);if(q.some((v,j)=>Math.abs(v-knots.at(-1)[j])>1e-6))knots.push(q);}
           const motion=pathTrajectory(def,knots,config.dt);
           for(let tick=0;tick<=motion.ticks;tick++){
             probe.robots[task.robot].q=motion.sample(tick).q;syncAttachments(config,probe);
@@ -95,7 +103,13 @@ function uprightLeg(def,from,to) {
     return Array.from({length:n},(_,i)=>{
       const position=a.position.map((v,j)=>v+(p.position[j]-v)*(i+1)/n);
       const yaw=Math.atan2(-(position[0]-def.base.position[0]),position[1]-def.base.position[1]);
-      return {position,quaternion:new Quaternion().setFromAxisAngle(new Vector3(0,0,1),yaw).toArray()};
+      return {position,quaternion:i===n-1&&p.orientAtEnd?p.quaternion:new Quaternion().setFromAxisAngle(new Vector3(0,0,1),yaw).toArray()};
     });
   });
+}
+
+// Close to a container, translate along the fingers without yawing through it.
+function axialLeg(from,to) {
+ const n=Math.max(1,Math.ceil(new Vector3(...from.position).distanceTo(new Vector3(...to.position))/.01));
+ return Array.from({length:n},(_,i)=>({position:from.position.map((v,j)=>v+(to.position[j]-v)*(i+1)/n),quaternion:to.quaternion}));
 }

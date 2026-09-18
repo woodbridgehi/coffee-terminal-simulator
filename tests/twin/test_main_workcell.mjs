@@ -33,10 +33,19 @@ test('continuous joint path obeys velocity acceleration jerk limits and rejects 
 });
 
 test('main layout completes upright dual-arm transfer, clear-before-seal and capped pickup without collision',async()=>{
-  const sim=await Simulation.create(world,latteTasks(world),{record:false});let maxTilt=0;
+  const sim=await Simulation.create(world,latteTasks(world),{record:false});let maxTilt=0,pourTilt=0,flowSamples=0;
   while(sim.state.time<600){
     const advancing=sim.step();
-    for(const o of Object.values(sim.state.objects))maxTilt=Math.max(maxTilt,2*(o.pose.quaternion[0]**2+o.pose.quaternion[1]**2));
+    for(const [id,o] of Object.entries(sim.state.objects)){
+      const tilt=2*(o.pose.quaternion[0]**2+o.pose.quaternion[1]**2);
+      if(id==='milk-cup'&&sim.state.tasks.pour.status==='running')pourTilt=Math.max(pourTilt,tilt);
+      else maxTilt=Math.max(maxTilt,tilt);
+    }
+    if(sim.state.tasks.pour.status==='running'){
+      const phase=sim.state.tasks.pour.pourPhase;
+      if(phase==='flow'){flowSamples++;assert.ok(sim.state.objects['milk-cup'].pose.quaternion[0]**2+sim.state.objects['milk-cup'].pose.quaternion[1]**2>.24);}
+      if(phase==='tilting')assert.equal(sim.state.objects.cup.contents.foamer??0,0);
+    }
     if(sim.state.tasks.seal.status==='running'){
       assert.equal(sim.state.objects.cup.owner,null);
       assert.equal(sim.state.tasks['right-clear-lid'].status,'done');
@@ -45,7 +54,8 @@ test('main layout completes upright dual-arm transfer, clear-before-seal and cap
     if(!advancing)break;
   }
   assert.equal(sim.state.status,'completed',JSON.stringify(sim.metrics()));assert.equal(sim.metrics().done,31);
-  assert.ok(maxTilt<1-Math.cos(Math.PI/180),'cup tilt stays below one degree');
+  assert.ok(maxTilt<1-Math.cos(Math.PI/180),'transport keeps cups upright within one degree');
+  assert.ok(pourTilt>.49&&pourTilt<.51,'pitcher reaches 60 degrees');assert.equal(flowSamples,300,'six seconds of flow excludes tilt/return');
   assert.equal(sim.state.objects.cup.sealed,true);assert.equal(sim.state.objects.cup.owner,null);
   assert.equal(sim.events.some(e=>e.type.startsWith('collision.')),false);
   assert.ok(Math.abs(Object.values(sim.state.objects.cup.contents).reduce((a,b)=>a+b,0)-.22)<1e-8);

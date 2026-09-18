@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {DISPENSER_NOZZLE} from './workcell-geometry.mjs';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { BASES, forward, solvePose, sideGrip } from './kinematics.mjs';
 import { STATIONS } from './sequence.mjs';
@@ -169,7 +170,7 @@ export function createWorkcell({ cabinetOnly = false, cupPadTop = null } = {}) {
     box(group, [width - 0.09, 0.22, 0.014], [x, 1.39, -0.855], M.black, 0.015);
     textPlate(group, kind === 'coffee' ? 'ESPRESSO' : name, [x, 1.69, -0.611], width - 0.08, 0.055, '#eaf0e8', kind === 'coffee' ? '#255846' : '#35443d');
     cylinder(group, 0.032, 0.09, [x, 1.53, -0.68], M.steel);
-    cylinder(group, 0.018, 0.035, [x, 1.47, -0.68], M.dark);
+    cylinder(group, 0.018, DISPENSER_NOZZLE.height, [x, DISPENSER_NOZZLE.centerY, DISPENSER_NOZZLE.z], M.dark);
     // Drip-tray bars.
     for (let i = -3; i <= 3; i++) box(group, [width - 0.07, 0.009, 0.012], [x, 0.969, -0.68 + i * 0.034], M.steel, 0.003);
     if (kind === 'coffee') {

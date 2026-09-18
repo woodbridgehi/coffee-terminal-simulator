@@ -2,6 +2,7 @@ import {clone,validateWorld,validateGraph} from './schema.mjs';
 import {fk,relative,vec} from './robot.mjs';
 import {CollisionChecker,initCollision,syncAttachments} from './collision.mjs';
 import {planMotion} from './planner.mjs';
+import {planPour} from './pouring.mjs';
 export class Simulation {
   static async create(config,tasks,options={}) {await initCollision();return new Simulation(config,tasks,options);}
   constructor(config,tasks,{policy='parallel',record=true,external=false}={}) {
@@ -101,10 +102,13 @@ export class Simulation {
     }
     if(t.type==='transfer') {
       const src=this.state.objects[t.source],dst=this.state.objects[t.object];
-      if(dst.sealed||!src.owner||dst.owner||vec(src.pose.position).distanceTo(vec(dst.pose.position))>.3) {this.fail(t,'INVALID_POUR_POSE');return false;}
+      if(dst.sealed||src.owner!==t.robot||dst.owner||vec(src.pose.position).distanceTo(vec(dst.pose.position))>.3) {this.fail(t,'INVALID_POUR_POSE');return false;}
       const mass=Object.values(src.contents).reduce((a,b)=>a+b,0);
       if(mass<=0||mass+Object.values(dst.contents).reduce((a,b)=>a+b,0)>this.config.objects[t.object].capacityKg+1e-9) {this.fail(t,'INVALID_POUR_VOLUME');return false;}
       a.transfer=clone(src.contents);a.ticks=Math.ceil((t.duration??6)/this.config.dt);
+      if(this.config.motionProfile==='upright-corridor') {
+        try {a.motion=planPour(this.config,this.state,t,this.checker);a.ticks=a.motion.ticks;} catch(e){this.fail(t,e.message);return false;}
+      }
     }
     resources.forEach(r=>this.locks.set(r,t.id));this.active.set(t.id,a);
     s.status='running';s.reason=null;s.startedAt=this.state.time;s.resources=resources;
@@ -139,6 +143,7 @@ export class Simulation {
     }
     for(const a of [...this.active.values()]) {
       const t=a.task,s=this.state.tasks[t.id];a.elapsed++;s.elapsed=a.elapsed*this.config.dt;
+      if(t.type==='transfer')s.pourPhase=!a.motion?'flow':a.elapsed<=a.motion.flowStart?'tilting':a.elapsed<=a.motion.flowEnd?'flow':'returning';
       if(t.type==='process') {
         const def=this.processDefinition(t),fraction=1/a.ticks,o=this.state.objects[t.object];
         this.state.devices[t.device].remaining=Math.max(0,(a.ticks-a.elapsed)*this.config.dt);
@@ -150,8 +155,8 @@ export class Simulation {
         this.state.wasteKg+=(def.inputs.reduce((s,i)=>s+i.amount,0)-def.outputKg)*fraction;
       }
       if((t.type==='dispense'||t.type==='wait')&&t.device)this.state.devices[t.device].remaining=Math.max(0,(a.ticks-a.elapsed)*this.config.dt);
-      if(t.type==='transfer') for(const [id,mass] of Object.entries(a.transfer)) {
-        const amount=Math.min(this.state.objects[t.source].contents[id],mass/a.ticks);
+      if(t.type==='transfer'&&(!a.motion||(a.elapsed>a.motion.flowStart&&a.elapsed<=a.motion.flowEnd))) for(const [id,mass] of Object.entries(a.transfer)) {
+        const amount=Math.min(this.state.objects[t.source].contents[id],mass/(a.motion?.holdTicks??a.ticks));
         this.state.objects[t.source].contents[id]-=amount;
         this.state.objects[t.object].contents[id]=(this.state.objects[t.object].contents[id]??0)+amount;
       }
@@ -193,5 +198,5 @@ export class Simulation {
     for(const t of this.tasks) {const s=this.state.tasks[t.id];if(s.startedAt!==null)for(const r of s.resources??this.resources(t))busy[r]=(busy[r]??0)+(s.finishedAt??duration)-s.startedAt;}
     return {status:this.state.status,makespan:duration,done:Object.values(this.state.tasks).filter(t=>t.status==='done').length,total:this.tasks.length,consumed:Object.fromEntries(Object.entries(this.state.materials).map(([id,m])=>[id,m.consumed])),wasteKg:this.state.wasteKg,utilization:Object.fromEntries(Object.entries(busy).map(([id,s])=>[id,duration?s/duration:0])),blocked:Object.entries(this.state.tasks).filter(([,s])=>s.status==='pending'||s.status==='failed').map(([id,s])=>({id,reason:s.reason}))};
   }
-  export() {return {schemaVersion:1,engineVersion:'1.0.0',config:clone(this.config),tasks:clone(this.tasks),policy:this.policy,commands:clone(this.commands),events:clone(this.events),trace:clone(this.trace),finalState:clone(this.state),metrics:this.metrics()};}
+  export() {return {schemaVersion:1,engineVersion:'1.1.0',config:clone(this.config),tasks:clone(this.tasks),policy:this.policy,commands:clone(this.commands),events:clone(this.events),trace:clone(this.trace),finalState:clone(this.state),metrics:this.metrics()};}
 }
