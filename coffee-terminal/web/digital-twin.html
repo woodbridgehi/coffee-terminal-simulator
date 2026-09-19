@@ -1,5 +1,212 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>咖啡工作台 · 数字孪生</title><link rel="icon" type="image/svg+xml" href="assets/brand/logo-symbol.svg"><link rel="stylesheet" href="digital-twin.css"></head><body>
-<header><div><span class="eyebrow">COFFEE / DIGITAL TWIN</span><h1>工作台仿真实验室</h1></div><div class="badge">本地仿真 · 参数待实机标定</div></header>
-<main><section class="workspace"><div class="toolbar"><button id="play" disabled>开始</button><button id="step" disabled>单步</button><button id="reset" disabled>重置</button><label>速度 <select id="speed"><option value="1">1×</option><option value="4">4×</option><option value="16">16×</option></select></label><label>视角 <select id="view"><option value="shop">门店全景</option><option value="workcell">工作台</option><option value="top">俯视</option></select></label><label><input type="checkbox" id="labels" checked>工位</label><label><input type="checkbox" id="collision">碰撞几何</label><span id="clock">0.00 s</span></div><div id="viewport"></div><div class="statusline"><strong id="status">正在加载仿真内核…</strong><span id="progress">0 / 25</span></div><div class="timeline"><div class="sectionline"><h2>任务时间线</h2><span>蓝：左臂　金：右臂　绿：设备</span></div><div id="gantt"></div></div></section>
-<aside><section><h2>共享工作台配置</h2><p id="config-source">配置来源：内置默认场景。</p><button id="load-shared">从联调台载入并重置实验</button><p id="config-feedback" role="status">载入配置不改变联调台的现场状态。运行中请先暂停。</p><p>共享布局、设备工艺、夹爪及库存参数；HTTP 确认、通信故障和启动等待仍在联调台验证。</p></section><section><h2>设备与物料</h2><div id="devices"></div><div id="materials"></div><div id="containers"></div><p id="shared-sensors"></p></section><section><h2>实验控制</h2><label>调度策略 <select id="policy"><option value="parallel">双臂并行</option><option value="serial">任务串行</option></select></label><div class="buttonrow"><button id="compare" disabled>比较两种策略</button><button id="export" disabled>导出实验</button></div><p id="comparison">同一场景、同一配方，比较完工时间与资源利用率。</p><label>设备 <select id="fault-device"><option value="brewer">咖啡机</option><option value="foamer">奶沫机</option><option value="hot-water">热水机</option><option value="lidder">封盖机</option></select></label><div class="buttonrow"><button id="fault" disabled>注入故障</button><button id="repair" disabled>维修复位</button></div><button id="refill" disabled>补充牛奶 1 kg</button></section><section><h2>场景与回放</h2><label class="file">导入场景／联调台配置 JSON<input id="world-file" type="file" accept=".json"></label><label class="file">导入实验回放<input id="replay-file" type="file" accept=".json"></label><label>回放位置<input id="seek" type="range" min="0" max="0" value="0" disabled></label><p>场景采用米、弧度、秒、千克。修改设备布局或运动参数后重新运行。</p></section><section><h2>事件日志</h2><pre id="events" aria-live="polite"></pre></section></aside></main>
-<footer>品牌门店 · 工艺仿真 · 装饰模型不参与碰撞 · UR10e 标称 DH · Rapier 碰撞查询 · 固定步长 20 ms · 无流体求解　<a href="robot-scene.html">原展示场景 ↗</a>　<a href="http://127.0.0.1:9131/device-lab.html">虚拟设备联调 ↗</a></footer><script type="module" src="digital-twin.bundle.js"></script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Coffee Terminal Simulator · 数字孪生</title>
+  <link rel="icon" type="image/svg+xml" href="assets/brand/logo-symbol.svg">
+  <link rel="stylesheet" href="digital-twin.css">
+</head>
+<body>
+<div class="app" id="studio-app" data-workspace="simulation">
+  <header class="appbar">
+    <a class="brand" href="digital-twin.html" aria-label="Coffee Terminal Simulator">
+      <img src="assets/brand/logo-symbol.svg" alt="" class="brand-mark">
+      <span class="brand-copy"><strong>COFFEE TERMINAL</strong><small>SIMULATOR</small></span>
+    </a>
+    <span class="brand-by">BY QARM · 千臂机器人</span>
+
+    <nav class="workspace-tabs" aria-label="工作区">
+      <button type="button" class="workspace-tab" data-workspace="workcell"><span>工作站</span><small>WORKCELL</small></button>
+      <button type="button" class="workspace-tab" data-workspace="flow"><span>流程</span><small>FLOW</small></button>
+      <button type="button" class="workspace-tab active" data-workspace="simulation"><span>仿真</span><small>SIMULATION</small></button>
+      <button type="button" class="workspace-tab" data-workspace="device"><span>设备</span><small>DEVICE LAB</small></button>
+    </nav>
+
+    <div class="transport" aria-label="仿真控制">
+      <button id="reset" class="icon-btn" type="button" disabled title="重置实验">↺</button>
+      <button id="play" class="play-btn" type="button" disabled>开始</button>
+      <button id="step" class="icon-btn" type="button" disabled title="单步">▶|</button>
+      <span class="transport-sep"></span>
+      <label class="compact-field">速度
+        <select id="speed" aria-label="仿真速度">
+          <option value="1">1×</option><option value="4">4×</option><option value="16">16×</option>
+        </select>
+      </label>
+      <div class="sim-clock"><span>SIM</span><strong id="clock">0.00 s</strong></div>
+    </div>
+
+    <div class="appbar-right">
+      <button id="layout-toggle" class="top-btn" type="button" aria-expanded="false">布局</button>
+      <button id="config-toggle" class="top-btn config-summary" type="button" aria-expanded="false">
+        <span><small>SCENE</small><strong id="scene-name">coffee-workcell-main-v2</strong></span><i></i>
+      </button>
+      <span class="connection-badge"><i></i>LOCAL</span>
+    </div>
+  </header>
+
+  <div class="body">
+    <nav class="tool-rail" aria-label="工具">
+      <button type="button" class="rail-btn active" data-tool="select" title="选择">⌖</button>
+      <button type="button" class="rail-btn" data-tool="move" title="移动">↔</button>
+      <button type="button" class="rail-btn" data-tool="rotate" title="旋转">↻</button>
+      <button type="button" class="rail-btn" data-tool="measure" title="测量">⌁</button>
+      <span class="rail-sep"></span>
+      <button type="button" class="rail-btn" data-panel="scene" title="场景树">☷</button>
+      <button type="button" class="rail-btn active" data-panel="experiment" title="实验控制">⚗</button>
+      <button type="button" class="rail-btn" data-panel="materials" title="物料监控">▣</button>
+      <button type="button" class="rail-btn" data-panel="layers" title="显示层">▤</button>
+      <span class="rail-spacer"></span>
+      <button type="button" class="rail-btn" id="inspector-toggle" title="检查器">☰</button>
+    </nav>
+
+    <aside class="side-panel" id="side-panel">
+      <div class="panel-header"><strong id="side-title">实验控制 · EXPERIMENT</strong><button type="button" id="side-close" class="panel-close">×</button></div>
+      <div class="panel-scroll">
+        <section class="side-section side-view" data-panel-view="experiment">
+          <div class="section-title">调度策略</div>
+          <label class="form-row"><span>Policy</span>
+            <select id="policy"><option value="parallel">双臂并行</option><option value="serial">任务串行</option></select>
+          </label>
+          <div class="button-row"><button id="compare" disabled>比较两种策略</button><button id="export" disabled>导出实验</button></div>
+          <p id="comparison" class="support-copy">同一场景、同一配方，比较完工时间与资源利用率。</p>
+        </section>
+
+        <section class="side-section side-view" data-panel-view="experiment">
+          <div class="section-title">故障与恢复</div>
+          <label class="form-row"><span>目标设备</span><select id="fault-device"><option value="brewer">咖啡机</option><option value="foamer">奶沫机</option><option value="hot-water">热水机</option><option value="lidder">封盖机</option></select></label>
+          <div class="button-row"><button id="fault" class="danger" disabled>注入故障</button><button id="repair" disabled>维修复位</button></div>
+          <button id="refill" class="wide" disabled>补充牛奶 1 kg</button>
+        </section>
+
+        <section class="side-section side-view" data-panel-view="experiment">
+          <div class="section-title">配置与数据</div>
+          <button id="load-shared" class="wide" type="button">从联调台载入并重置实验</button>
+          <p id="config-feedback" class="support-copy" role="status">载入配置不改变联调台的现场状态。运行中请先暂停。</p>
+          <label class="file-action">导入工作站 JSON<input id="world-file" type="file" accept=".json"></label>
+          <label class="file-action">导入实验回放<input id="replay-file" type="file" accept=".json"></label>
+          <label class="form-column"><span>回放位置</span><input id="seek" type="range" min="0" max="0" value="0" disabled></label>
+        </section>
+
+        <section class="side-section side-view" data-panel-view="scene" hidden>
+          <div class="section-title">场景与设备</div>
+          <p class="support-copy">当前阶段使用真实仿真场景；设备状态来自仿真内核。点击设备行可在右侧检查器中查看当前文本状态。</p>
+          <div id="scene-device-mirror" class="mirror-list"></div>
+        </section>
+
+        <section class="side-section side-view" data-panel-view="materials" hidden>
+          <div class="section-title">物料监控</div>
+          <div id="material-mirror" class="mirror-list"></div>
+          <div class="section-title compact">容器</div>
+          <div id="container-mirror" class="mirror-list"></div>
+        </section>
+
+        <section class="side-section side-view" data-panel-view="layers" hidden>
+          <div class="section-title">显示层</div>
+          <p class="support-copy">视图、标签与碰撞几何直接控制真实 Three.js 视口。</p>
+          <label class="switch-row"><span>工位标签</span><input id="labels" type="checkbox" checked></label>
+          <label class="switch-row"><span>碰撞几何</span><input id="collision" type="checkbox"></label>
+        </section>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <section class="flow-preview" id="flow-preview" hidden>
+        <div class="flow-head"><strong>饮品流程编排 · Preview</strong><span>编译器 / 校验后端尚未接入</span></div>
+        <div class="flow-empty">
+          <div class="flow-node">Drop Cup</div><span>→</span><div class="flow-node">Pick Cup</div><span>→</span><div class="flow-node">Brew / Foam</div><span>→</span><div class="flow-node">Pour</div><span>→</span><div class="flow-node">Seal</div>
+        </div>
+      </section>
+
+      <section class="viewport-pane" id="viewport-pane">
+        <div id="viewport" class="viewport" aria-label="数字孪生三维工作台"></div>
+        <div class="viewport-toolbar">
+          <span class="view-label">视图</span>
+          <select id="view" aria-label="相机视角"><option value="shop">门店全景</option><option value="workcell">工作台</option><option value="top">俯视</option></select>
+          <span class="toolbar-sep"></span>
+          <button type="button" id="labels-proxy" class="toggle-btn active">标签</button>
+          <button type="button" id="collision-proxy" class="toggle-btn">碰撞体</button>
+          <button type="button" id="focus-proxy" class="toggle-btn" disabled title="当前版本暂未接入统一 3D 选择">聚焦选中</button>
+        </div>
+        <div class="viewport-hud">
+          <small>仿真状态</small><strong id="viewport-status">正在加载仿真内核…</strong>
+          <small>任务进度</small><strong id="viewport-progress">0 / 25</strong>
+        </div>
+        <div class="viewport-chip">LOCAL · REAL SIMULATION</div>
+      </section>
+
+      <section class="device-workspace" id="device-workspace" hidden>
+        <div class="device-workspace-header"><strong>Device Lab · 当前仿真设备</strong><a href="http://127.0.0.1:9131/device-lab.html">打开完整联调台 ↗</a></div>
+        <div id="device-rack-mirror" class="device-rack-mirror"></div>
+      </section>
+    </main>
+
+    <aside class="inspector" id="inspector">
+      <div class="panel-header inspector-head"><span><small>SIMULATION</small><strong>实时状态检查器</strong></span><button type="button" id="inspector-close" class="panel-close">×</button></div>
+      <div class="inspector-tabs">
+        <button type="button" class="ins-tab active" data-ins="overview">概览</button>
+        <button type="button" class="ins-tab" data-ins="devices">设备</button>
+        <button type="button" class="ins-tab" data-ins="materials">物料</button>
+        <button type="button" class="ins-tab" data-ins="config">配置</button>
+      </div>
+      <div class="inspector-scroll">
+        <section class="ins-view" data-ins-view="overview">
+          <div class="ins-section"><div class="section-title">Session</div><div class="kv"><span>状态</span><strong id="status">正在加载仿真内核…</strong><span>任务</span><strong id="progress">0 / 25</strong><span>时钟</span><strong id="clock-mirror">0.00 s</strong></div></div>
+          <div class="ins-section"><div class="section-title">Sensors</div><p id="shared-sensors" class="support-copy">等待仿真状态…</p></div>
+          <div class="ins-section"><div class="section-title">说明</div><p class="support-copy">当前分支先完成真实 UI Shell 迁移，Three.js / Rapier / Worker / Planner / Kernel 保持原实现。Flow 与完整 Cross-selection 仍作为后续能力。</p></div>
+        </section>
+        <section class="ins-view" data-ins-view="devices" hidden><div class="section-title">设备状态</div><div id="devices"></div></section>
+        <section class="ins-view" data-ins-view="materials" hidden><div class="section-title">物料</div><div id="materials"></div><div class="section-title compact">容器</div><div id="containers"></div></section>
+        <section class="ins-view" data-ins-view="config" hidden><div class="section-title">配置来源</div><p id="config-source" class="support-copy">配置来源：内置默认场景。</p><p class="support-copy">Simulator 使用独立实验副本；联调台通信延迟、断连与命令确认仍在 Device Lab 验证。</p></section>
+      </div>
+    </aside>
+  </div>
+
+  <section class="dock" id="dock">
+    <div class="dock-grip" id="dock-grip" title="拖动调整高度"></div>
+    <div class="dock-tabs">
+      <button class="dock-tab active" type="button" data-dock="timeline">时间线</button>
+      <button class="dock-tab" type="button" data-dock="events">事件</button>
+      <button class="dock-tab" type="button" data-dock="metrics">度量</button>
+      <button class="dock-tab" type="button" data-dock="console">控制台</button>
+      <span class="dock-spacer"></span>
+      <button type="button" id="dock-collapse" class="dock-action">折叠</button>
+      <button type="button" id="dock-max" class="dock-action">最大化</button>
+    </div>
+    <div class="dock-body">
+      <div class="dock-pane active" data-dock-pane="timeline"><div class="timeline-head"><span>资源 / 任务</span><span>真实 planner 任务窗口</span></div><div id="gantt"></div></div>
+      <div class="dock-pane" data-dock-pane="events"><pre id="events" aria-live="polite"></pre></div>
+      <div class="dock-pane" data-dock-pane="metrics"><div class="metrics-grid"><div><small>SIM TIME</small><strong id="metric-time">0.00 s</strong></div><div><small>PROGRESS</small><strong id="metric-progress">0 / 25</strong></div><div><small>SESSION</small><strong id="metric-status">LOADING</strong></div><div><small>PHYSICS</small><strong>Rapier · dt 20 ms</strong></div></div></div>
+      <div class="dock-pane" data-dock-pane="console"><pre id="ui-console">[ui] Simulator Studio shell ready
+[ui] core bundle pending…</pre></div>
+    </div>
+  </section>
+
+  <footer class="statusbar">
+    <span><b>SIM</b><strong id="sb-time">0.00 s</strong></span>
+    <span class="status-highlight"><b>SESSION</b><strong id="sb-status">LOADING</strong></span>
+    <span><b>TASKS</b><strong id="sb-progress">0 / 25</strong></span>
+    <span><b>CONFIG</b><strong>LOCAL COPY</strong></span>
+    <span><b>RAPIER</b><strong>dt 20 ms</strong></span>
+    <span><b>VIEW</b><strong id="sb-view">shop</strong></span>
+    <span class="status-spacer"></span>
+    <a href="robot-scene.html">原展示场景 ↗</a>
+  </footer>
+
+  <div class="popover" id="layout-popover" hidden>
+    <strong>Workspace Layout</strong>
+    <button type="button" data-layout="simulation">仿真 · 大视口 + Timeline</button>
+    <button type="button" data-layout="workcell">工作站 · 场景面板</button>
+    <button type="button" data-layout="fault">故障诊断 · 实验面板 + Events</button>
+    <p>布局只改变面板，不改变仿真状态。</p>
+  </div>
+  <div class="popover config-popover" id="config-popover" hidden>
+    <strong>Scene / Configuration</strong>
+    <p>真实配置来源见右侧「配置」标签。</p>
+    <button type="button" id="config-open-inspector">查看配置详情</button>
+  </div>
+</div>
+<script defer src="digital-twin-ui.js"></script>
+<script type="module" src="digital-twin.bundle.js"></script>
+</body>
+</html>
