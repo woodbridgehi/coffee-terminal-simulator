@@ -15,6 +15,8 @@ import {ownMaterials,cabinetVisual,deviceVisual,armVisual,cupVisual,milkVesselVi
 export class TwinRenderer {
   constructor(host,config){
     this.host=host;this.config=config;this.disposed=false;this.labels=[];this.assetErrors=[];
+    this.entityRoots=new Map();this.pickRoots=[];this.raycaster=new THREE.Raycaster();this.pointerDown=null;
+    this.onSelection=null;this.onFocus=null;this.selectionHelper=null;this.relatedHelpers=[];
     this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#e8dece');this.scene.fog=new THREE.Fog('#e8dece',22,45);
     this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
     this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.75));this.renderer.shadowMap.enabled=true;
@@ -77,10 +79,110 @@ export class TwinRenderer {
       holder.add(visual.group);this.root.add(holder);this.objects[id]={holder,visual};jobs.push(visual.ready);
     }
     this.originAxes=new THREE.AxesHelper(.22);this.originAxes.material.depthTest=false;this.originAxes.renderOrder=20;this.originAxes.visible=false;this.root.add(this.originAxes);
+    this.registerSelectionEntities();this.bindPicking();
     this.effects=new DeviceEffects(this.root,config);jobs.push(this.effects.ready);this.actionLabel=document.createElement('span');this.actionLabel.className='twin-action-label';host.append(this.actionLabel);
     this.debugGroup=new THREE.Group();this.root.add(this.debugGroup);this.debugVisible=false;this.labelsVisible=true;
     this.ready=Promise.all(jobs).catch(error=>{if(!this.disposed)this.assetErrors.push(error.message);});
     this.observer=new ResizeObserver(()=>this.resize());this.observer.observe(host);this.resize();this.setView('shop');
+  }
+  entityKey(ref){return ref?`${ref.kind}:${ref.id}`:'';}
+  markEntity(root,ref){
+    if(!root||!ref)return;
+    root.userData.selectionRef={kind:String(ref.kind),id:String(ref.id)};
+    this.entityRoots.set(this.entityKey(ref),root);
+  }
+  registerSelectionEntities(){
+    this.entityRoots.clear();
+    for(const [id,arm] of Object.entries(this.arms??{}))this.markEntity(arm.group,{kind:'robot',id});
+    for(const [id,gripper] of Object.entries(this.config.grippers??{})){
+      const arm=this.arms[gripper.robot],root=arm?.actuator?.group??arm?.gripper;
+      this.markEntity(root,{kind:'gripper',id});
+    }
+    for(const [id,def] of Object.entries(this.config.devices??{})){
+      const root=this.workcell?.components?.[def.station]??this.devices?.[def.station]?.group;
+      this.markEntity(root,{kind:'device',id});
+    }
+    for(const [id,entry] of Object.entries(this.objects??{}))this.markEntity(entry.holder,{kind:'object',id});
+    for(const id of Object.keys(this.config.stations??{})){
+      const pad=this.workcell?.pads?.[id];
+      if(pad)this.markEntity(pad,{kind:'station',id});
+    }
+    this.pickRoots=[this.root,...(this.workcell?.group?[this.workcell.group]:[])];
+  }
+  selectionRef(object){
+    for(let node=object;node;node=node.parent)if(node.userData?.selectionRef)return node.userData.selectionRef;
+    return null;
+  }
+  pick(event){
+    const rect=this.renderer.domElement.getBoundingClientRect();
+    if(!rect.width||!rect.height)return null;
+    const pointer=new THREE.Vector2(((event.clientX-rect.left)/rect.width)*2-1,-((event.clientY-rect.top)/rect.height)*2+1);
+    this.raycaster.setFromCamera(pointer,this.camera);
+    for(const hit of this.raycaster.intersectObjects(this.pickRoots,true)){
+      const ref=this.selectionRef(hit.object);
+      if(ref)return ref;
+    }
+    return null;
+  }
+  bindPicking(){
+    this.pointerDownHandler=event=>{if(event.button===0)this.pointerDown={x:event.clientX,y:event.clientY};};
+    this.pointerUpHandler=event=>{
+      if(event.button!==0||!this.pointerDown)return;
+      const moved=Math.hypot(event.clientX-this.pointerDown.x,event.clientY-this.pointerDown.y);this.pointerDown=null;
+      if(moved>4)return;
+      this.onSelection?.(this.pick(event));
+    };
+    this.doubleClickHandler=event=>{const ref=this.pick(event);if(ref)this.onFocus?.(ref);};
+    this.renderer.domElement.addEventListener('pointerdown',this.pointerDownHandler);
+    this.renderer.domElement.addEventListener('pointerup',this.pointerUpHandler);
+    this.renderer.domElement.addEventListener('dblclick',this.doubleClickHandler);
+  }
+  clearSelectionHelpers(){
+    if(this.selectionHelper){this.scene.remove(this.selectionHelper);this.selectionHelper.dispose?.();this.selectionHelper=null;}
+    for(const helper of this.relatedHelpers){this.scene.remove(helper);helper.dispose?.();}
+    this.relatedHelpers=[];
+  }
+  addSelectionHelper(root,color){
+    if(!root)return null;
+    const helper=new THREE.BoxHelper(root,color);helper.material.depthTest=false;helper.material.transparent=true;helper.material.opacity=.92;helper.renderOrder=40;this.scene.add(helper);return helper;
+  }
+  setSelection(ref,related=[]){
+    this.selectedRef=ref?{kind:ref.kind,id:ref.id}:null;
+    this.selectedDevice=ref?.kind==='device'?ref.id:undefined;
+    this.clearSelectionHelpers();
+    let primary=this.entityRoots.get(this.entityKey(ref));
+    const relatedRoots=[];
+    for(const item of related??[]){
+      const root=this.entityRoots.get(this.entityKey(item));
+      if(root&&!relatedRoots.includes(root))relatedRoots.push(root);
+    }
+    if(!primary)primary=relatedRoots.shift();
+    if(primary)this.selectionHelper=this.addSelectionHelper(primary,0xb78a52);
+    for(const root of relatedRoots.filter(root=>root!==primary).slice(0,12)){
+      const helper=this.addSelectionHelper(root,0x75a58e);if(helper)this.relatedHelpers.push(helper);
+    }
+    for(const entry of this.labels){
+      const selected=ref?.kind==='device'&&entry.deviceId===ref.id;
+      const relatedDevice=(related??[]).some(item=>item.kind==='device'&&item.id===entry.deviceId);
+      entry.label.dataset.selected=selected?'true':'false';entry.label.dataset.related=relatedDevice?'true':'false';
+    }
+  }
+  focusEntity(ref,related=[]){
+    if(!ref)return;
+    if(['device','robot','gripper'].includes(ref.kind)){
+      const before=this.controls.target.clone();this.focusDevice(ref.id);
+      if(!this.controls.target.equals(before)||this.entityRoots.has(this.entityKey(ref)))return;
+    }
+    let root=this.entityRoots.get(this.entityKey(ref));
+    if(!root)for(const item of related??[]){root=this.entityRoots.get(this.entityKey(item));if(root)break;}
+    if(!root)return;
+    this.scene.updateMatrixWorld(true);
+    const box=new THREE.Box3().setFromObject(root);if(box.isEmpty())return;
+    const sphere=box.getBoundingSphere(new THREE.Sphere()),target=sphere.center;
+    const direction=this.camera.position.clone().sub(this.controls.target);if(direction.lengthSq()<1e-8)direction.set(1,.8,1.6);
+    direction.normalize();
+    const distance=Math.max(.35,sphere.radius/Math.tan(THREE.MathUtils.degToRad(this.camera.fov*.5))*1.35);
+    this.controls.target.copy(target);this.camera.position.copy(target).add(direction.multiplyScalar(distance));this.camera.lookAt(target);this.controls.update();
   }
   async loadVisual(def,holder,fallback){
     const url=new URL(def.visual.url,location.href);
@@ -102,10 +204,7 @@ export class TwinRenderer {
     const target=this.controls.target;this.camera.position.set(target.x+p[0]*scale*radius,target.y+(p[1]-1)*scale*radius,target.z+p[2]*scale*radius);
     this.camera.lookAt(target);this.controls.update();
   }
-  selectDevice(id){
-    this.selectedDevice=id;
-    for(const entry of this.labels)entry.label.dataset.selected=entry.deviceId===id;
-  }
+  selectDevice(id){this.setSelection(id?{kind:'device',id}:null,[]);}
   focusDevice(id){
     const tool=this.config.grippers?.[id];
     if(tool&&this.state){
@@ -169,7 +268,7 @@ export class TwinRenderer {
     }
   }
   render(){
-    this.controls.update();this.renderer.render(this.scene,this.camera);
+    this.controls.update();this.selectionHelper?.update();for(const helper of this.relatedHelpers)helper.update();this.renderer.render(this.scene,this.camera);
     const occupied=[];
     for(const {label,position,deviceId} of this.labels){
       const p=position.clone().project(this.camera),x=(p.x+1)*this.host.clientWidth/2,y=(1-p.y)*this.host.clientHeight/2;
@@ -185,7 +284,9 @@ export class TwinRenderer {
     });geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());
   }
   dispose(){
-    this.disposed=true;this.shop.dispose();this.observer.disconnect();this.controls.dispose();this.labels.forEach(x=>x.label.remove());this.actionLabel.remove();
+    this.disposed=true;this.shop.dispose();this.observer.disconnect();this.controls.dispose();
+    this.renderer.domElement.removeEventListener('pointerdown',this.pointerDownHandler);this.renderer.domElement.removeEventListener('pointerup',this.pointerUpHandler);this.renderer.domElement.removeEventListener('dblclick',this.doubleClickHandler);this.clearSelectionHelpers();
+    this.labels.forEach(x=>x.label.remove());this.actionLabel.remove();
     this.disposeTree(this.scene);this.environment.dispose();this.pmrem.dispose();this.renderer.dispose();this.renderer.domElement.remove();
   }
 }

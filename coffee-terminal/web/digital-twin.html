@@ -91,7 +91,7 @@
         <section class="side-section side-view" data-panel-view="scene" hidden>
           <div class="section-title">场景与设备</div>
           <p class="support-copy">当前阶段使用真实仿真场景；设备状态来自仿真内核。点击设备行可在右侧检查器中查看当前文本状态。</p>
-          <div id="scene-device-mirror" class="mirror-list"></div>
+          <div id="scene-tree" class="scene-tree" aria-label="场景实体树"></div>
         </section>
 
         <section class="side-section side-view" data-panel-view="materials" hidden>
@@ -126,7 +126,7 @@
           <span class="toolbar-sep"></span>
           <button type="button" id="labels-proxy" class="toggle-btn active">标签</button>
           <button type="button" id="collision-proxy" class="toggle-btn">碰撞体</button>
-          <button type="button" id="focus-proxy" class="toggle-btn" disabled title="当前版本暂未接入统一 3D 选择">聚焦选中</button>
+          <button type="button" id="focus-proxy" class="toggle-btn" disabled title="聚焦当前选择 (F)">聚焦选中</button>
         </div>
         <div class="viewport-hud">
           <small>仿真状态</small><strong id="viewport-status">正在加载仿真内核…</strong>
@@ -142,24 +142,19 @@
     </main>
 
     <aside class="inspector" id="inspector">
-      <div class="panel-header inspector-head"><span><small>SIMULATION</small><strong>实时状态检查器</strong></span><button type="button" id="inspector-close" class="panel-close">×</button></div>
-      <div class="inspector-tabs">
-        <button type="button" class="ins-tab active" data-ins="overview">概览</button>
-        <button type="button" class="ins-tab" data-ins="devices">设备</button>
-        <button type="button" class="ins-tab" data-ins="materials">物料</button>
-        <button type="button" class="ins-tab" data-ins="config">配置</button>
-      </div>
-      <div class="inspector-scroll">
-        <section class="ins-view" data-ins-view="overview">
-          <div class="ins-section"><div class="section-title">Session</div><div class="kv"><span>状态</span><strong id="status">正在加载仿真内核…</strong><span>任务</span><strong id="progress">0 / 25</strong><span>时钟</span><strong id="clock-mirror">0.00 s</strong></div></div>
-          <div class="ins-section"><div class="section-title">Sensors</div><p id="shared-sensors" class="support-copy">等待仿真状态…</p></div>
-          <div class="ins-section"><div class="section-title">说明</div><p class="support-copy">当前分支先完成真实 UI Shell 迁移，Three.js / Rapier / Worker / Planner / Kernel 保持原实现。Flow 与完整 Cross-selection 仍作为后续能力。</p></div>
-        </section>
-        <section class="ins-view" data-ins-view="devices" hidden><div class="section-title">设备状态</div><div id="devices"></div></section>
-        <section class="ins-view" data-ins-view="materials" hidden><div class="section-title">物料</div><div id="materials"></div><div class="section-title compact">容器</div><div id="containers"></div></section>
-        <section class="ins-view" data-ins-view="config" hidden><div class="section-title">配置来源</div><p id="config-source" class="support-copy">配置来源：内置默认场景。</p><p class="support-copy">Simulator 使用独立实验副本；联调台通信延迟、断连与命令确认仍在 Device Lab 验证。</p></section>
-      </div>
+      <div class="panel-header inspector-head"><span><small>CONTEXT</small><strong>上下文检查器</strong></span><button type="button" id="inspector-close" class="panel-close">×</button></div>
+      <div id="inspector-content" class="inspector-scroll" aria-live="polite"></div>
     </aside>
+    <div id="engine-bridge" hidden>
+      <strong id="status">正在加载仿真内核…</strong>
+      <span id="progress">0 / 25</span>
+      <span id="clock-mirror">0.00 s</span>
+      <p id="shared-sensors"></p>
+      <div id="devices"></div>
+      <div id="materials"></div>
+      <div id="containers"></div>
+      <p id="config-source">配置来源：内置默认场景。</p>
+    </div>
   </div>
 
   <section class="dock" id="dock">

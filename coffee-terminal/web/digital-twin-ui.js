@@ -47,7 +47,7 @@
     $$('.ins-tab').forEach(x=>x.classList.toggle('active',x===b));
     $$('.ins-view').forEach(v=>v.hidden=v.dataset.insView!==b.dataset.ins);
   }));
-  $('#config-open-inspector').addEventListener('click',()=>{inspector.classList.remove('hidden');$('.ins-tab[data-ins="config"]').click();hidePopovers();});
+  $('#config-open-inspector').addEventListener('click',()=>{inspector.classList.remove('hidden');hidePopovers();});
 
   function applyDock(){
     $$('.dock-tab').forEach(b=>b.classList.toggle('active',b.dataset.dock===state.dock));

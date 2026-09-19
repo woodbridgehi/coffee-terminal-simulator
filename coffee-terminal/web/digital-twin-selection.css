@@ -1,0 +1,45 @@
+.scene-tree{display:flex;flex-direction:column;gap:10px}
+.tree-group{border-bottom:1px solid var(--line);padding-bottom:8px}
+.tree-group:last-child{border-bottom:0}
+.tree-group-title{font:600 10.5px var(--font-mono);letter-spacing:.1em;color:var(--muted);margin:2px 0 5px}
+.tree-group-body{display:flex;flex-direction:column;gap:2px}
+.tree-row{width:100%;min-height:29px;display:flex;align-items:center;gap:8px;border:1px solid transparent;border-left:2px solid transparent;border-radius:3px;background:transparent;color:var(--body);padding:4px 7px;text-align:left}
+.tree-row:hover{background:color-mix(in srgb,var(--title) 6%,transparent)}
+.tree-row.selected{background:color-mix(in srgb,var(--brass-500) 16%,transparent);border-left-color:var(--brass-500);color:var(--espresso-900)}
+.tree-row.related{background:color-mix(in srgb,var(--forest-300) 11%,transparent);border-left-color:color-mix(in srgb,var(--forest-500) 55%,transparent)}
+.tree-row.selected.related{background:color-mix(in srgb,var(--brass-500) 16%,transparent);border-left-color:var(--brass-500)}
+.tree-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.tree-meta{margin-left:auto;font:10px var(--font-mono);color:var(--muted);white-space:nowrap}
+.tree-row[data-status="running"] .tree-meta,.tree-row[data-status="held"] .tree-meta{color:var(--espresso-700)}
+.tree-row[data-status="fault"] .tree-meta{color:var(--danger)}
+.tree-row[data-status="ready"] .tree-meta{color:var(--forest-700)}
+
+.context-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center;padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:13px}
+.context-head small{grid-column:1;font:10px var(--font-mono);letter-spacing:.1em;color:var(--muted)}
+.context-head h3{grid-column:1;margin:0;font:600 15px var(--font-display);color:var(--title);overflow-wrap:anywhere}
+.context-pill{grid-column:2;grid-row:1/3;align-self:center;padding:3px 7px;border:1px solid color-mix(in srgb,var(--brass-500) 35%,var(--line));border-radius:99px;background:color-mix(in srgb,var(--brass-500) 12%,transparent);font:10px var(--font-mono);color:var(--espresso-700);max-width:112px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.context-section{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.context-row{display:grid;grid-template-columns:82px minmax(0,1fr);gap:10px;padding:6px 0;border-bottom:1px dashed color-mix(in srgb,var(--line) 80%,transparent);align-items:start}
+.context-row:last-child{border-bottom:0}
+.context-row>span{font-size:12px;color:var(--muted)}
+.context-row>strong{font:500 11.5px/1.5 var(--font-mono);color:var(--title);text-align:right;overflow-wrap:anywhere}
+.context-related{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 14px}
+.context-related button,.context-actions button{border:1px solid var(--line);border-radius:3px;background:var(--cream-50);color:var(--body);padding:5px 7px;font-size:11px}
+.context-related button:hover,.context-actions button:hover:not(:disabled){border-color:color-mix(in srgb,var(--brass-500) 55%,var(--line));background:var(--cream-100)}
+.context-actions{position:sticky;bottom:0;display:flex;gap:7px;padding-top:9px;background:linear-gradient(to bottom,transparent,var(--cream-50) 32%)}
+.context-actions button{flex:1;min-height:30px}
+
+#gantt [data-task-id]{cursor:pointer}
+#gantt .gantt-row.task-selected{background:color-mix(in srgb,var(--brass-500) 12%,transparent);box-shadow:inset 2px 0 0 var(--brass-500)}
+#gantt .gantt-row.task-related{background:color-mix(in srgb,var(--forest-300) 9%,transparent);box-shadow:inset 2px 0 0 color-mix(in srgb,var(--forest-500) 55%,transparent)}
+#gantt .gantt-row.task-selected .gantt-bar{background:var(--brass-500)!important}
+#gantt .gantt-row.task-related .gantt-bar{outline:1px solid var(--forest-500)}
+.viewport canvas{cursor:default}
+.app:has(.rail-btn[data-tool="select"].active) .viewport canvas{cursor:pointer}
+.twin-label[data-selected="true"]{border-color:var(--brass-500);box-shadow:0 0 0 2px color-mix(in srgb,var(--brass-500) 28%,transparent),0 4px 12px #17382d20}
+.twin-label[data-related="true"]{border-color:var(--forest-300)}
+
+@media(max-width:1279px){
+  .context-row{grid-template-columns:72px minmax(0,1fr)}
+  .tree-meta{font-size:9.5px}
+}
