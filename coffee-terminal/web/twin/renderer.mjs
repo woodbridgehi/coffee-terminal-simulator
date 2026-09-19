@@ -137,9 +137,12 @@ export class TwinRenderer {
     this.renderer.domElement.addEventListener('pointerup',this.pointerUpHandler);
     this.renderer.domElement.addEventListener('dblclick',this.doubleClickHandler);
   }
+  disposeSelectionHelper(helper){
+    if(!helper)return;this.scene.remove(helper);helper.geometry?.dispose?.();helper.material?.dispose?.();
+  }
   clearSelectionHelpers(){
-    if(this.selectionHelper){this.scene.remove(this.selectionHelper);this.selectionHelper.dispose?.();this.selectionHelper=null;}
-    for(const helper of this.relatedHelpers){this.scene.remove(helper);helper.dispose?.();}
+    this.disposeSelectionHelper(this.selectionHelper);this.selectionHelper=null;
+    for(const helper of this.relatedHelpers)this.disposeSelectionHelper(helper);
     this.relatedHelpers=[];
   }
   addSelectionHelper(root,color){
