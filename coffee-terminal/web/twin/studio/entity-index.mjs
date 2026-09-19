@@ -23,15 +23,17 @@ export function createEntityIndex(config, tasks = []) {
     links.get(kb).add(ka);
   };
 
+  const known=(kind,id)=>entities.has(keyOf({kind,id:String(id)}))?{kind,id:String(id)}:null;
+
   for (const [id, robot] of Object.entries(config.robots ?? {})) add('robot', id, {config: robot});
   for (const [id, gripper] of Object.entries(config.grippers ?? {})) {
     const gr = add('gripper', id, {config: gripper, robot: gripper.robot});
-    link(gr, add('robot', gripper.robot, {config: config.robots?.[gripper.robot]}));
+    link(gr, known('robot', gripper.robot));
   }
   for (const [id, station] of Object.entries(config.stations ?? {})) add('station', id, {config: station});
   for (const [id, device] of Object.entries(config.devices ?? {})) {
     const dev = add('device', id, {config: device, station: device.station});
-    link(dev, add('station', device.station, {config: config.stations?.[device.station]}));
+    link(dev, known('station', device.station));
   }
   for (const [id, object] of Object.entries(config.objects ?? {})) add('object', id, {config: object});
 
@@ -45,17 +47,18 @@ export function createEntityIndex(config, tasks = []) {
     const taskRef = add('task', task.id, {task});
     taskIds.add(task.id);
     const related = [];
-    if (task.robot) related.push(add('robot', task.robot, {config: config.robots?.[task.robot]}));
-    if (task.device) related.push(add('device', task.device, {config: config.devices?.[task.device]}));
-    if (task.object) related.push(add('object', task.object, {config: config.objects?.[task.object]}));
-    if (task.source) related.push(add('object', task.source, {config: config.objects?.[task.source]}));
-    if (task.station) related.push(add('station', task.station, {config: config.stations?.[task.station]}));
+    if (task.robot) related.push(known('robot', task.robot));
+    if (task.device) related.push(known('device', task.device));
+    if (task.object) related.push(known('object', task.object));
+    if (task.source) related.push(known('object', task.source));
+    const station=task.station??config.devices?.[task.device]?.station;
+    if (station) related.push(known('station', station));
     if (task.robot && ['grasp', 'release'].includes(task.type)) {
       for (const id of grippersByRobot.get(task.robot) ?? []) related.push(add('gripper', id, {config: config.grippers?.[id], robot: task.robot}));
     }
     for (const grasp of task.allowedGrasps ?? []) {
-      if (grasp.robot) related.push(add('robot', grasp.robot, {config: config.robots?.[grasp.robot]}));
-      if (grasp.object) related.push(add('object', grasp.object, {config: config.objects?.[grasp.object]}));
+      if (grasp.robot) related.push(known('robot', grasp.robot));
+      if (grasp.object) related.push(known('object', grasp.object));
     }
     for (const ref of related) link(taskRef, ref);
   }

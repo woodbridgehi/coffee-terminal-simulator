@@ -1,8 +1,9 @@
+import {patchMarkup} from './dom.mjs';
 const esc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const fmt=n=>Number.isFinite(Number(n))?Number(n).toFixed(3):String(n??'—');
 
-export function mountInspector({host,selection,index,getState,getConfig,onFocus}){
-  let unsubscribe=()=>{},scheduled=false;
+export function mountInspector({host,selection,index,getState,getConfig,getMode,onFocus}){
+  let unsubscribe=()=>{},frame=0,disposed=false,lastHTML='';
 
   const row=(k,v)=>`<div class="context-row"><span>${esc(k)}</span><strong>${v}</strong></div>`;
   const relationButtons=ref=>{
@@ -13,7 +14,7 @@ export function mountInspector({host,selection,index,getState,getConfig,onFocus}
 
   function sceneSummary(config,state){
     return `
-      <div class="context-head"><small>SCENE</small><h3>Coffee Workcell</h3><span class="context-pill">LIVE</span></div>
+      <div class="context-head"><small>SCENE</small><h3>Coffee Workcell</h3><span class="context-pill">${esc(getMode?.()??'LIVE')}</span></div>
       <div class="context-section"><div class="section-title">场景概览</div>
         ${row('设备',Object.keys(config?.devices??{}).length)}
         ${row('机器人',Object.keys(config?.robots??{}).length)}
@@ -33,6 +34,8 @@ export function mountInspector({host,selection,index,getState,getConfig,onFocus}
         ${row('Station',esc(cfg.station??'—'))}
         ${row('Duration',cfg.duration===undefined?'—':fmt(cfg.duration)+' s')}
         ${row('Effect',esc(cfg.effect??'—'))}
+        ${row('Task',esc(live.task??'—'))}
+        ${row('Fault',esc(live.fault??'—'))}
       </div>
       ${relationButtons(ref)}`;
   }
@@ -42,8 +45,9 @@ export function mountInspector({host,selection,index,getState,getConfig,onFocus}
     const q=(live.q??[]).map((v,i)=>`J${i+1} ${Number(v).toFixed(3)}`).join(' · ');
     const p=cfg.base?.position??[];
     return `
-      <div class="context-head"><small>ROBOT · ${esc(ref.id)}</small><h3>${esc(cfg.model??ref.id)}</h3><span class="context-pill">LIVE</span></div>
+      <div class="context-head"><small>ROBOT · ${esc(ref.id)}</small><h3>${esc(cfg.model??ref.id)}</h3><span class="context-pill">${esc(getMode?.()??'LIVE')}</span></div>
       <div class="context-section"><div class="section-title">机器人</div>
+        ${row('Mode',esc(live.mode??'—'))}
         ${row('Base',p.length?p.map(fmt).join(', ')+' m':'—')}
         ${row('Joints',esc(q||'—'))}
         ${row('Link radius',cfg.linkRadius===undefined?'—':fmt(cfg.linkRadius)+' m')}
@@ -58,7 +62,7 @@ export function mountInspector({host,selection,index,getState,getConfig,onFocus}
       <div class="context-section"><div class="section-title">夹爪</div>
         ${row('Robot',esc(cfg.robot??entity?.robot??'—'))}
         ${row('Opening',live.openingMm===undefined?'—':fmt(live.openingMm)+' mm')}
-        ${row('Target',live.targetMm===undefined?'—':fmt(live.targetMm)+' mm')}
+        ${row('Target',live.targetOpeningMm===undefined?'—':fmt(live.targetOpeningMm)+' mm')}
       </div>
       ${relationButtons(ref)}`;
   }
@@ -97,8 +101,9 @@ export function mountInspector({host,selection,index,getState,getConfig,onFocus}
         ${row('Status',esc(live.status??'—'))}
         ${row('Robot',esc(task.robot??'—'))}
         ${row('Device',esc(task.device??'—'))}
-        ${row('Object',esc(task.object??task.source??'—'))}
-        ${row('Station',esc(task.station??'—'))}
+        ${row('Object',esc(task.object??'—'))}
+        ${row('Source',esc(task.source??'—'))}
+        ${row('Station',esc(task.station??getConfig?.()?.devices?.[task.device]?.station??'—'))}
         ${row('Started',live.startedAt===null||live.startedAt===undefined?'—':fmt(live.startedAt)+' s')}
         ${row('Finished',live.finishedAt===null||live.finishedAt===undefined?'—':fmt(live.finishedAt)+' s')}
         ${row('Reason',esc(live.reason??'—'))}
@@ -107,6 +112,7 @@ export function mountInspector({host,selection,index,getState,getConfig,onFocus}
   }
 
   function render(){
+    if(disposed)return;
     const ref=selection.get(), state=getState?.(), config=getConfig?.();
     let html='';
     if(!ref) html=sceneSummary(config,state);
@@ -121,13 +127,13 @@ export function mountInspector({host,selection,index,getState,getConfig,onFocus}
       else if(ref.kind==='task') html=taskView(ref,entity,state);
       else html=sceneSummary(config,state);
     }
-    host.innerHTML=html+`<div class="context-actions"><button type="button" data-context-focus ${ref?'':'disabled'}>聚焦选中</button><button type="button" data-context-clear ${ref?'':'disabled'}>清除选择</button></div>`;
+    const nextHTML=html+`<div class="context-actions"><button type="button" data-context-focus ${ref?'':'disabled'}>聚焦选中</button><button type="button" data-context-clear ${ref?'':'disabled'}>清除选择</button></div>`;
+    if(nextHTML!==lastHTML){patchMarkup(host,nextHTML);lastHTML=nextHTML;}
   }
 
   function update(){
-    if(scheduled) return;
-    scheduled=true;
-    requestAnimationFrame(()=>{scheduled=false;render();});
+    if(frame||disposed)return;
+    frame=requestAnimationFrame(()=>{frame=0;render();});
   }
 
   const click=event=>{
@@ -139,5 +145,5 @@ export function mountInspector({host,selection,index,getState,getConfig,onFocus}
   host.addEventListener('click',click);
   unsubscribe=selection.subscribe(render,{immediate:true});
 
-  return {render,update,dispose(){unsubscribe();host.removeEventListener('click',click);}};
+  return {render,update,dispose(){disposed=true;cancelAnimationFrame(frame);unsubscribe();host.removeEventListener('click',click);}};
 }

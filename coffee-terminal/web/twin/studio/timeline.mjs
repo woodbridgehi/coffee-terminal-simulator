@@ -7,6 +7,7 @@ export function bindTimeline({host,selection,index,onFocus}){
     host.querySelectorAll('[data-task-id]').forEach(row=>{
       const id=row.dataset.taskId;
       row.classList.toggle('task-selected',current?.kind==='task'&&current.id===id);
+      row.setAttribute('aria-pressed',String(current?.kind==='task'&&current.id===id));
       row.classList.toggle('task-related',!(current?.kind==='task'&&current.id===id)&&relatedTasks.has(id));
     });
   }
@@ -23,9 +24,11 @@ export function bindTimeline({host,selection,index,onFocus}){
     selection.select(ref,'timeline');
     onFocus?.(ref);
   };
+  const keydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();click(event);}};
+  host.addEventListener('keydown',keydown);
   host.addEventListener('click',click);
   host.addEventListener('dblclick',dblclick);
   unsubscribe=selection.subscribe(sync);
 
-  return {sync,dispose(){unsubscribe();host.removeEventListener('click',click);host.removeEventListener('dblclick',dblclick);}};
+  return {sync,dispose(){unsubscribe();host.removeEventListener('keydown',keydown);host.removeEventListener('click',click);host.removeEventListener('dblclick',dblclick);}};
 }

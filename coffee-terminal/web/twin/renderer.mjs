@@ -15,7 +15,7 @@ import {ownMaterials,cabinetVisual,deviceVisual,armVisual,cupVisual,milkVesselVi
 export class TwinRenderer {
   constructor(host,config){
     this.host=host;this.config=config;this.disposed=false;this.labels=[];this.assetErrors=[];
-    this.entityRoots=new Map();this.pickRoots=[];this.raycaster=new THREE.Raycaster();this.pointerDown=null;
+    this.entityRoots=new Map();this.stationRoots={};this.obstacleRoots={};this.pickRoots=[];this.raycaster=new THREE.Raycaster();this.pointerDown=null;
     this.onSelection=null;this.onFocus=null;this.selectionHelper=null;this.relatedHelpers=[];
     this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#e8dece');this.scene.fog=new THREE.Fog('#e8dece',22,45);
     this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
@@ -45,7 +45,7 @@ export class TwinRenderer {
     }
     for(const def of config.obstacles){
       if(this.workcell)continue;
-      const holder=new THREE.Group();holder.name=`twin-obstacle:${def.id}`;this.setPose(holder,def.pose);this.root.add(holder);
+      const holder=new THREE.Group();holder.name=`twin-obstacle:${def.id}`;this.setPose(holder,def.pose);this.root.add(holder);this.obstacleRoots[def.id]=holder;
       let visual;
       if(def.id==='table')visual=cabinetVisual(def);
       else if(def.id.endsWith('-housing')){
@@ -63,7 +63,7 @@ export class TwinRenderer {
       if(['left-ready','right-ready','pour'].includes(id))continue;
       if(!this.workcell){const pad=new THREE.Mesh(new THREE.TorusGeometry(.08,.004,8,40),new THREE.MeshStandardMaterial({color:'#b78a52',metalness:.6,roughness:.3}));
       const table=config.obstacles.find(o=>o.id==='table');
-      pad.position.set(station.pose.position[0],station.pose.position[1],table?table.pose.position[2]+table.size[2]/2+.012:station.pose.position[2]-.1);this.root.add(pad);}
+      pad.position.set(station.pose.position[0],station.pose.position[1],table?table.pose.position[2]+table.size[2]/2+.012:station.pose.position[2]-.1);this.root.add(pad);this.stationRoots[id]=pad;}
       const label=document.createElement('span');label.className='twin-label';label.textContent=`${station.number??++number} · ${station.label}`;host.append(label);
       this.labels.push({label,position:scenePosition(station.pose.position),deviceId:Object.entries(config.devices).find(([,d])=>d.station===id)?.[0]});
     }
@@ -71,7 +71,7 @@ export class TwinRenderer {
     for(const [id,robot] of Object.entries(config.robots)){
       const arm=armVisual(robot.linkRadius,{independentGripper:Object.values(config.grippers??{}).some(g=>g.robot===id),maxOpeningMm:Object.values(config.grippers??{}).find(g=>g.robot===id)?.maxOpeningMm??120});if(arm.actuator)arm.actuator.group.quaternion.fromArray((config.installation?.nominalTools[id]??robot.tool).quaternion).invert();this.root.add(arm.group);this.arms[id]=arm;
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.105,.12,.025,32),new THREE.MeshStandardMaterial({color:'#273230',metalness:.5,roughness:.3}));
-      const group=new THREE.Group();this.setPose(group,robot.base);base.rotation.x=Math.PI/2;group.add(base);this.root.add(group);
+      const group=new THREE.Group();this.setPose(group,robot.base);base.rotation.x=Math.PI/2;group.add(base);this.root.add(group);group.userData.selectionRef={kind:'robot',id};
     }
     this.objects={};
     for(const [id,def] of Object.entries(config.objects)){
@@ -99,12 +99,19 @@ export class TwinRenderer {
       this.markEntity(root,{kind:'gripper',id});
     }
     for(const [id,def] of Object.entries(this.config.devices??{})){
-      const root=this.workcell?.components?.[def.station]??this.devices?.[def.station]?.group;
+      let root=this.workcell?.components?.[def.station]??this.devices?.[def.station]?.group;
+      if(!this.workcell){root=new THREE.Group();root.name=`device:${id}`;this.root.add(root);}
       this.markEntity(root,{kind:'device',id});
+      // Fallback geometry (custom layouts) includes more than the cabinet housing.
+      for(const [key,part] of Object.entries(this.obstacleRoots))if(key.startsWith(def.station+'-')||(id==='cup-dispenser'&&key==='cup-magazine')){
+        root.attach(part);part.userData.selectionRef={kind:'device',id};
+      }
     }
     for(const [id,entry] of Object.entries(this.objects??{}))this.markEntity(entry.holder,{kind:'object',id});
     for(const id of Object.keys(this.config.stations??{})){
-      const pad=this.workcell?.pads?.[id];
+      const component=this.workcell?.components?.[id];
+      if(component&&!component.userData.selectionRef)this.markEntity(component,{kind:'station',id});
+      const pad=this.workcell?.pads?.[id]??this.stationRoots[id];
       if(pad)this.markEntity(pad,{kind:'station',id});
     }
     this.pickRoots=[this.root,...(this.workcell?.group?[this.workcell.group]:[])];
@@ -118,23 +125,30 @@ export class TwinRenderer {
     if(!rect.width||!rect.height)return null;
     const pointer=new THREE.Vector2(((event.clientX-rect.left)/rect.width)*2-1,-((event.clientY-rect.top)/rect.height)*2+1);
     this.raycaster.setFromCamera(pointer,this.camera);
+    this.scene.updateMatrixWorld(true);
     for(const hit of this.raycaster.intersectObjects(this.pickRoots,true)){
+      if(!this.entityVisible(hit.object))continue;
       const ref=this.selectionRef(hit.object);
       if(ref)return ref;
     }
     return null;
   }
+  entityVisible(root){for(let node=root;node;node=node.parent)if(!node.visible)return false;return true;}
   bindPicking(){
-    this.pointerDownHandler=event=>{if(event.button===0)this.pointerDown={x:event.clientX,y:event.clientY};};
+    this.pointerDownHandler=event=>{if(event.button===0)this.pointerDown={x:event.clientX,y:event.clientY,id:event.pointerId,moved:false};};
+    this.pointerMoveHandler=event=>{const down=this.pointerDown;if(down&&event.pointerId===down.id&&Math.hypot(event.clientX-down.x,event.clientY-down.y)>4)down.moved=true;};
+    this.pointerCancelHandler=()=>{this.pointerDown=null;};
     this.pointerUpHandler=event=>{
-      if(event.button!==0||!this.pointerDown)return;
-      const moved=Math.hypot(event.clientX-this.pointerDown.x,event.clientY-this.pointerDown.y);this.pointerDown=null;
-      if(moved>4)return;
+      if(event.button!==0||!this.pointerDown||event.pointerId!==this.pointerDown.id)return;
+      const moved=this.pointerDown.moved||Math.hypot(event.clientX-this.pointerDown.x,event.clientY-this.pointerDown.y)>4;this.pointerDown=null;
+      if(moved){this.lastClickWasDrag=true;return;}this.lastClickWasDrag=false;
       this.onSelection?.(this.pick(event));
     };
-    this.doubleClickHandler=event=>{const ref=this.pick(event);if(ref)this.onFocus?.(ref);};
+    this.doubleClickHandler=event=>{if(this.lastClickWasDrag)return;const ref=this.pick(event);if(ref)this.onFocus?.(ref);};
     this.renderer.domElement.addEventListener('pointerdown',this.pointerDownHandler);
     this.renderer.domElement.addEventListener('pointerup',this.pointerUpHandler);
+    this.renderer.domElement.addEventListener('pointermove',this.pointerMoveHandler);
+    this.renderer.domElement.addEventListener('pointercancel',this.pointerCancelHandler);
     this.renderer.domElement.addEventListener('dblclick',this.doubleClickHandler);
   }
   disposeSelectionHelper(helper){
@@ -147,7 +161,7 @@ export class TwinRenderer {
   }
   addSelectionHelper(root,color){
     if(!root)return null;
-    const helper=new THREE.BoxHelper(root,color);helper.material.depthTest=false;helper.material.transparent=true;helper.material.opacity=.92;helper.renderOrder=40;this.scene.add(helper);return helper;
+    const helper=new THREE.BoxHelper(root,color);helper.material.depthTest=false;helper.material.transparent=true;helper.material.opacity=.92;helper.renderOrder=40;helper.userData.selectionRoot=root;helper.visible=this.entityVisible(root);this.scene.add(helper);return helper;
   }
   setSelection(ref,related=[]){
     this.selectedRef=ref?{kind:ref.kind,id:ref.id}:null;
@@ -159,7 +173,6 @@ export class TwinRenderer {
       const root=this.entityRoots.get(this.entityKey(item));
       if(root&&!relatedRoots.includes(root))relatedRoots.push(root);
     }
-    if(!primary)primary=relatedRoots.shift();
     if(primary)this.selectionHelper=this.addSelectionHelper(primary,0xb78a52);
     for(const root of relatedRoots.filter(root=>root!==primary).slice(0,12)){
       const helper=this.addSelectionHelper(root,0x75a58e);if(helper)this.relatedHelpers.push(helper);
@@ -176,6 +189,9 @@ export class TwinRenderer {
       const before=this.controls.target.clone();this.focusDevice(ref.id);
       if(!this.controls.target.equals(before)||this.entityRoots.has(this.entityKey(ref)))return;
     }
+    if(ref.kind==='station'&&!this.entityRoots.has(this.entityKey(ref))){
+      const pose=this.config.stations[ref.id]?.pose;if(pose){const target=scenePosition(pose.position);this.focusedTool=false;this.controls.minDistance=.35;this.controls.target.copy(target);this.camera.position.copy(target).add(new THREE.Vector3(.6,.7,1));this.controls.update();return;}
+    }
     let root=this.entityRoots.get(this.entityKey(ref));
     if(!root)for(const item of related??[]){root=this.entityRoots.get(this.entityKey(item));if(root)break;}
     if(!root)return;
@@ -185,7 +201,7 @@ export class TwinRenderer {
     const direction=this.camera.position.clone().sub(this.controls.target);if(direction.lengthSq()<1e-8)direction.set(1,.8,1.6);
     direction.normalize();
     const distance=Math.max(.35,sphere.radius/Math.tan(THREE.MathUtils.degToRad(this.camera.fov*.5))*1.35);
-    this.controls.target.copy(target);this.camera.position.copy(target).add(direction.multiplyScalar(distance));this.camera.lookAt(target);this.controls.update();
+    this.focusedTool=false;this.controls.minDistance=Math.min(2,distance);this.controls.target.copy(target);this.camera.position.copy(target).add(direction.multiplyScalar(distance));this.camera.lookAt(target);this.controls.update();
   }
   async loadVisual(def,holder,fallback){
     const url=new URL(def.visual.url,location.href);
@@ -221,7 +237,7 @@ export class TwinRenderer {
   resize(){
     const w=this.host.clientWidth,h=this.host.clientHeight;if(!w||!h)return;
     this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.renderer.setSize(w,h);
-    if(this.lastAspect&&Math.abs(this.lastAspect-w/h)>.15)this.setView(this.view);this.lastAspect=w/h;
+    this.lastAspect=w/h; // Panel resizing must preserve a user-selected camera / focus pose.
   }
   apply(state){
     this.state=state;
@@ -271,7 +287,7 @@ export class TwinRenderer {
     }
   }
   render(){
-    this.controls.update();this.selectionHelper?.update();for(const helper of this.relatedHelpers)helper.update();this.renderer.render(this.scene,this.camera);
+    this.controls.update();for(const helper of [this.selectionHelper,...this.relatedHelpers].filter(Boolean)){helper.visible=this.entityVisible(helper.userData.selectionRoot);if(helper.visible)helper.update();}this.renderer.render(this.scene,this.camera);
     const occupied=[];
     for(const {label,position,deviceId} of this.labels){
       const p=position.clone().project(this.camera),x=(p.x+1)*this.host.clientWidth/2,y=(1-p.y)*this.host.clientHeight/2;
@@ -288,8 +304,8 @@ export class TwinRenderer {
   }
   dispose(){
     this.disposed=true;this.shop.dispose();this.observer.disconnect();this.controls.dispose();
-    this.renderer.domElement.removeEventListener('pointerdown',this.pointerDownHandler);this.renderer.domElement.removeEventListener('pointerup',this.pointerUpHandler);this.renderer.domElement.removeEventListener('dblclick',this.doubleClickHandler);this.clearSelectionHelpers();
+    this.renderer.domElement.removeEventListener('pointerdown',this.pointerDownHandler);this.renderer.domElement.removeEventListener('pointerup',this.pointerUpHandler);this.renderer.domElement.removeEventListener('dblclick',this.doubleClickHandler);this.renderer.domElement.removeEventListener('pointermove',this.pointerMoveHandler);this.renderer.domElement.removeEventListener('pointercancel',this.pointerCancelHandler);this.onSelection=null;this.onFocus=null;this.pointerDown=null;this.clearSelectionHelpers();
     this.labels.forEach(x=>x.label.remove());this.actionLabel.remove();
-    this.disposeTree(this.scene);this.environment.dispose();this.pmrem.dispose();this.renderer.dispose();this.renderer.domElement.remove();
+    this.disposeTree(this.scene);this.environment.dispose();this.pmrem.dispose();this.renderer.dispose();this.renderer.domElement.remove();this.entityRoots.clear();this.pickRoots=[];
   }
 }

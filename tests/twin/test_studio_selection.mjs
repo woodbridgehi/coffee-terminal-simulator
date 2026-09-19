@@ -30,9 +30,16 @@ test('entity index links tasks to devices, robots, objects, stations and gripper
   ];
   const index=createEntityIndex(config,tasks);
   assert.ok(index.has({kind:'task',id:'extract'}));
-  assert.deepEqual(new Set(index.related({kind:'task',id:'extract'}).map(x=>`${x.kind}:${x.id}`)),new Set(['device:brewer','object:cup']));
+  assert.deepEqual(new Set(index.related({kind:'task',id:'extract'}).map(x=>`${x.kind}:${x.id}`)),new Set(['device:brewer','object:cup','station:brew']));
   assert.deepEqual(new Set(index.relatedTasks({kind:'device',id:'brewer'})),new Set(['extract']));
   assert.deepEqual(new Set(index.relatedTasks({kind:'robot',id:'left'})),new Set(['left-grasp','left-to-brew']));
   assert.ok(index.related({kind:'task',id:'left-grasp'}).some(x=>x.kind==='gripper'&&x.id==='left-gripper'));
   assert.ok(index.related({kind:'device',id:'brewer'}).some(x=>x.kind==='station'&&x.id==='brew'));
+});
+
+
+test('entity reconciliation does not keep phantom devices referenced by stale tasks',()=>{
+  const index=createEntityIndex({robots:{},grippers:{},devices:{},stations:{},objects:{}},[{id:'old-task',device:'removed',robot:'removed',object:'removed',station:'removed'}]);
+  for(const kind of ['device','robot','object','station'])assert.equal(index.has({kind,id:'removed'}),false);
+  const selection=createSelectionStore();selection.select({kind:'device',id:'removed'});selection.reconcile(ref=>index.has(ref));assert.equal(selection.get(),null);
 });

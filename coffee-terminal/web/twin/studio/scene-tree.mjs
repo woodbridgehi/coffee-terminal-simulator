@@ -1,6 +1,6 @@
 const keyOf = ref => ref ? `${ref.kind}:${ref.id}` : '';
 
-function statusFor(ref,state,taskRobots){
+function statusFor(ref,state){
   if(!state) return '';
   if(ref.kind==='device') return state.devices?.[ref.id]?.mode ?? '';
   if(ref.kind==='gripper') return state.grippers?.[ref.id]?.mode ?? '';
@@ -11,8 +11,7 @@ function statusFor(ref,state,taskRobots){
     return object.owner ? `held · ${object.owner}` : 'present';
   }
   if(ref.kind==='robot'){
-    const running=Object.entries(state.tasks??{}).some(([id,t])=>t.status==='running'&&taskRobots.get(id)===ref.id);
-    return running?'running':'ready';
+    return state.robots?.[ref.id]?.mode??'unknown';
   }
   return '';
 }
@@ -20,7 +19,6 @@ function statusFor(ref,state,taskRobots){
 export function mountSceneTree({host,selection,index,getState,labelFor,onFocus}){
   let unsubscribe=()=>{};
   const refsByKey=new Map();
-  const taskRobots=new Map(index.all('task').filter(x=>x.task?.robot).map(x=>[x.id,x.task.robot]));
 
   function label(ref){
     return labelFor?.(ref,index.get(ref)) ?? ref.id;
@@ -75,6 +73,7 @@ export function mountSceneTree({host,selection,index,getState,labelFor,onFocus})
     const related=new Set((index.related(current)||[]).map(keyOf));
     host.querySelectorAll('.tree-row').forEach(row=>{
       row.classList.toggle('selected',row.dataset.selectionKey===selectedKey);
+      row.setAttribute('aria-pressed',String(row.dataset.selectionKey===selectedKey));
       row.classList.toggle('related',related.has(row.dataset.selectionKey));
     });
   }
@@ -82,10 +81,10 @@ export function mountSceneTree({host,selection,index,getState,labelFor,onFocus})
   function update(state){
     host.querySelectorAll('.tree-row').forEach(row=>{
       const ref=refsByKey.get(row.dataset.selectionKey);
-      const value=statusFor(ref,state,taskRobots);
+      const value=statusFor(ref,state);
       const meta=row.querySelector('[data-tree-status]');
-      if(meta) meta.textContent=value;
-      row.dataset.status=value.split(' · ')[0];
+      if(meta&&meta.textContent!==value)meta.textContent=value;
+      const status=value.split(' · ')[0];if(row.dataset.status!==status)row.dataset.status=status;
     });
   }
 
